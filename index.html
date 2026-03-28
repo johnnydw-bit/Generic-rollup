@@ -272,7 +272,10 @@
   </div>
 
   <div id="teamConfig" style="display:none; padding:8px 10px; background:#f0f0f8; border-bottom:1px solid #ddd;">
-    <div class="field-label" style="margin-bottom:5px;">Team size preference</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+      <div class="field-label">Team size preference</div>
+      <div id="teeTimesInfo" style="font-size:10px;color:#2D2B5B;font-weight:600;background:#E8F0FE;padding:2px 8px;border-radius:10px;display:none;"></div>
+    </div>
     <div style="display:flex; gap:6px; margin-bottom:6px;">
       <button class="team-size-btn active" id="size2" onclick="setTeamSize(2)">Pairs (2)</button>
       <button class="team-size-btn" id="size3" onclick="setTeamSize(3)">Triples (3)</button>
@@ -500,6 +503,7 @@ let state = {
   selectedStructure: null,
   teamScores: [],
   walkupFoundHC: null,
+  teeTimes: null,
   // Results browser
   allRoundDates: [],
   currentRoundIdx: 0,
@@ -622,7 +626,7 @@ async function loadRoundByDate(dateStr) {
   document.getElementById('resultsLoading').style.display = 'block';
   document.getElementById('resultsTable').style.display = 'none';
   try {
-    const resp = await fetch(`/api/round/${dateStr}`);
+    const resp = await fetch(`/api/round?date=${dateStr}`);
     if (!resp.ok) throw new Error('Not found');
     const data = await resp.json();
     renderResults(data.players, data.date);
@@ -730,7 +734,7 @@ async function loadPlayerHistory(name) {
   document.getElementById('phEmpty').style.display = 'none';
 
   try {
-    const resp = await fetch(`/api/player-history/${encodeURIComponent(name)}`);
+    const resp = await fetch(`/api/player-history?name=${encodeURIComponent(name)}`);
     const data = await resp.json();
     let rounds = data.rounds || [];
 
@@ -880,6 +884,7 @@ async function loadPlayers() {
     const data = await resp.json();
     state.players = data.players;
     state.roundDate = data.date;
+    state.teeTimes = data.tee_times || null;
     state.newPlayerQueue = data.new_players || [];
     if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
     else openScoreEntry();
@@ -893,7 +898,10 @@ function getAllValidStructures(n, preferredSize) {
   if (n < 4) return [];
   const seen = new Set();
   const results = [];
+  // Max teams is constrained by available tee times (one team per tee time)
+  const maxTeams = state.teeTimes || n;
   for (let numTeams = 2; numTeams <= n; numTeams++) {
+    if (numTeams > maxTeams) continue;  // exceeds available tee times
     const base = Math.floor(n / numTeams);
     const remainder = n % numTeams;
     const largeSize = remainder > 0 ? base + 1 : base;
@@ -969,6 +977,13 @@ function setGameMode(mode) {
   document.getElementById('modeIndividual').classList.toggle('active', mode === 'individual');
   document.getElementById('modeTeam').classList.toggle('active', mode === 'team');
   document.getElementById('teamConfig').style.display = mode === 'team' ? 'block' : 'none';
+  const ttInfo = document.getElementById('teeTimesInfo');
+  if (mode === 'team' && state.teeTimes) {
+    ttInfo.textContent = `${state.teeTimes} tee time${state.teeTimes !== 1 ? 's' : ''} · max ${state.teeTimes * 4} players`;
+    ttInfo.style.display = 'inline';
+  } else {
+    ttInfo.style.display = 'none';
+  }
   document.getElementById('teamScoreboard').style.display = mode === 'team' ? 'block' : 'none';
   document.getElementById('addPlayerBar').style.display = mode === 'individual' ? 'block' : 'none';
   if (mode === 'individual') state.players.forEach(p => p.team = null);
