@@ -2,16 +2,12 @@ services:
   - type: web
     name: moths-rollup
     env: python
-    buildCommand: pip install -r requirements.txt && PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright python -m playwright install chromium
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: GOOGLE_CLIENT_ID
+      - key: DATABASE_URL
+        sync: false          # Paste your Neon connection string here in Render dashboard
+      - key: IG_USERNAME
         sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_REDIRECT_URI
-        sync: false
-      - key: APP_SECRET_KEY
-        generateValue: true
-      - key: SHEET_ID
+      - key: IG_PIN
         sync: false

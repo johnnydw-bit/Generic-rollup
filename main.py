@@ -1,5 +1,5 @@
 # MOTH's Rollup - main.py
-# Updated: 2026-03-26
+# Updated: 2026-03-28 — migrated from Google Sheets to PostgreSQL (Neon + asyncpg)
 
 """
 MOTH's Rollup - FastAPI backend
@@ -19,12 +19,14 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from backend.handicap import calculate_new_handicaps, calculate_team_scores, format_adjustment
-from backend.sheets import (
+from backend.db import (
     get_all_players,
     save_round_results,
     add_new_player,
     get_last_round_results,
     get_last_round_date,
+    get_pool,
+    close_pool,
 )
 from backend.scraper import scrape_players
 
@@ -43,12 +45,20 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 templates = Jinja2Templates(directory="frontend/templates")
 
-SHEET_ID = os.getenv("SHEET_ID")
 IG_USERNAME = os.getenv("IG_USERNAME")
 IG_PIN = os.getenv("IG_PIN")
 
-def get_context():
-    return {"sheet_id": SHEET_ID}
+
+@app.on_event("startup")
+async def startup():
+    """Initialise the database connection pool on startup."""
+    await get_pool()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Gracefully close the pool on shutdown."""
+    await close_pool()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -59,7 +69,7 @@ async def root(request: Request):
 @app.get("/auth/status")
 async def auth_status():
     try:
-        last_date = get_last_round_date(SHEET_ID, get_context())
+        last_date = await get_last_round_date()
     except Exception:
         last_date = None
     return {"last_round_date": last_date}
@@ -83,9 +93,9 @@ async def load_players(body: LoadRequest):
         raise HTTPException(404, "No players found for this date.")
 
     try:
-        all_players = get_all_players(SHEET_ID, get_context())
+        all_players = await get_all_players()
     except Exception as e:
-        raise HTTPException(500, f"Could not read player list from sheet: {str(e)}")
+        raise HTTPException(500, f"Could not read player list from database: {str(e)}")
 
     name_to_hc = {p["name"].strip().lower(): p["handicap"] for p in all_players}
 
@@ -110,9 +120,9 @@ class NewPlayerRequest(BaseModel):
 @app.post("/api/new-player")
 async def new_player(body: NewPlayerRequest):
     try:
-        add_new_player(SHEET_ID, get_context(), body.name, body.handicap)
+        await add_new_player(body.name, body.handicap)
     except Exception as e:
-        raise HTTPException(500, f"Could not add player to sheet: {str(e)}")
+        raise HTTPException(500, f"Could not add player to database: {str(e)}")
     return {"ok": True, "name": body.name, "handicap": body.handicap}
 
 
@@ -124,7 +134,7 @@ class ScoreUpdate(BaseModel):
 
 @app.post("/api/autosave")
 async def autosave(body: ScoreUpdate):
-    """Calculate handicaps only — no sheet write. Fast."""
+    """Calculate handicaps only — no DB write. Fast."""
     results = calculate_new_handicaps(body.players, team_mode=body.team_mode)
     for r in results:
         r["adj_display"] = format_adjustment(r.get("adjustment"))
@@ -138,12 +148,12 @@ async def autosave(body: ScoreUpdate):
 
 @app.post("/api/save-round")
 async def save_round(body: ScoreUpdate):
-    """Calculate final handicaps and write to Google Sheet."""
+    """Calculate final handicaps and write to PostgreSQL."""
     results = calculate_new_handicaps(body.players, team_mode=body.team_mode)
     try:
-        save_round_results(SHEET_ID, get_context(), results, body.date)
+        await save_round_results(results, body.date)
     except Exception as e:
-        raise HTTPException(500, f"Failed to save to Google Sheets: {str(e)}")
+        raise HTTPException(500, f"Failed to save to database: {str(e)}")
     for r in results:
         r["adj_display"] = format_adjustment(r.get("adjustment"))
 
@@ -157,8 +167,8 @@ async def save_round(body: ScoreUpdate):
 @app.get("/api/last-round")
 async def last_round():
     try:
-        results = get_last_round_results(SHEET_ID, get_context())
-        date = get_last_round_date(SHEET_ID, get_context())
+        results = await get_last_round_results()
+        date = await get_last_round_date()
     except Exception as e:
         raise HTTPException(500, f"Could not load last round: {str(e)}")
     return {"players": results, "date": date}
@@ -170,9 +180,9 @@ class LookupRequest(BaseModel):
 
 @app.post("/api/lookup-player")
 async def lookup_player(body: LookupRequest):
-    """Look up a player by name — returns handicap if found, not found otherwise."""
+    """Look up a player by name — returns handicap if found."""
     try:
-        all_players = get_all_players(SHEET_ID, get_context())
+        all_players = await get_all_players()
     except Exception as e:
         raise HTTPException(500, f"Could not read player list: {str(e)}")
 
