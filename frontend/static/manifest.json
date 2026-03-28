@@ -1,0 +1,22 @@
+{
+  "name": "MOTH's Rollup",
+  "short_name": "MOTH's",
+  "description": "Bramley Golf Club - MOTH's Rollup scoring app",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2D2B5B",
+  "theme_color": "#2D2B5B",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
