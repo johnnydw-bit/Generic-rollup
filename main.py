@@ -21,6 +21,8 @@ from backend.db import (
     add_new_player,
     get_last_round_results,
     get_last_round_date,
+    get_player_history,
+    get_round_dates,
     get_pool,
     close_pool,
 )
@@ -184,4 +186,107 @@ async def lookup_player(body: LookupRequest):
     return {"found": False, "name": body.name}
 
 
+@app.get("/admin/migrate")
+async def run_migration():
+    players = [
+        ("Ben Bengougam", 24, 31),
+        ("Chris Hoare", 30, 26),
+        ("Chris Merrifield", 23, 19),
+        ("Dan Murton", 36, 12),
+        ("Gerry Kinally", 31, 22),
+        ("Graham Finney", None, 36),
+        ("Howard Thomas", 36, 26),
+        ("Ian Duncan", 36, 24),
+        ("Jim Horsborough", 34, 32),
+        ("John De Wit", 22, 22),
+        ("John Hollis", 35, 26),
+        ("John Moffitt", 27, 23),
+        ("Julian Furnell", 27, 11),
+        ("Michael Padgett", 36, 32),
+        ("Neil Franchino", 21, 20),
+        ("Patrick King", 36, 19),
+        ("Peter Bates", 36, 22),
+        ("Phil Chaney", 17, 31),
+        ("Simon Lee", 30, 27),
+        ("Tim Taylor", 28, 32),
+        ("Tim Wright", 35, 15),
+        ("Tom Boylett", 30, 24),
+        ("William Plaskett", 30, 20),
+    ]
 
+    from backend.db import _get_conn, _init_schema
+    result = {}
+
+    def _migrate():
+        _init_schema()
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                inserted_players = 0
+                inserted_rounds = 0
+                for name, score, handicap in players:
+                    cur.execute("""
+                        INSERT INTO players (name, handicap)
+                        VALUES (%s, %s)
+                        ON CONFLICT (name) DO UPDATE SET handicap = EXCLUDED.handicap
+                        RETURNING id
+                    """, (name, handicap))
+                    player_id = cur.fetchone()[0]
+                    inserted_players += 1
+                    if score is not None:
+                        cur.execute("""
+                            INSERT INTO rounds (player_id, date, score, new_handicap)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT DO NOTHING
+                        """, (player_id, "2026-03-26", score, handicap))
+                        inserted_rounds += 1
+                result["players"] = inserted_players
+                result["rounds"] = inserted_rounds
+
+    await asyncio.get_event_loop().run_in_executor(None, _migrate)
+    return {"ok": True, "players": result["players"], "rounds": result["rounds"]}
+
+
+@app.get("/api/round-dates")
+async def round_dates():
+    """Return all dates that have saved round results."""
+    try:
+        dates = await get_round_dates()
+    except Exception as e:
+        raise HTTPException(500, f"Could not load round dates: {str(e)}")
+    return {"dates": dates}
+
+
+@app.get("/api/round/{date_str}")
+async def round_by_date(date_str: str):
+    """Return results for a specific date (YYYY-MM-DD)."""
+    try:
+        pool = await get_pool()
+        from backend.db import _get_conn
+        def _fetch():
+            with _get_conn() as conn:
+                with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT p.name, r.score, r.new_handicap
+                        FROM rounds r
+                        JOIN players p ON p.id = r.player_id
+                        WHERE r.date = %s
+                        ORDER BY r.score DESC
+                    """, (date_str,))
+                    return [dict(r) for r in cur.fetchall()]
+        import asyncio
+        results = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load round: {str(e)}")
+    if not results:
+        raise HTTPException(404, f"No results found for {date_str}")
+    return {"players": results, "date": date_str}
+
+
+@app.get("/api/player-history/{name}")
+async def player_history(name: str):
+    """Return full round history for a player."""
+    try:
+        history = await get_player_history(name)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load player history: {str(e)}")
+    return {"name": name, "rounds": [{"date": str(r["date"]), "score": r["score"], "new_handicap": r["new_handicap"]} for r in history]}
