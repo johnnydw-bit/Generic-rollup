@@ -224,3 +224,13 @@ def _get_player_history(name: str):
 
 async def get_player_history(name: str) -> list[dict]:
     return await _run(_get_player_history, name)
+
+
+async def get_round_dates() -> list[str]:
+    """Return all dates that have round results, most recent first."""
+    def _get():
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT DISTINCT date FROM rounds ORDER BY date DESC")
+                return [str(r[0]) for r in cur.fetchall()]
+    return await _run(_get)
