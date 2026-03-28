@@ -5,7 +5,7 @@ import os
 import asyncio
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -81,9 +81,12 @@ async def load_players(body: LoadRequest):
         raise HTTPException(500, "Intelligent Golf credentials not configured on server.")
 
     try:
-        names = await scrape_players(IG_USERNAME, IG_PIN, body.date)
+        scrape_result = await scrape_players(IG_USERNAME, IG_PIN, body.date)
     except Exception as e:
         raise HTTPException(502, str(e))
+
+    names = scrape_result["names"]
+    tee_times = scrape_result["tee_times"]
 
     if not names:
         raise HTTPException(404, "No players found for this date.")
@@ -105,7 +108,7 @@ async def load_players(body: LoadRequest):
         else:
             players.append({"name": name, "handicap": hc, "score": None, "team": None, "new_player": False})
 
-    return {"date": body.date, "players": players, "new_players": new_players}
+    return {"date": body.date, "players": players, "new_players": new_players, "tee_times": tee_times}
 
 
 class NewPlayerRequest(BaseModel):
@@ -186,3 +189,56 @@ async def lookup_player(body: LookupRequest):
     return {"found": False, "name": body.name}
 
 
+@app.get("/api/round-dates")
+async def round_dates():
+    """Return all dates that have saved round results."""
+    try:
+        dates = await get_round_dates()
+    except Exception as e:
+        raise HTTPException(500, f"Could not load round dates: {str(e)}")
+    return {"dates": dates}
+
+
+@app.get("/api/round")
+async def round_by_date(date: str = Query(...)):
+    """Return results for a specific date (YYYY-MM-DD)."""
+    try:
+        from backend.db import _get_conn
+        import psycopg2.extras
+
+        def _fetch():
+            with _get_conn() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT p.name, r.score, r.new_handicap
+                        FROM rounds r
+                        JOIN players p ON p.id = r.player_id
+                        WHERE r.date = %s
+                        ORDER BY r.score DESC
+                    """, (date,))
+                    return [dict(r) for r in cur.fetchall()]
+
+        results = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load round: {str(e)}")
+    if not results:
+        raise HTTPException(404, f"No results found for {date}")
+    return {"players": results, "date": date}
+
+
+@app.get("/api/player-history")
+async def player_history(name: str = Query(...)):
+    """Return full round history for a player."""
+    try:
+        history = await get_player_history(name)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load player history: {str(e)}")
+    if not history:
+        raise HTTPException(404, f"No history found for {name}")
+    return {
+        "name": name,
+        "rounds": [
+            {"date": str(r["date"]), "score": r["score"], "new_handicap": r["new_handicap"]}
+            for r in history
+        ]
+    }
