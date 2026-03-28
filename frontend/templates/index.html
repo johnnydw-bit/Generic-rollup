@@ -686,34 +686,17 @@ function openPlayerFromResults(name) {
 // ═══════════════════════════════════════
 async function showPlayerHistory(preselect) {
   showScreen('screen4');
+  // If called from nav/home (no preselect), reset the screen
+  if (!preselect) {
+    document.getElementById('historyPlayerSelect').value = '';
+    document.getElementById('s4PlayerLabel').textContent = 'Player History';
+    document.getElementById('phContent').style.display = 'none';
+    document.getElementById('phNoData').style.display = 'none';
+    document.getElementById('phEmpty').style.display = 'block';
+    if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
+  }
   // Load players into select if not already done
   const sel = document.getElementById('historyPlayerSelect');
-  if (sel.options.length <= 1) {
-    try {
-      const resp = await fetch('/api/last-round');
-      const data = await resp.json();
-      // Get player names from all round dates to build full list
-      const datesResp = await fetch('/api/round-dates');
-      const datesData = await datesResp.json();
-      const allDates = datesData.dates || [];
-      // Collect unique names from most recent round + any preselect
-      const names = new Set(data.players.map(p => p.name));
-      sel.innerHTML = '<option value="">Choose a player…</option>';
-      [...names].sort().forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;
-        opt.textContent = n;
-        sel.appendChild(opt);
-      });
-    } catch(e) {}
-  }
-
-  if (preselect) {
-    sel.value = preselect;
-    document.getElementById('s4PlayerLabel').textContent = preselect;
-    await loadPlayerHistory(preselect);
-  }
-}
 
 function onPlayerSelectChange() {
   const name = document.getElementById('historyPlayerSelect').value;
