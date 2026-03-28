@@ -1,5 +1,5 @@
 <!-- MOTH's Rollup - frontend/templates/index.html -->
-<!-- Updated: 2026-03-27 -->
+<!-- Updated: 2026-03-28 — added history results browser + player history graph -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,6 +11,7 @@
   <title>MOTH's Rollup</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <link rel="apple-touch-icon" href="/static/icon-192.png"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; }
@@ -40,6 +41,7 @@
     .big-btn .bs { font-size: 10px; opacity: 0.7; text-align: center; }
     .btn-navy { background: #2D2B5B; color: #fff; }
     .btn-outline { background: #fff; color: #2D2B5B; border: 1.5px solid #2D2B5B !important; }
+    .btn-gold { background: #FFD700; color: #2D2B5B; border: none !important; }
     .status-bar { text-align: center; font-size: 11px; font-weight: 500; padding: 6px; border-radius: 20px; }
     .status-neutral { background: #2D2B5B15; color: #2D2B5B; }
     .status-success { background: #EAF3DE; color: #3B6D11; }
@@ -64,8 +66,6 @@
     .team-size-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
     .team-structure-info { font-size: 11px; color: #2D2B5B; font-weight: 600; padding: 4px 0; min-height: 18px; }
     .team-structure-info.error { color: #A32D2D; }
-
-    /* Structure options picker */
     .structure-options { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
     .structure-option-btn { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: left; }
     .structure-option-btn.selected { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
@@ -119,22 +119,63 @@
     .team-pill-5 { background: #E1BEE7; color: #4a1a5a; }
     .team-pill-6 { background: #B3E5FC; color: #0d3a5a; }
 
-    /* Screen 3 */
+    /* Screen 3 - Results */
+    .results-nav { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f8f8f8; border-bottom: 1px solid #ddd; }
+    .nav-arrow { background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; cursor: pointer; font-family: inherit; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .nav-arrow:disabled { background: #ccc; color: #888; cursor: default; }
+    .date-select { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
     .results-wrap { flex: 1; overflow-y: auto; background: #fff; }
     table.rt { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; }
     table.rt thead tr { background: #2D2B5B; }
     table.rt thead th { font-size: 12px; font-weight: 600; color: #FFD700; padding: 5px 6px; border: 1px solid #2D2B5B; text-align: center; }
     table.rt thead th.left { text-align: left; }
-    table.rt tbody td { font-size: 12px; color: #000; padding: 3px 6px; border: 1px solid #ccc; background: #fff; vertical-align: middle; }
+    table.rt tbody td { font-size: 12px; color: #000; padding: 3px 6px; border: 1px solid #ccc; background: #fff; vertical-align: middle; cursor: pointer; }
     table.rt tbody td.c { text-align: center; }
     table.rt tbody tr.gold td { background: #FFF9E0; }
     table.rt tbody tr.silver td { background: #F5F5F5; }
     table.rt tbody tr.bronze td { background: #FDF3ED; }
+    table.rt tbody tr:hover td { filter: brightness(0.96); }
     .medal { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; }
     .medal.g { background: #FFD700; color: #7A5C00; }
     .medal.s { background: #C0C0C0; color: #444; }
     .medal.b { background: #CD7F32; color: #fff; }
+    .hc-change { font-size: 9px; color: #666; }
+    .hc-change.down { color: #3B6D11; }
+    .hc-change.up { color: #A32D2D; }
     .results-footer { padding: 10px; background: #f5f5f0; }
+
+    /* Screen 4 - Player History */
+    .ph-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    .player-select-wrap { position: relative; }
+    .player-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
+    .player-select:focus { outline: none; border-color: #2D2B5B; }
+    .filter-row { display: flex; gap: 8px; align-items: flex-end; }
+    .filter-row .field-group { flex: 1; }
+    .filter-row input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #000; }
+    .filter-row input:focus { outline: none; border-color: #2D2B5B; }
+    .apply-btn { padding: 8px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .chart-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; padding: 12px; }
+    .chart-title { font-size: 11px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+    .ph-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-card { background: #fff; border-radius: 10px; border: 1px solid #ddd; padding: 10px 8px; text-align: center; }
+    .stat-val { font-size: 22px; font-weight: 700; color: #2D2B5B; }
+    .stat-lbl { font-size: 10px; color: #888; margin-top: 2px; }
+    .ph-table-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; overflow: hidden; }
+    table.ph { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
+    table.ph thead tr { background: #2D2B5B; }
+    table.ph thead th { font-size: 11px; font-weight: 600; color: #FFD700; padding: 5px 8px; text-align: center; }
+    table.ph thead th.left { text-align: left; }
+    table.ph tbody td { font-size: 12px; padding: 5px 8px; border-bottom: 1px solid #eee; text-align: center; }
+    table.ph tbody td.left { text-align: left; }
+    table.ph tbody tr:last-child td { border-bottom: none; }
+    .no-data { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
+
+    /* Nav bar */
+    .nav-bar { display: flex; background: #2D2B5B; border-top: 1px solid #1a1840; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; color: #ffffff80; gap: 2px; }
+    .nav-item.active { color: #FFD700; }
+    .nav-item .ni { font-size: 20px; }
+    .nav-item .nl { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; }
 
     /* Dialogs */
     .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
@@ -160,7 +201,7 @@
 <div id="screen1" class="screen active">
   <div class="header">
     <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club" style="width:100%;height:100%;object-fit:contain;"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
     </div>
     <div class="header-title">
       <div class="club">Bramley Golf Club</div>
@@ -177,10 +218,10 @@
       <span class="error-retry">Tap Load Players to retry</span>
     </div>
     <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="showLastRound()">
+      <button class="big-btn btn-outline" onclick="showResultsScreen()">
         <span class="bi">📋</span>
-        <span class="bl">Last round</span>
-        <span class="bs">Results &amp; handicaps</span>
+        <span class="bl">Results</span>
+        <span class="bs">Browse round history</span>
       </button>
       <button class="big-btn btn-navy" onclick="loadPlayers()">
         <span class="bi">⛳</span>
@@ -188,7 +229,17 @@
         <span class="bs">Sets up new round</span>
       </button>
     </div>
+    <button class="big-btn btn-gold" onclick="showPlayerHistory()" style="width:100%">
+      <span class="bi">📈</span>
+      <span class="bl">Player history</span>
+      <span class="bs">Scores &amp; handicap trends</span>
+    </button>
     <div id="s1Status" class="status-bar status-neutral">Loading…</div>
+  </div>
+  <div class="nav-bar">
+    <button class="nav-item active" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
+    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
+    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
   </div>
 </div>
 
@@ -212,7 +263,6 @@
     </div>
   </div>
 
-  <!-- Game mode toggle -->
   <div style="padding:8px 10px; background:#f8f8f8; border-bottom:1px solid #ddd;">
     <div class="field-label" style="margin-bottom:5px;">Game type</div>
     <div class="toggle-row">
@@ -221,9 +271,11 @@
     </div>
   </div>
 
-  <!-- Team config -->
   <div id="teamConfig" style="display:none; padding:8px 10px; background:#f0f0f8; border-bottom:1px solid #ddd;">
-    <div class="field-label" style="margin-bottom:5px;">Team size preference</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+      <div class="field-label">Team size preference</div>
+      <div id="teeTimesInfo" style="font-size:10px;color:#2D2B5B;font-weight:600;background:#E8F0FE;padding:2px 8px;border-radius:10px;display:none;"></div>
+    </div>
     <div style="display:flex; gap:6px; margin-bottom:6px;">
       <button class="team-size-btn active" id="size2" onclick="setTeamSize(2)">Pairs (2)</button>
       <button class="team-size-btn" id="size3" onclick="setTeamSize(3)">Triples (3)</button>
@@ -235,16 +287,11 @@
     </div>
     <div class="team-structure-info" id="teamStructureInfo"></div>
     <div style="margin-top:8px; display:flex; gap:8px;">
-      <button onclick="randomAssign()" style="flex:1;padding:9px;background:#2D2B5B;color:#FFD700;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-        🎲 Random assign
-      </button>
-      <button onclick="addWalkupPlayer()" style="flex:1;padding:9px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
-        ➕ Add player
-      </button>
+      <button onclick="randomAssign()" style="flex:1;padding:9px;background:#2D2B5B;color:#FFD700;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🎲 Random assign</button>
+      <button onclick="addWalkupPlayer()" style="flex:1;padding:9px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add player</button>
     </div>
   </div>
 
-  <!-- Team scoreboard -->
   <div id="teamScoreboard" style="display:none;" class="team-scoreboard">
     <div class="team-scoreboard-title">Team scores (top 2)</div>
     <div class="team-scores-row" id="teamScoresPills"></div>
@@ -252,59 +299,129 @@
 
   <div class="grid-wrap">
     <table class="xl">
-      <thead>
-        <tr>
-          <th class="left">Player</th>
-          <th>HC</th>
-          <th>Score</th>
-          <th>New HC</th>
-          <th id="lastColHeader">✕</th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th class="left">Player</th><th>HC</th><th>Score</th><th>New HC</th><th id="lastColHeader">✕</th>
+      </tr></thead>
       <tbody id="scoreGrid"></tbody>
     </table>
   </div>
 
   <div style="padding:6px 10px; background:#f8f8f8; border-top:1px solid #ddd;" id="addPlayerBar">
-    <button onclick="addWalkupPlayer()" style="width:100%;padding:8px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
-      ➕ Add walk-up player
-    </button>
+    <button onclick="addWalkupPlayer()" style="width:100%;padding:8px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add walk-up player</button>
   </div>
 
   <div style="padding:10px;">
-    <button id="saveRoundBtn" onclick="saveRound()"
-      style="width:100%;padding:14px;background:#2D2B5B;color:#FFD700;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">
-      Save Round
-    </button>
+    <button id="saveRoundBtn" onclick="saveRound()" style="width:100%;padding:14px;background:#2D2B5B;color:#FFD700;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Save Round</button>
   </div>
 </div>
 
 
-<!-- SCREEN 3 -->
+<!-- SCREEN 3 - Results -->
 <div id="screen3" class="screen">
   <div class="header">
     <button class="header-back" onclick="goBack()">‹</button>
     <div class="header-title" style="text-align:center">
-      <div class="club" id="s3DateLabel">MOTH's Rollup</div>
+      <div class="club">MOTH's Rollup</div>
       <div class="society">Results</div>
     </div>
     <div class="header-spacer"></div>
   </div>
+
+  <!-- Date navigation -->
+  <div class="results-nav">
+    <button class="nav-arrow" id="prevRoundBtn" onclick="stepRound(-1)">‹</button>
+    <select class="date-select" id="roundDateSelect" onchange="loadRoundByDate(this.value)">
+      <option value="">Select a round…</option>
+    </select>
+    <button class="nav-arrow" id="nextRoundBtn" onclick="stepRound(1)">›</button>
+  </div>
+
   <div class="results-wrap">
-    <table class="rt">
-      <thead>
-        <tr>
-          <th></th>
-          <th class="left">Player</th>
-          <th>Score</th>
-          <th>New HC</th>
-        </tr>
-      </thead>
+    <div id="resultsLoading" style="display:none;text-align:center;padding:30px;color:#888;font-size:13px;">Loading…</div>
+    <table class="rt" id="resultsTable">
+      <thead><tr>
+        <th style="width:28px"></th>
+        <th class="left">Player</th>
+        <th>Score</th>
+        <th>HC</th>
+        <th>Change</th>
+      </tr></thead>
       <tbody id="resultsGrid"></tbody>
     </table>
   </div>
   <div class="results-footer">
-    <div id="s3Status" class="status-bar status-success">Results</div>
+    <div id="s3Status" class="status-bar status-neutral">Select a round above</div>
+  </div>
+  <div class="nav-bar">
+    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
+    <button class="nav-item active" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
+    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
+  </div>
+</div>
+
+
+<!-- SCREEN 4 - Player History -->
+<div id="screen4" class="screen">
+  <div class="header">
+    <button class="header-back" onclick="goBack()">‹</button>
+    <div class="header-title" style="text-align:center">
+      <div class="club" id="s4PlayerLabel">Player History</div>
+      <div class="society">Score &amp; handicap trends</div>
+    </div>
+    <div class="header-spacer"></div>
+  </div>
+
+  <div class="ph-body">
+    <div class="field-group">
+      <div class="field-label">Select player</div>
+      <div class="player-select-wrap">
+        <select class="player-select" id="historyPlayerSelect" onchange="onPlayerSelectChange()">
+          <option value="">Choose a player…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div class="field-group">
+        <div class="field-label">From</div>
+        <input type="date" id="filterFrom"/>
+      </div>
+      <div class="field-group">
+        <div class="field-label">To</div>
+        <input type="date" id="filterTo"/>
+      </div>
+      <button class="apply-btn" onclick="applyFilter()">Apply</button>
+    </div>
+
+    <div id="phContent" style="display:none;">
+      <div class="ph-stats" id="phStats"></div>
+      <div style="height:12px;"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">Score &amp; Handicap per Round</div>
+        <canvas id="historyChart" height="200"></canvas>
+      </div>
+      <div style="height:12px;"></div>
+      <div class="ph-table-wrap">
+        <table class="ph">
+          <thead><tr>
+            <th class="left">Date</th>
+            <th>Score</th>
+            <th>HC After</th>
+            <th>Change</th>
+          </tr></thead>
+          <tbody id="phTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="phNoData" class="no-data" style="display:none;">No rounds found for this player in the selected range.</div>
+    <div id="phEmpty" class="no-data">Select a player to view their history.</div>
+  </div>
+
+  <div class="nav-bar">
+    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
+    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
+    <button class="nav-item active" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
   </div>
 </div>
 
@@ -355,8 +472,7 @@
     <div class="dialog-body">Enter player name — if they're in the system their handicap will be loaded automatically.</div>
     <div class="field-group">
       <div class="field-label">Player name</div>
-      <input class="name-input" id="walkupName" type="text" placeholder="First Last" autocomplete="off"
-        onkeydown="if(event.key==='Enter') lookupWalkupPlayer()"/>
+      <input class="name-input" id="walkupName" type="text" placeholder="First Last" autocomplete="off" onkeydown="if(event.key==='Enter') lookupWalkupPlayer()"/>
     </div>
     <div id="walkupHCRow" style="display:none;" class="field-group">
       <div class="field-label">Starting handicap</div>
@@ -387,64 +503,425 @@ let state = {
   selectedStructure: null,
   teamScores: [],
   walkupFoundHC: null,
+  teeTimes: null,
+  // Results browser
+  allRoundDates: [],
+  currentRoundIdx: 0,
+  // Player history
+  allPlayers: [],
+  historyData: [],
+  historyChart: null,
 };
 
 const TEAM_NAMES = ['', 'Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5', 'Team 6'];
 
 // ═══════════════════════════════════════
-// Team structure calculator
+// Navigation
+// ═══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  state.currentScreen = id;
+}
+
+function goBack() { showScreen('screen1'); }
+
+// ═══════════════════════════════════════
+// Init
+// ═══════════════════════════════════════
+async function init() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('roundDate').value = today;
+
+  // Set default filter dates (last 3 rounds = ~3 months back as initial range)
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  document.getElementById('filterFrom').value = threeMonthsAgo.toISOString().split('T')[0];
+  document.getElementById('filterTo').value = today;
+
+  try {
+    const resp = await fetch('/auth/status');
+    const data = await resp.json();
+    updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
+  } catch(e) { updateStatus('Ready'); }
+
+  // Pre-load players list for history screen
+  loadAllPlayers();
+
+  const day = new Date(today + 'T12:00:00').getDay();
+  if (day === 1 || day === 4) loadPlayers();
+}
+
+async function loadAllPlayers() {
+  try {
+    const resp = await fetch('/api/load-players', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date: new Date().toISOString().split('T')[0]}),
+    });
+    // This will fail if today isn't a Mon/Thu — use a direct players endpoint instead
+  } catch(e) {}
+  // Populate player select from last round or all players
+  try {
+    const resp = await fetch('/api/last-round');
+    const data = await resp.json();
+    // Build player list from all round dates eventually — for now seed from last round
+    const sel = document.getElementById('historyPlayerSelect');
+    // We'll populate properly when history screen opens
+  } catch(e) {}
+}
+
+function updateStatus(msg, type = 'neutral') {
+  const el = document.getElementById('s1Status');
+  el.textContent = msg;
+  el.className = `status-bar status-${type}`;
+}
+
+function showS1Error(msg) {
+  document.getElementById('s1ErrorMsg').textContent = msg;
+  document.getElementById('s1Error').style.display = 'block';
+  updateStatus('Load failed', 'danger');
+}
+
+function clearS1Error() { document.getElementById('s1Error').style.display = 'none'; }
+
+// ═══════════════════════════════════════
+// Results screen
+// ═══════════════════════════════════════
+async function showResultsScreen() {
+  showScreen('screen3');
+  // Load all round dates
+  try {
+    const resp = await fetch('/api/round-dates');
+    const data = await resp.json();
+    state.allRoundDates = data.dates || [];
+    const sel = document.getElementById('roundDateSelect');
+    sel.innerHTML = '<option value="">Select a round…</option>';
+    state.allRoundDates.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = formatDateLabel(d);
+      sel.appendChild(opt);
+    });
+    // Auto-load most recent
+    if (state.allRoundDates.length > 0) {
+      state.currentRoundIdx = 0;
+      sel.value = state.allRoundDates[0];
+      await loadRoundByDate(state.allRoundDates[0]);
+    }
+    updateRoundNavButtons();
+  } catch(e) {
+    document.getElementById('s3Status').textContent = 'Could not load round dates.';
+  }
+}
+
+function formatDateLabel(d) {
+  const dt = new Date(d + 'T12:00:00');
+  return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function loadRoundByDate(dateStr) {
+  if (!dateStr) return;
+  state.currentRoundIdx = state.allRoundDates.indexOf(dateStr);
+  document.getElementById('roundDateSelect').value = dateStr;
+  document.getElementById('resultsLoading').style.display = 'block';
+  document.getElementById('resultsTable').style.display = 'none';
+  try {
+    const resp = await fetch(`/api/round/${dateStr}`);
+    if (!resp.ok) throw new Error('Not found');
+    const data = await resp.json();
+    renderResults(data.players, data.date);
+  } catch(e) {
+    document.getElementById('s3Status').textContent = 'Could not load results for this date.';
+  } finally {
+    document.getElementById('resultsLoading').style.display = 'none';
+    document.getElementById('resultsTable').style.display = 'table';
+  }
+  updateRoundNavButtons();
+}
+
+function stepRound(dir) {
+  const newIdx = state.currentRoundIdx + dir;
+  if (newIdx < 0 || newIdx >= state.allRoundDates.length) return;
+  loadRoundByDate(state.allRoundDates[newIdx]);
+}
+
+function updateRoundNavButtons() {
+  document.getElementById('prevRoundBtn').disabled = state.currentRoundIdx >= state.allRoundDates.length - 1;
+  document.getElementById('nextRoundBtn').disabled = state.currentRoundIdx <= 0;
+}
+
+function renderResults(players, dateStr) {
+  document.getElementById('s3Status').textContent = formatDateLabel(dateStr);
+  document.getElementById('s3Status').className = 'status-bar status-neutral';
+  const tbody = document.getElementById('resultsGrid');
+  tbody.innerHTML = '';
+  const medals = ['g', 's', 'b'];
+  const rowClass = ['gold', 'silver', 'bronze'];
+  const sorted = [...players].filter(p => p.score !== null && p.score !== undefined)
+    .sort((a, b) => Number(b.score) - Number(a.score));
+
+  sorted.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    if (i < 3) tr.className = rowClass[i];
+    const medalCell = i < 3 ? `<span class="medal ${medals[i]}">${i + 1}</span>` : `<span style="font-size:10px;color:#aaa">${i + 1}</span>`;
+    // HC change calculation — new_handicap is after the round
+    // We don't store prior HC in rounds table, so show new HC only with a tap-to-history hint
+    tr.innerHTML = `
+      <td class="c">${medalCell}</td>
+      <td style="cursor:pointer;font-weight:${i===0?'700':'400'}" onclick="openPlayerFromResults('${p.name}')">${p.name}</td>
+      <td class="c" style="font-weight:600">${p.score}</td>
+      <td class="c" style="font-size:11px">${p.new_handicap ?? ''}</td>
+      <td class="c"><span style="font-size:10px;color:#2D2B5B;text-decoration:underline" onclick="openPlayerFromResults('${p.name}')">📈</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function openPlayerFromResults(name) {
+  showPlayerHistory(name);
+}
+
+// ═══════════════════════════════════════
+// Player History screen
+// ═══════════════════════════════════════
+async function showPlayerHistory(preselect) {
+  showScreen('screen4');
+  // Load players into select if not already done
+  const sel = document.getElementById('historyPlayerSelect');
+  if (sel.options.length <= 1) {
+    try {
+      const resp = await fetch('/api/last-round');
+      const data = await resp.json();
+      // Get player names from all round dates to build full list
+      const datesResp = await fetch('/api/round-dates');
+      const datesData = await datesResp.json();
+      const allDates = datesData.dates || [];
+      // Collect unique names from most recent round + any preselect
+      const names = new Set(data.players.map(p => p.name));
+      sel.innerHTML = '<option value="">Choose a player…</option>';
+      [...names].sort().forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  if (preselect) {
+    sel.value = preselect;
+    document.getElementById('s4PlayerLabel').textContent = preselect;
+    await loadPlayerHistory(preselect);
+  }
+}
+
+function onPlayerSelectChange() {
+  const name = document.getElementById('historyPlayerSelect').value;
+  if (!name) return;
+  document.getElementById('s4PlayerLabel').textContent = name;
+  loadPlayerHistory(name);
+}
+
+async function applyFilter() {
+  const name = document.getElementById('historyPlayerSelect').value;
+  if (!name) return;
+  loadPlayerHistory(name);
+}
+
+async function loadPlayerHistory(name) {
+  document.getElementById('phContent').style.display = 'none';
+  document.getElementById('phNoData').style.display = 'none';
+  document.getElementById('phEmpty').style.display = 'none';
+
+  try {
+    const resp = await fetch(`/api/player-history/${encodeURIComponent(name)}`);
+    const data = await resp.json();
+    let rounds = data.rounds || [];
+
+    // Apply date filter
+    const from = document.getElementById('filterFrom').value;
+    const to = document.getElementById('filterTo').value;
+    if (from) rounds = rounds.filter(r => r.date >= from);
+    if (to) rounds = rounds.filter(r => r.date <= to);
+
+    // Default: show last 3 if no filter applied and more than 3 exist
+    if (!from && !to && rounds.length > 3) rounds = rounds.slice(0, 3);
+
+    state.historyData = rounds;
+
+    if (rounds.length === 0) {
+      document.getElementById('phNoData').style.display = 'block';
+      return;
+    }
+
+    renderPlayerHistory(name, rounds);
+    document.getElementById('phContent').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('phNoData').style.display = 'block';
+  }
+}
+
+function renderPlayerHistory(name, rounds) {
+  // Rounds come newest first from API — reverse for chart (oldest left)
+  const chronological = [...rounds].reverse();
+
+  // Stats
+  const scores = rounds.map(r => r.score);
+  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  const best = Math.max(...scores);
+  const currentHC = rounds[0].new_handicap;
+
+  document.getElementById('phStats').innerHTML = `
+    <div class="stat-card"><div class="stat-val">${avg}</div><div class="stat-lbl">Avg score</div></div>
+    <div class="stat-card"><div class="stat-val">${best}</div><div class="stat-lbl">Best score</div></div>
+    <div class="stat-card"><div class="stat-val">${currentHC}</div><div class="stat-lbl">Current HC</div></div>
+  `;
+
+  // Chart
+  const labels = chronological.map(r => {
+    const d = new Date(r.date + 'T12:00:00');
+    return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+  });
+  const scoreData = chronological.map(r => r.score);
+  const hcData = chronological.map(r => r.new_handicap);
+
+  if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
+
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  state.historyChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Score',
+          data: scoreData,
+          backgroundColor: '#2D2B5B33',
+          borderColor: '#2D2B5B',
+          borderWidth: 1.5,
+          yAxisID: 'yScore',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Handicap',
+          data: hcData,
+          borderColor: '#FFD700',
+          backgroundColor: '#FFD70033',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#FFD700',
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: 'yHC',
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { font: { size: 11 } } } },
+      scales: {
+        yScore: {
+          type: 'linear', position: 'left',
+          title: { display: true, text: 'Score', font: { size: 10 } },
+          ticks: { font: { size: 10 } },
+        },
+        yHC: {
+          type: 'linear', position: 'right',
+          title: { display: true, text: 'Handicap', font: { size: 10 } },
+          ticks: { font: { size: 10 } },
+          grid: { drawOnChartArea: false },
+        },
+        x: { ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+
+  // Table
+  const tbody = document.getElementById('phTableBody');
+  tbody.innerHTML = '';
+  rounds.forEach((r, i) => {
+    const prev = rounds[i + 1];
+    const hcChange = prev ? r.new_handicap - prev.new_handicap : null;
+    let changeEl = '—';
+    if (hcChange !== null) {
+      const cls = hcChange < 0 ? 'down' : hcChange > 0 ? 'up' : '';
+      const sign = hcChange > 0 ? '+' : '';
+      changeEl = `<span class="hc-change ${cls}">${sign}${hcChange}</span>`;
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="left">${formatDateLabel(r.date)}</td>
+      <td style="font-weight:600">${r.score}</td>
+      <td>${r.new_handicap}</td>
+      <td>${changeEl}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ═══════════════════════════════════════
+// Load Players (Screen 1 → Screen 2)
+// ═══════════════════════════════════════
+async function loadPlayers() {
+  clearS1Error();
+  const date = document.getElementById('roundDate').value;
+  if (!date) { showS1Error('Please select a round date.'); return; }
+  const day = new Date(date + 'T12:00:00').getDay();
+  if (day !== 1 && day !== 4) {
+    showS1Error("MOTH's Rollup is on Mondays and Thursdays only. Tap on the date field to select the round you want.");
+    return;
+  }
+  updateStatus('Loading players from Intelligent Golf…', 'neutral');
+  try {
+    const resp = await fetch('/api/load-players', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date}),
+    });
+    if (!resp.ok) { const err = await resp.json(); showS1Error(err.detail || 'Failed to load players.'); return; }
+    const data = await resp.json();
+    state.players = data.players;
+    state.roundDate = data.date;
+    state.teeTimes = data.tee_times || null;
+    state.newPlayerQueue = data.new_players || [];
+    if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
+    else openScoreEntry();
+  } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
+}
+
+// ═══════════════════════════════════════
+// Team structure calculator (unchanged)
 // ═══════════════════════════════════════
 function getAllValidStructures(n, preferredSize) {
-  // Rules:
-  // - All teams must have between 2 and 4 players (hard limits)
-  // - Team sizes within a round must differ by at most 1
-  // Returns all valid structures sorted by closeness to preferredSize
-
   if (n < 4) return [];
-
   const seen = new Set();
   const results = [];
-
+  // Max teams is constrained by available tee times (one team per tee time)
+  const maxTeams = state.teeTimes || n;
   for (let numTeams = 2; numTeams <= n; numTeams++) {
+    if (numTeams > maxTeams) continue;  // exceeds available tee times
     const base = Math.floor(n / numTeams);
     const remainder = n % numTeams;
     const largeSize = remainder > 0 ? base + 1 : base;
-
-    // Hard limits: teams must be 2-4 players
     if (base < 2) continue;
     if (largeSize > 4) continue;
-
     const key = `${numTeams}_${base}_${remainder}`;
     if (seen.has(key)) continue;
     seen.add(key);
-
     const diff = Math.abs(base - preferredSize);
-    results.push({
-      numTeams,
-      smallSize: base,
-      largeSize,
-      numLarge: remainder,
-      numSmall: numTeams - remainder,
-      diff,
-      description: buildDescription(numTeams, base, remainder),
-      valid: true,
-    });
+    results.push({ numTeams, smallSize: base, largeSize, numLarge: remainder, numSmall: numTeams - remainder, diff, description: buildDescription(numTeams, base, remainder), valid: true });
   }
-
-  // Sort by closeness to preferred size, then by number of teams
   results.sort((a, b) => a.diff - b.diff || a.numTeams - b.numTeams);
   return results;
 }
 
 function buildDescription(numTeams, base, numLarge) {
   const numSmall = numTeams - numLarge;
-  if (numLarge === 0) {
-    return `${numTeams} team${numTeams > 1 ? 's' : ''} of ${base}`;
-  } else if (numSmall === 0) {
-    return `${numLarge} team${numLarge > 1 ? 's' : ''} of ${base + 1}`;
-  } else {
-    return `${numSmall} team${numSmall > 1 ? 's' : ''} of ${base}, ${numLarge} of ${base + 1}`;
-  }
+  if (numLarge === 0) return `${numTeams} team${numTeams > 1 ? 's' : ''} of ${base}`;
+  else if (numSmall === 0) return `${numLarge} team${numLarge > 1 ? 's' : ''} of ${base + 1}`;
+  else return `${numSmall} team${numSmall > 1 ? 's' : ''} of ${base}, ${numLarge} of ${base + 1}`;
 }
 
 function updateTeamStructureUI() {
@@ -453,7 +930,6 @@ function updateTeamStructureUI() {
   const infoEl = document.getElementById('teamStructureInfo');
   const optionsEl = document.getElementById('structureOptions');
   const listEl = document.getElementById('structureOptionsList');
-
   if (structures.length === 0) {
     infoEl.textContent = n < 4 ? 'Not enough players for teams' : `No valid team structure for ${n} players with teams of 2-4`;
     infoEl.className = 'team-structure-info error';
@@ -461,12 +937,9 @@ function updateTeamStructureUI() {
     state.selectedStructure = null;
     return;
   }
-
-  // Auto-select best structure if none selected or current is no longer valid
   if (!state.selectedStructure || !structures.find(s => s.description === state.selectedStructure.description)) {
     state.selectedStructure = structures[0];
   }
-
   if (structures.length === 1) {
     infoEl.textContent = `${n} players → ${structures[0].description}`;
     infoEl.className = 'team-structure-info';
@@ -499,206 +972,18 @@ function getActiveStructure() {
   return structures.length > 0 ? structures[0] : null;
 }
 
-// ═══════════════════════════════════════
-// Navigation
-// ═══════════════════════════════════════
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  state.currentScreen = id;
-}
-
-function goBack() { showScreen('screen1'); }
-
-// ═══════════════════════════════════════
-// Init
-// ═══════════════════════════════════════
-async function init() {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('roundDate').value = today;
-  try {
-    const resp = await fetch('/auth/status');
-    const data = await resp.json();
-    updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
-  } catch(e) { updateStatus('Ready'); }
-  const day = new Date(today + 'T12:00:00').getDay();
-  if (day === 1 || day === 4) loadPlayers();
-}
-
-function updateStatus(msg, type = 'neutral') {
-  const el = document.getElementById('s1Status');
-  el.textContent = msg;
-  el.className = `status-bar status-${type}`;
-}
-
-function showS1Error(msg) {
-  document.getElementById('s1ErrorMsg').textContent = msg;
-  document.getElementById('s1Error').style.display = 'block';
-  updateStatus('Load failed', 'danger');
-}
-
-function clearS1Error() { document.getElementById('s1Error').style.display = 'none'; }
-
-// ═══════════════════════════════════════
-// Load Players
-// ═══════════════════════════════════════
-async function loadPlayers() {
-  clearS1Error();
-  const date = document.getElementById('roundDate').value;
-  if (!date) { showS1Error('Please select a round date.'); return; }
-  const day = new Date(date + 'T12:00:00').getDay();
-  if (day !== 1 && day !== 4) {
-    showS1Error("MOTH's Rollup is on Mondays and Thursdays only. Tap on the date field to select the round you want.");
-    return;
-  }
-  updateStatus('Loading players from Intelligent Golf…', 'neutral');
-  try {
-    const resp = await fetch('/api/load-players', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({date}),
-    });
-    if (!resp.ok) { const err = await resp.json(); showS1Error(err.detail || 'Failed to load players.'); return; }
-    const data = await resp.json();
-    state.players = data.players;
-    state.roundDate = data.date;
-    state.newPlayerQueue = data.new_players || [];
-    if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
-    else openScoreEntry();
-  } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
-}
-
-// ═══════════════════════════════════════
-// New player queue
-// ═══════════════════════════════════════
-function processNewPlayerQueue() {
-  if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
-  state.currentNewPlayer = state.newPlayerQueue.shift();
-  document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
-  document.getElementById('newPlayerHC').value = '';
-  document.getElementById('newPlayerOverlay').classList.add('open');
-}
-
-async function confirmNewPlayer() {
-  const hc = parseInt(document.getElementById('newPlayerHC').value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await fetch('/api/new-player', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: state.currentNewPlayer, handicap: hc}),
-  });
-  const p = state.players.find(p => p.name === state.currentNewPlayer);
-  if (p) { p.handicap = hc; p.new_player = false; }
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-function skipNewPlayer() {
-  state.players = state.players.filter(p => p.name !== state.currentNewPlayer);
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-// ═══════════════════════════════════════
-// Remove player
-// ═══════════════════════════════════════
-function promptRemovePlayer(name) {
-  state.playerToRemove = name;
-  document.getElementById('removePlayerName').textContent = name;
-  document.getElementById('removePlayerOverlay').classList.add('open');
-}
-
-function confirmRemovePlayer() {
-  state.players = state.players.filter(p => p.name !== state.playerToRemove);
-  state.playerToRemove = null;
-  closeOverlay('removePlayerOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI();
-  updateUnassignedWarning();
-  renderGrid();
-}
-
-// ═══════════════════════════════════════
-// Walk-up player
-// ═══════════════════════════════════════
-function addWalkupPlayer() {
-  document.getElementById('walkupName').value = '';
-  document.getElementById('walkupHCRow').style.display = 'none';
-  document.getElementById('walkupStatus').textContent = '';
-  document.getElementById('walkupLookupBtn').textContent = 'Look up';
-  document.getElementById('walkupLookupBtn').onclick = lookupWalkupPlayer;
-  state.walkupFoundHC = null;
-  document.getElementById('walkupOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('walkupName').focus(), 100);
-}
-
-async function lookupWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) { alert('Please enter a player name.'); return; }
-  if (state.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
-    document.getElementById('walkupStatus').textContent = 'Player is already in the round.';
-    document.getElementById('walkupStatus').style.color = '#A32D2D';
-    return;
-  }
-  document.getElementById('walkupStatus').textContent = 'Looking up…';
-  document.getElementById('walkupStatus').style.color = '#888';
-  try {
-    const resp = await fetch('/api/lookup-player', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name}),
-    });
-    const data = await resp.json();
-    if (data.found) {
-      state.walkupFoundHC = data.handicap;
-      document.getElementById('walkupStatus').textContent = `Found — handicap ${data.handicap}`;
-      document.getElementById('walkupStatus').style.color = '#3B6D11';
-      document.getElementById('walkupHCRow').style.display = 'none';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    } else {
-      state.walkupFoundHC = null;
-      document.getElementById('walkupStatus').textContent = 'New player — enter starting handicap';
-      document.getElementById('walkupStatus').style.color = '#2D2B5B';
-      document.getElementById('walkupHCRow').style.display = 'flex';
-      document.getElementById('walkupHC').value = '';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    }
-  } catch(e) {
-    document.getElementById('walkupStatus').textContent = 'Lookup failed — enter handicap manually';
-    document.getElementById('walkupStatus').style.color = '#A32D2D';
-    document.getElementById('walkupHCRow').style.display = 'flex';
-    document.getElementById('walkupLookupBtn').textContent = 'Add player';
-    document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-  }
-}
-
-async function confirmWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) return;
-  let hc = state.walkupFoundHC;
-  if (hc === null) {
-    hc = parseInt(document.getElementById('walkupHC').value);
-    if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-    await fetch('/api/new-player', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, handicap: hc}),
-    });
-  }
-  state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
-  closeOverlay('walkupOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI();
-  updateUnassignedWarning();
-  renderGrid();
-}
-
-// ═══════════════════════════════════════
-// Game mode
-// ═══════════════════════════════════════
 function setGameMode(mode) {
   state.gameMode = mode;
   document.getElementById('modeIndividual').classList.toggle('active', mode === 'individual');
   document.getElementById('modeTeam').classList.toggle('active', mode === 'team');
   document.getElementById('teamConfig').style.display = mode === 'team' ? 'block' : 'none';
+  const ttInfo = document.getElementById('teeTimesInfo');
+  if (mode === 'team' && state.teeTimes) {
+    ttInfo.textContent = `${state.teeTimes} tee time${state.teeTimes !== 1 ? 's' : ''} · max ${state.teeTimes * 4} players`;
+    ttInfo.style.display = 'inline';
+  } else {
+    ttInfo.style.display = 'none';
+  }
   document.getElementById('teamScoreboard').style.display = mode === 'team' ? 'block' : 'none';
   document.getElementById('addPlayerBar').style.display = mode === 'individual' ? 'block' : 'none';
   if (mode === 'individual') state.players.forEach(p => p.team = null);
@@ -717,9 +1002,6 @@ function setTeamSize(size) {
   renderGrid();
 }
 
-// ═══════════════════════════════════════
-// Team validation
-// ═══════════════════════════════════════
 function getTeamCounts() {
   const counts = {};
   state.players.forEach(p => { if (p.team) counts[p.team] = (counts[p.team] || 0) + 1; });
@@ -737,10 +1019,7 @@ function validateTeamAssignment(name, newTeam) {
   const currentTeam = state.players.find(p => p.name === name)?.team;
   const newCount = (counts[newTeam] || 0) + (currentTeam === newTeam ? 0 : 1);
   const maxSize = getMaxTeamSize();
-  if (newCount > maxSize) {
-    alert(`Team ${newTeam} is full (max ${maxSize} players for this structure).`);
-    return false;
-  }
+  if (newCount > maxSize) { alert(`Team ${newTeam} is full (max ${maxSize} players for this structure).`); return false; }
   return true;
 }
 
@@ -748,12 +1027,8 @@ function updateUnassignedWarning() {
   const el = document.getElementById('unassignedWarning');
   if (state.gameMode !== 'team') { el.style.display = 'none'; return; }
   const unassigned = state.players.filter(p => !p.team).length;
-  if (unassigned > 0) {
-    el.textContent = `${unassigned} player${unassigned > 1 ? 's' : ''} unassigned`;
-    el.style.display = 'inline';
-  } else {
-    el.style.display = 'none';
-  }
+  if (unassigned > 0) { el.textContent = `${unassigned} player${unassigned > 1 ? 's' : ''} unassigned`; el.style.display = 'inline'; }
+  else { el.style.display = 'none'; }
 }
 
 function checkAutoAssignLast() {
@@ -775,9 +1050,6 @@ function checkAutoAssignLast() {
   }
 }
 
-// ═══════════════════════════════════════
-// Random assign
-// ═══════════════════════════════════════
 function randomAssign() {
   const structure = getActiveStructure();
   if (!structure) { alert('Cannot form valid teams with the current number of players.'); return; }
@@ -814,12 +1086,10 @@ function getNumTeams() {
 }
 
 // ═══════════════════════════════════════
-// Score entry
+// Score entry (Screen 2)
 // ═══════════════════════════════════════
 function openScoreEntry() {
-  const dateLabel = new Date(state.roundDate + 'T12:00:00').toLocaleDateString('en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
-  });
+  const dateLabel = new Date(state.roundDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   document.getElementById('s2DateLabel').textContent = `MOTH's Rollup · ${dateLabel}`;
   document.getElementById('addPlayerBar').style.display = 'block';
   updateTeamStructureUI();
@@ -834,12 +1104,9 @@ function renderGrid() {
   const numTeams = getNumTeams();
   const counts = getTeamCounts();
   const maxSize = getMaxTeamSize();
-
   document.getElementById('lastColHeader').textContent = isTeam ? 'Team' : '✕';
   document.getElementById('addPlayerBar').style.display = isTeam ? 'none' : 'block';
-
   let currentTeam = null;
-
   state.players.forEach((p, i) => {
     if (isTeam && p.team && p.team !== currentTeam) {
       currentTeam = p.team;
@@ -850,11 +1117,9 @@ function renderGrid() {
       headerRow.innerHTML = `<td colspan="5">${TEAM_NAMES[p.team]} · ${teamCount} player${teamCount !== 1 ? 's' : ''}${oversized ? ' ⚠ too many' : ''}</td>`;
       tbody.appendChild(headerRow);
     }
-
     const tr = document.createElement('tr');
     tr.setAttribute('data-name', p.name);
     if (isTeam && p.team) tr.classList.add(`team-${p.team}`);
-
     let lastCol;
     if (isTeam) {
       const teamCount = p.team ? (counts[p.team] || 0) : 0;
@@ -867,23 +1132,17 @@ function renderGrid() {
     } else {
       lastCol = `<td class="remove-col" onclick="promptRemovePlayer('${p.name}')">✕</td>`;
     }
-
     tr.innerHTML = `
       <td>${p.name}</td>
       <td class="c">${p.handicap ?? ''}</td>
-      <td class="sc"><input
-        type="tel" inputmode="numeric"
-        value="${p.score ?? ''}"
+      <td class="sc"><input type="tel" inputmode="numeric" value="${p.score ?? ''}"
         onchange="onScoreChange(${i}, this.value)"
         onkeydown="onScoreKey(event, ${i})"
-        style="width:100%;border:none;background:transparent;font-size:11px;text-align:center;font-family:Arial,sans-serif;padding:0;outline:none;"
-      /></td>
+        style="width:100%;border:none;background:transparent;font-size:11px;text-align:center;font-family:Arial,sans-serif;padding:0;outline:none;"/></td>
       <td class="nhc" data-nhc="${p.name}"></td>
-      ${lastCol}
-    `;
+      ${lastCol}`;
     tbody.appendChild(tr);
   });
-
   updateGridDisplay();
 }
 
@@ -904,9 +1163,7 @@ function updateGridDisplay() {
 function updateIndividualRankings() {
   const rows = document.querySelectorAll('#scoreGrid tr:not(.team-header)');
   rows.forEach(r => r.classList.remove('rank-gold', 'rank-silver', 'rank-bronze'));
-  const scored = state.players
-    .filter(p => p.score !== null && p.score !== undefined && p.score !== '')
-    .sort((a, b) => Number(b.score) - Number(a.score));
+  const scored = state.players.filter(p => p.score !== null && p.score !== undefined && p.score !== '').sort((a, b) => Number(b.score) - Number(a.score));
   ['rank-gold', 'rank-silver', 'rank-bronze'].forEach((cls, rank) => {
     if (!scored[rank]) return;
     const row = document.querySelector(`#scoreGrid tr[data-name="${scored[rank].name}"]`);
@@ -958,16 +1215,13 @@ async function recalculate() {
     state.teamScores = data.team_scores || [];
     updateGridDisplay();
     setSaveState('saved');
-  } catch(e) { setSaveState('error'); console.error('Calculate error', e); }
+  } catch(e) { setSaveState('error'); }
 }
 
 async function saveRound() {
   if (state.gameMode === 'team') {
     const unassigned = state.players.filter(p => !p.team).length;
-    if (unassigned > 0) {
-      alert(`${unassigned} player${unassigned > 1 ? 's are' : ' is'} not assigned to a team. Please assign all players before saving.`);
-      return;
-    }
+    if (unassigned > 0) { alert(`${unassigned} player${unassigned > 1 ? 's are' : ' is'} not assigned to a team.`); return; }
     const counts = getTeamCounts();
     const maxSize = getMaxTeamSize();
     const oversized = Object.entries(counts).filter(([, count]) => count > maxSize);
@@ -980,14 +1234,11 @@ async function saveRound() {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ date: state.roundDate, players: state.players, team_mode: state.gameMode === 'team' }),
     });
-    if (!resp.ok) {
-      const err = await resp.json();
-      alert('Save failed: ' + (err.detail || 'Unknown error'));
-      btn.textContent = 'Save Round'; btn.disabled = false; return;
-    }
+    if (!resp.ok) { const err = await resp.json(); alert('Save failed: ' + (err.detail || 'Unknown error')); btn.textContent = 'Save Round'; btn.disabled = false; return; }
     const data = await resp.json();
-    renderResults(data.players, data.date, true);
-    showScreen('screen3');
+    // Show in results screen
+    await showResultsScreen();
+    // The results screen will auto-load the most recent — which is now this round
   } catch(e) { alert('Network error saving round.'); btn.textContent = 'Save Round'; btn.disabled = false; }
 }
 
@@ -999,33 +1250,112 @@ function setSaveState(s) {
   else { dot.style.background = '#A32D2D'; label.style.color = '#A32D2D'; label.textContent = 'Error'; }
 }
 
-async function showLastRound() {
-  try {
-    const resp = await fetch('/api/last-round');
-    if (!resp.ok) { alert('Could not load last round results.'); return; }
-    const data = await resp.json();
-    renderResults(data.players, data.date, false);
-    showScreen('screen3');
-  } catch(e) { alert('Network error loading last round.'); }
+// ═══════════════════════════════════════
+// New player queue
+// ═══════════════════════════════════════
+function processNewPlayerQueue() {
+  if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
+  state.currentNewPlayer = state.newPlayerQueue.shift();
+  document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
+  document.getElementById('newPlayerHC').value = '';
+  document.getElementById('newPlayerOverlay').classList.add('open');
 }
 
-function renderResults(players, dateStr, isCurrent) {
-  document.getElementById('s3DateLabel').textContent = `MOTH's Rollup · ${dateStr}`;
-  const tbody = document.getElementById('resultsGrid');
-  tbody.innerHTML = '';
-  const medals = ['g', 's', 'b'];
-  const rowClass = ['gold', 'silver', 'bronze'];
-  const sorted = [...players].filter(p => p.score !== null && p.score !== undefined)
-    .sort((a, b) => Number(b.score) - Number(a.score));
-  sorted.forEach((p, i) => {
-    const tr = document.createElement('tr');
-    if (i < 3) tr.className = rowClass[i];
-    const medalCell = i < 3 ? `<span class="medal ${medals[i]}">${i + 1}</span>` : `<span style="font-size:10px;color:#aaa">${i + 1}</span>`;
-    tr.innerHTML = `<td class="c">${medalCell}</td><td>${p.name}</td><td class="c" style="font-weight:600">${p.score}</td><td class="c" style="font-size:10px">${p.new_handicap ?? ''}</td>`;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('s3Status').textContent = isCurrent ? 'Handicaps updated · Sheet saved' : dateStr;
-  document.getElementById('s3Status').className = isCurrent ? 'status-bar status-success' : 'status-bar status-neutral';
+async function confirmNewPlayer() {
+  const hc = parseInt(document.getElementById('newPlayerHC').value);
+  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
+  await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc}) });
+  const p = state.players.find(p => p.name === state.currentNewPlayer);
+  if (p) { p.handicap = hc; p.new_player = false; }
+  closeOverlay('newPlayerOverlay');
+  processNewPlayerQueue();
+}
+
+function skipNewPlayer() {
+  state.players = state.players.filter(p => p.name !== state.currentNewPlayer);
+  closeOverlay('newPlayerOverlay');
+  processNewPlayerQueue();
+}
+
+function promptRemovePlayer(name) {
+  state.playerToRemove = name;
+  document.getElementById('removePlayerName').textContent = name;
+  document.getElementById('removePlayerOverlay').classList.add('open');
+}
+
+function confirmRemovePlayer() {
+  state.players = state.players.filter(p => p.name !== state.playerToRemove);
+  state.playerToRemove = null;
+  closeOverlay('removePlayerOverlay');
+  state.selectedStructure = null;
+  updateTeamStructureUI();
+  updateUnassignedWarning();
+  renderGrid();
+}
+
+function addWalkupPlayer() {
+  document.getElementById('walkupName').value = '';
+  document.getElementById('walkupHCRow').style.display = 'none';
+  document.getElementById('walkupStatus').textContent = '';
+  document.getElementById('walkupLookupBtn').textContent = 'Look up';
+  document.getElementById('walkupLookupBtn').onclick = lookupWalkupPlayer;
+  state.walkupFoundHC = null;
+  document.getElementById('walkupOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('walkupName').focus(), 100);
+}
+
+async function lookupWalkupPlayer() {
+  const name = document.getElementById('walkupName').value.trim();
+  if (!name) { alert('Please enter a player name.'); return; }
+  if (state.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    document.getElementById('walkupStatus').textContent = 'Player is already in the round.';
+    document.getElementById('walkupStatus').style.color = '#A32D2D'; return;
+  }
+  document.getElementById('walkupStatus').textContent = 'Looking up…';
+  document.getElementById('walkupStatus').style.color = '#888';
+  try {
+    const resp = await fetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name}) });
+    const data = await resp.json();
+    if (data.found) {
+      state.walkupFoundHC = data.handicap;
+      document.getElementById('walkupStatus').textContent = `Found — handicap ${data.handicap}`;
+      document.getElementById('walkupStatus').style.color = '#3B6D11';
+      document.getElementById('walkupHCRow').style.display = 'none';
+      document.getElementById('walkupLookupBtn').textContent = 'Add player';
+      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
+    } else {
+      state.walkupFoundHC = null;
+      document.getElementById('walkupStatus').textContent = 'New player — enter starting handicap';
+      document.getElementById('walkupStatus').style.color = '#2D2B5B';
+      document.getElementById('walkupHCRow').style.display = 'flex';
+      document.getElementById('walkupHC').value = '';
+      document.getElementById('walkupLookupBtn').textContent = 'Add player';
+      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
+    }
+  } catch(e) {
+    document.getElementById('walkupStatus').textContent = 'Lookup failed — enter handicap manually';
+    document.getElementById('walkupStatus').style.color = '#A32D2D';
+    document.getElementById('walkupHCRow').style.display = 'flex';
+    document.getElementById('walkupLookupBtn').textContent = 'Add player';
+    document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
+  }
+}
+
+async function confirmWalkupPlayer() {
+  const name = document.getElementById('walkupName').value.trim();
+  if (!name) return;
+  let hc = state.walkupFoundHC;
+  if (hc === null) {
+    hc = parseInt(document.getElementById('walkupHC').value);
+    if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
+    await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc}) });
+  }
+  state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
+  closeOverlay('walkupOverlay');
+  state.selectedStructure = null;
+  updateTeamStructureUI();
+  updateUnassignedWarning();
+  renderGrid();
 }
 
 function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
