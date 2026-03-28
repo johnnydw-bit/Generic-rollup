@@ -626,7 +626,7 @@ async function loadRoundByDate(dateStr) {
   document.getElementById('resultsLoading').style.display = 'block';
   document.getElementById('resultsTable').style.display = 'none';
   try {
-    const resp = await fetch(`/api/round/${dateStr}`);
+    const resp = await fetch(`/api/round?date=${dateStr}`);
     if (!resp.ok) throw new Error('Not found');
     const data = await resp.json();
     renderResults(data.players, data.date);
@@ -734,7 +734,7 @@ async function loadPlayerHistory(name) {
   document.getElementById('phEmpty').style.display = 'none';
 
   try {
-    const resp = await fetch(`/api/player-history/${encodeURIComponent(name)}`);
+    const resp = await fetch(`/api/player-history?name=${encodeURIComponent(name)}`);
     const data = await resp.json();
     let rounds = data.rounds || [];
 
