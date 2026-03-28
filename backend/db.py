@@ -1,35 +1,87 @@
 # MOTH's Rollup — backend/db.py
-# Replaces sheets.py. Uses asyncpg with a connection pool.
-# All public functions maintain the same signatures as sheets.py
-# so main.py changes are minimal.
+# Uses psycopg2 (sync) wrapped in asyncio run_in_executor for FastAPI compatibility.
 
 import os
-import asyncpg
+import asyncio
+from functools import partial
+from contextlib import contextmanager
 
-_pool: asyncpg.Pool | None = None
+import psycopg2
+import psycopg2.extras
+from psycopg2.pool import ThreadedConnectionPool
+
+_pool: ThreadedConnectionPool | None = None
 
 
-async def get_pool() -> asyncpg.Pool:
-    """Return the shared connection pool, creating it if needed."""
+def _get_pool() -> ThreadedConnectionPool:
     global _pool
     if _pool is None:
         db_url = os.getenv("DATABASE_URL")
         if not db_url:
             raise RuntimeError("DATABASE_URL environment variable not set.")
-        _pool = await asyncpg.create_pool(
-            db_url,
-            min_size=1,
-            max_size=5,
-            statement_cache_size=0,  # Required for Neon's PgBouncer pooler
-        )
+        _pool = ThreadedConnectionPool(1, 5, dsn=db_url)
     return _pool
 
 
+@contextmanager
+def _get_conn():
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+def _run(func, *args, **kwargs):
+    """Run a sync function in a thread pool so FastAPI stays non-blocking."""
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, partial(func, *args, **kwargs))
+
+
+# ---------------------------------------------------------------------------
+# Schema init (called on startup)
+# ---------------------------------------------------------------------------
+
+def _init_schema():
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS players (
+                    id          SERIAL PRIMARY KEY,
+                    name        TEXT UNIQUE NOT NULL,
+                    handicap    INTEGER NOT NULL DEFAULT 0,
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rounds (
+                    id           SERIAL PRIMARY KEY,
+                    player_id    INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    date         DATE NOT NULL,
+                    score        INTEGER NOT NULL,
+                    new_handicap INTEGER NOT NULL,
+                    recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_date_idx ON rounds(date DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_player_date_idx ON rounds(player_id, date DESC)")
+
+
+async def get_pool():
+    """Initialise pool and schema on startup."""
+    await _run(_get_pool)
+    await _run(_init_schema)
+
+
 async def close_pool():
-    """Gracefully close the pool on shutdown."""
     global _pool
     if _pool:
-        await _pool.close()
+        _pool.closeall()
         _pool = None
 
 
@@ -37,74 +89,59 @@ async def close_pool():
 # Players
 # ---------------------------------------------------------------------------
 
+def _get_all_players():
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, name, handicap FROM players ORDER BY name")
+            return [dict(r) for r in cur.fetchall()]
+
+
 async def get_all_players() -> list[dict]:
-    """
-    Return all players ordered alphabetically.
-    Each dict: {id, name, handicap}
-    """
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT id, name, handicap FROM players ORDER BY name"
-        )
-    return [dict(r) for r in rows]
+    return await _run(_get_all_players)
+
+
+def _get_player_handicap(name: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT handicap FROM players WHERE LOWER(name) = LOWER(%s)",
+                (name.strip(),)
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
 
 
 async def get_player_handicap(name: str) -> int | None:
-    """Return a player's current handicap, or None if not found."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT handicap FROM players WHERE LOWER(name) = LOWER($1)",
-            name.strip(),
-        )
-    return row["handicap"] if row else None
+    return await _run(_get_player_handicap, name)
+
+
+def _add_new_player(name: str, handicap: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO players (name, handicap)
+                VALUES (%s, %s)
+                ON CONFLICT (name) DO NOTHING
+                """,
+                (name.strip(), handicap)
+            )
 
 
 async def add_new_player(name: str, handicap: int) -> None:
-    """Insert a new player. Raises if name already exists."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO players (name, handicap)
-            VALUES ($1, $2)
-            ON CONFLICT (name) DO NOTHING
-            """,
-            name.strip(),
-            handicap,
-        )
-
-
-async def update_player_handicap(player_id: int, new_handicap: int, conn) -> None:
-    """Update a player's current handicap (called within save_round_results)."""
-    await conn.execute(
-        "UPDATE players SET handicap = $1 WHERE id = $2",
-        new_handicap,
-        player_id,
-    )
+    await _run(_add_new_player, name, handicap)
 
 
 # ---------------------------------------------------------------------------
 # Rounds
 # ---------------------------------------------------------------------------
 
-async def save_round_results(results: list[dict], date_str: str) -> None:
-    """
-    Persist round results to the database.
-    Updates each player's current handicap and inserts a rounds row.
+def _save_round_results(results: list[dict], date_str: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM players")
+            name_to_id = {row[1].strip().lower(): row[0] for row in cur.fetchall()}
 
-    results: list of player dicts with keys name, score, new_handicap.
-             Players with score=None are skipped.
-    """
-    pool = await get_pool()
-
-    # Build name→id lookup
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, name FROM players")
-        name_to_id = {r["name"].strip().lower(): r["id"] for r in rows}
-
-        async with conn.transaction():
             for r in results:
                 if r.get("score") is None or r.get("new_handicap") is None:
                     continue
@@ -112,73 +149,78 @@ async def save_round_results(results: list[dict], date_str: str) -> None:
                 if player_id is None:
                     continue
 
-                # Update current handicap on players table
-                await update_player_handicap(player_id, r["new_handicap"], conn)
-
-                # Insert round record (upsert — safe to call save twice)
-                await conn.execute(
+                cur.execute(
+                    "UPDATE players SET handicap = %s WHERE id = %s",
+                    (r["new_handicap"], player_id)
+                )
+                cur.execute(
                     """
                     INSERT INTO rounds (player_id, date, score, new_handicap)
-                    VALUES ($1, $2, $3, $4)
+                    VALUES (%s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
                     """,
-                    player_id,
-                    date_str,
-                    r["score"],
-                    r["new_handicap"],
+                    (player_id, date_str, r["score"], r["new_handicap"])
                 )
 
 
+async def save_round_results(results: list[dict], date_str: str) -> None:
+    await _run(_save_round_results, results, date_str)
+
+
+def _get_last_round_date():
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(date) FROM rounds")
+            row = cur.fetchone()
+            if row and row[0]:
+                return str(row[0])
+            return "No previous round"
+
+
 async def get_last_round_date() -> str:
-    """Return the most recent round date as a string, or 'No previous round'."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT MAX(date) AS last_date FROM rounds")
-    if row and row["last_date"]:
-        return str(row["last_date"])
-    return "No previous round"
+    return await _run(_get_last_round_date)
+
+
+def _get_last_round_results():
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT MAX(date) AS last_date FROM rounds")
+            row = cur.fetchone()
+            if not row or not row["last_date"]:
+                return []
+            last_date = row["last_date"]
+            cur.execute(
+                """
+                SELECT p.name, r.score, r.new_handicap
+                FROM rounds r
+                JOIN players p ON p.id = r.player_id
+                WHERE r.date = %s
+                ORDER BY r.score DESC
+                """,
+                (last_date,)
+            )
+            return [dict(r) for r in cur.fetchall()]
 
 
 async def get_last_round_results() -> list[dict]:
-    """
-    Return scores from the most recent round, sorted by score descending.
-    Each dict: {name, score, new_handicap}
-    """
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        last_date_row = await conn.fetchrow("SELECT MAX(date) AS last_date FROM rounds")
-        if not last_date_row or not last_date_row["last_date"]:
-            return []
-        last_date = last_date_row["last_date"]
+    return await _run(_get_last_round_results)
 
-        rows = await conn.fetch(
-            """
-            SELECT p.name, r.score, r.new_handicap
-            FROM rounds r
-            JOIN players p ON p.id = r.player_id
-            WHERE r.date = $1
-            ORDER BY r.score DESC
-            """,
-            last_date,
-        )
-    return [dict(r) for r in rows]
+
+def _get_player_history(name: str):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT r.date, r.score, r.new_handicap
+                FROM rounds r
+                JOIN players p ON p.id = r.player_id
+                WHERE LOWER(p.name) = LOWER(%s)
+                ORDER BY r.date DESC
+                """,
+                (name.strip(),)
+            )
+            return [dict(r) for r in cur.fetchall()]
 
 
 async def get_player_history(name: str) -> list[dict]:
-    """
-    Return full round history for a player, most recent first.
-    Each dict: {date, score, new_handicap}
-    """
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT r.date, r.score, r.new_handicap
-            FROM rounds r
-            JOIN players p ON p.id = r.player_id
-            WHERE LOWER(p.name) = LOWER($1)
-            ORDER BY r.date DESC
-            """,
-            name.strip(),
-        )
-    return [dict(r) for r in rows]
+    return await _run(_get_player_history, name)
