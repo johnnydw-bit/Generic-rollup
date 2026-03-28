@@ -191,3 +191,84 @@ async def lookup_player(body: LookupRequest):
             return {"found": True, "name": p["name"], "handicap": p["handicap"]}
 
     return {"found": False, "name": body.name}
+    @app.get("/admin/migrate")
+async def run_migration():
+    import csv, io
+    pool = await get_pool()
+    
+    players = [
+        ("Ben Bengougam", 24, 31),
+        ("Chris Hoare", 30, 26),
+        ("Chris Merrifield", 23, 19),
+        ("Dan Murton", 36, 12),
+        ("Gerry Kinally", 31, 22),
+        ("Graham Finney", None, 36),
+        ("Howard Thomas", 36, 26),
+        ("Ian Duncan", 36, 24),
+        ("Jim Horsborough", 34, 32),
+        ("John De Wit", 22, 22),
+        ("John Hollis", 35, 26),
+        ("John Moffitt", 27, 23),
+        ("Julian Furnell", 27, 11),
+        ("Michael Padgett", 36, 32),
+        ("Neil Franchino", 21, 20),
+        ("Patrick King", 36, 19),
+        ("Peter Bates", 36, 22),
+        ("Phil Chaney", 17, 31),
+        ("Simon Lee", 30, 27),
+        ("Tim Taylor", 28, 32),
+        ("Tim Wright", 35, 15),
+        ("Tom Boylett", 30, 24),
+        ("William Plaskett", 30, 20),
+    ]
+    
+    async with pool.acquire() as conn:
+        # Apply schema
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS players (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                handicap INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS rounds (
+                id SERIAL PRIMARY KEY,
+                player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                date DATE NOT NULL,
+                score INTEGER NOT NULL,
+                new_handicap INTEGER NOT NULL,
+                recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS rounds_date_idx ON rounds(date DESC)")
+        
+        inserted_players = 0
+        inserted_rounds = 0
+        
+        async with conn.transaction():
+            for name, score, handicap in players:
+                row = await conn.fetchrow("""
+                    INSERT INTO players (name, handicap)
+                    VALUES ($1, $2)
+                    ON CONFLICT (name) DO UPDATE SET handicap = EXCLUDED.handicap
+                    RETURNING id
+                """, name, handicap)
+                player_id = row["id"]
+                inserted_players += 1
+                
+                if score is not None:
+                    await conn.execute("""
+                        INSERT INTO rounds (player_id, date, score, new_handicap)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT DO NOTHING
+                    """, player_id, "2026-03-26", score, handicap)
+                    inserted_rounds += 1
+    
+    return {"ok": True, "players": inserted_players, "rounds": inserted_rounds}
+```
+
+Commit and push, then once deployed just visit:
+```
+https://moths-rollup.onrender.com/admin/migrate
