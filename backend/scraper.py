@@ -138,22 +138,18 @@ async def scrape_players(username: str, pin: str, date_str: str) -> dict:
 
 
 def _count_tee_times(wrapper, names: list[str]) -> int:
-    import math
     import re
+    import math
 
-    for cls in ("booking-slot", "tee-time-slot", "rollup-slot", "tee-time", "bookingslot"):
-        slots = wrapper.find_all("div", class_=cls)
-        if slots:
-            return len(slots)
+    # Look for the time range span e.g. <span class="comp-time-info">10:00-10:20</span>
+    time_span = wrapper.find("span", class_="comp-time-info")
+    if time_span:
+        match = re.search(r'(\d{2}):(\d{2})-(\d{2}):(\d{2})', time_span.get_text())
+        if match:
+            start = int(match.group(1)) * 60 + int(match.group(2))
+            end   = int(match.group(3)) * 60 + int(match.group(4))
+            if end > start:
+                return (end - start) // 8 + 1
 
-    tee_rows = wrapper.find_all("tr", class_=lambda c: c and "tee" in c.lower())
-    if tee_rows:
-        return len(tee_rows)
-
-    time_pattern = re.compile(r'\b\d{2}:\d{2}\b')
-    text = wrapper.get_text()
-    times = set(time_pattern.findall(text))
-    if times:
-        return len(times)
-
+    # Fallback
     return math.ceil(len(names) / 4)
