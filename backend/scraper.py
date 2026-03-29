@@ -24,9 +24,15 @@ HEADERS = {
 }
 
 
-async def scrape_players(username: str, pin: str, date_str: str) -> list[str]:
+async def scrape_players(username: str, pin: str, date_str: str) -> dict:
     """
-    Scrape MOTH's Rollup player names for the given date.
+    Scrape MOTH's Rollup player names and tee time count for the given date.
+
+    Returns:
+        {
+            "names": ["Player One", "Player Two", ...],
+            "tee_times": 3
+        }
     """
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     date_param = dt.strftime("%d-%m-%Y")
@@ -118,9 +124,36 @@ async def scrape_players(username: str, pin: str, date_str: str) -> list[str]:
                 names = [n.strip() for n in italic.get_text(strip=True).split(",") if n.strip()]
                 if not names:
                     raise Exception("Found MOTH's Rollup but the signed-up list is empty.")
-                return names
+
+                tee_times = _count_tee_times(wrapper, names)
+                return {
+                    "names": names,
+                    "tee_times": tee_times,
+                }
 
         raise Exception(
             f"Could not find MOTH's Rollup on the booking page for {date_str}. "
             "The rollup may not be scheduled for this date."
         )
+
+
+def _count_tee_times(wrapper, names: list[str]) -> int:
+    import math
+    import re
+
+    for cls in ("booking-slot", "tee-time-slot", "rollup-slot", "tee-time", "bookingslot"):
+        slots = wrapper.find_all("div", class_=cls)
+        if slots:
+            return len(slots)
+
+    tee_rows = wrapper.find_all("tr", class_=lambda c: c and "tee" in c.lower())
+    if tee_rows:
+        return len(tee_rows)
+
+    time_pattern = re.compile(r'\b\d{2}:\d{2}\b')
+    text = wrapper.get_text()
+    times = set(time_pattern.findall(text))
+    if times:
+        return len(times)
+
+    return math.ceil(len(names) / 4)
