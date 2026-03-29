@@ -545,9 +545,6 @@ async function init() {
     updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
   } catch(e) { updateStatus('Ready'); }
 
-  // Pre-load players list for history screen
-  loadAllPlayers();
-
   const day = new Date(today + 'T12:00:00').getDay();
   if (day === 1 || day === 4) loadPlayers();
 }
