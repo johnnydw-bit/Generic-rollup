@@ -198,7 +198,12 @@ async def round_dates():
         raise HTTPException(500, f"Could not load round dates: {str(e)}")
     return {"dates": dates}
 
-
+@app.get("/sw.js")
+async def service_worker():
+    from fastapi.responses import Response
+    js = "self.addEventListener('fetch', function(event) {});"
+    return Response(content=js, media_type="application/javascript")
+    
 @app.get("/api/round")
 async def round_by_date(date: str = Query(...)):
     """Return results for a specific date (YYYY-MM-DD)."""
