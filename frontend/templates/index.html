@@ -1360,6 +1360,9 @@ async function confirmWalkupPlayer() {
 
 function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+  if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
