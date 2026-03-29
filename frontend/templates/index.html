@@ -692,8 +692,28 @@ async function showPlayerHistory(preselect) {
     document.getElementById('phEmpty').style.display = 'block';
     if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
   }
-  // Load players into select if not already done
+// Load players into select if not already done
   const sel = document.getElementById('historyPlayerSelect');
+  if (sel.options.length <= 1) {
+    try {
+      const resp = await fetch('/api/last-round');
+      const data = await resp.json();
+      const names = new Set(data.players.map(p => p.name));
+      sel.innerHTML = '<option value="">Choose a player…</option>';
+      [...names].sort().forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+  if (preselect) {
+    sel.value = preselect;
+    document.getElementById('s4PlayerLabel').textContent = preselect;
+    await loadPlayerHistory(preselect);
+  }
+}
 
 function onPlayerSelectChange() {
   const name = document.getElementById('historyPlayerSelect').value;
