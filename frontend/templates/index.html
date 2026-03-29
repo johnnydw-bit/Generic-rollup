@@ -1344,6 +1344,11 @@ async function lookupWalkupPlayer() {
 async function confirmWalkupPlayer() {
   const name = document.getElementById('walkupName').value.trim();
   if (!name) return;
+  // Check tee time capacity
+  if (state.teeTimes && state.players.length >= state.teeTimes * 4) {
+    alert(`Cannot add player — field is full (${state.teeTimes} tee times × 4 = ${state.teeTimes * 4} max players).`);
+    return;
+  }
   let hc = state.walkupFoundHC;
   if (hc === null) {
     hc = parseInt(document.getElementById('walkupHC').value);
