@@ -570,6 +570,7 @@ let state = {
   teamScores: [],
   walkupFoundHC: null,
   teeTimes: null,
+  teeStart: '',
   // Results browser
   allRoundDates: [],
   currentRoundIdx: 0,
@@ -1098,6 +1099,7 @@ async function loadPlayers() {
     state.players = data.players;
     state.roundDate = data.date;
     state.teeTimes = data.tee_times || null;
+    state.teeStart = data.tee_start || '';
     state.newPlayerQueue = data.new_players || [];
     if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
     else openScoreEntry();
@@ -1303,7 +1305,8 @@ function getNumTeams() {
 // ═══════════════════════════════════════
 function openScoreEntry() {
   const dateLabel = new Date(state.roundDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  document.getElementById('s2DateLabel').textContent = `MOTH's Rollup · ${dateLabel}`;
+  const teeStr = state.teeStart ? ` · Tee off ${state.teeStart}` : '';
+  document.getElementById('s2DateLabel').textContent = `${dateLabel}${teeStr}`;
   document.getElementById('addPlayerBar').style.display = 'block';
   updateTeamStructureUI();
   renderGrid();
