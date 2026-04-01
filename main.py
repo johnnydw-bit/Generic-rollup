@@ -1,5 +1,5 @@
 # MOTH's Rollup - main.py
-# Updated: 2026-03-28 — migrated from Google Sheets to PostgreSQL (Neon + psycopg2)
+# v2: multi-rollup support — rollup_id passed through all endpoints
 
 import os
 import asyncio
@@ -17,12 +17,15 @@ from dotenv import load_dotenv
 from backend.handicap import calculate_new_handicaps, calculate_team_scores, format_adjustment
 from backend.db import (
     get_all_players,
+    get_all_rollups,
+    get_or_create_rollup,
     save_round_results,
     add_new_player,
     get_last_round_results,
     get_last_round_date,
     get_player_history,
     get_round_dates,
+    get_round_by_date,
     get_pool,
     close_pool,
 )
@@ -43,9 +46,6 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 templates = Jinja2Templates(directory="frontend/templates")
 
-IG_USERNAME = os.getenv("IG_USERNAME")
-IG_PIN = os.getenv("IG_PIN")
-
 
 @app.on_event("startup")
 async def startup():
@@ -57,15 +57,32 @@ async def shutdown():
     await close_pool()
 
 
+@app.get("/sw.js")
+async def service_worker():
+    from fastapi.responses import Response
+    js = "self.addEventListener('fetch', function(event) {});"
+    return Response(content=js, media_type="application/javascript")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/auth/status")
-async def auth_status():
+@app.get("/api/rollups")
+async def rollups():
+    """Return all available rollups."""
     try:
-        last_date = await get_last_round_date()
+        data = await get_all_rollups()
+    except Exception as e:
+        raise HTTPException(500, f"Could not load rollups: {str(e)}")
+    return {"rollups": data}
+
+
+@app.get("/auth/status")
+async def auth_status(rollup_id: int = Query(1)):
+    try:
+        last_date = await get_last_round_date(rollup_id)
     except Exception:
         last_date = None
     return {"last_round_date": last_date}
@@ -73,15 +90,21 @@ async def auth_status():
 
 class LoadRequest(BaseModel):
     date: str
+    ig_username: str
+    ig_pin: str
+    rollup_id: int
+    ig_search_term: str
 
 
 @app.post("/api/load-players")
 async def load_players(body: LoadRequest):
-    if not IG_USERNAME or not IG_PIN:
-        raise HTTPException(500, "Intelligent Golf credentials not configured on server.")
-
     try:
-        scrape_result = await scrape_players(IG_USERNAME, IG_PIN, body.date)
+        scrape_result = await scrape_players(
+            body.ig_username,
+            body.ig_pin,
+            body.date,
+            body.ig_search_term,
+        )
     except Exception as e:
         raise HTTPException(502, str(e))
 
@@ -92,7 +115,7 @@ async def load_players(body: LoadRequest):
         raise HTTPException(404, "No players found for this date.")
 
     try:
-        all_players = await get_all_players()
+        all_players = await get_all_players(body.rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not read player list from database: {str(e)}")
 
@@ -108,18 +131,24 @@ async def load_players(body: LoadRequest):
         else:
             players.append({"name": name, "handicap": hc, "score": None, "team": None, "new_player": False})
 
-    return {"date": body.date, "players": players, "new_players": new_players, "tee_times": tee_times}
+    return {
+        "date": body.date,
+        "players": players,
+        "new_players": new_players,
+        "tee_times": tee_times,
+    }
 
 
 class NewPlayerRequest(BaseModel):
     name: str
     handicap: int
+    rollup_id: int
 
 
 @app.post("/api/new-player")
 async def new_player(body: NewPlayerRequest):
     try:
-        await add_new_player(body.name, body.handicap)
+        await add_new_player(body.rollup_id, body.name, body.handicap)
     except Exception as e:
         raise HTTPException(500, f"Could not add player to database: {str(e)}")
     return {"ok": True, "name": body.name, "handicap": body.handicap}
@@ -129,6 +158,7 @@ class ScoreUpdate(BaseModel):
     date: str
     players: list[dict]
     team_mode: bool = False
+    rollup_id: int = 1
 
 
 @app.post("/api/autosave")
@@ -148,7 +178,7 @@ async def autosave(body: ScoreUpdate):
 async def save_round(body: ScoreUpdate):
     results = calculate_new_handicaps(body.players, team_mode=body.team_mode)
     try:
-        await save_round_results(results, body.date)
+        await save_round_results(results, body.date, body.rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Failed to save to database: {str(e)}")
     for r in results:
@@ -162,10 +192,10 @@ async def save_round(body: ScoreUpdate):
 
 
 @app.get("/api/last-round")
-async def last_round():
+async def last_round(rollup_id: int = Query(1)):
     try:
-        results = await get_last_round_results()
-        date = await get_last_round_date()
+        results = await get_last_round_results(rollup_id)
+        date = await get_last_round_date(rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load last round: {str(e)}")
     return {"players": results, "date": date}
@@ -173,12 +203,13 @@ async def last_round():
 
 class LookupRequest(BaseModel):
     name: str
+    rollup_id: int = 1
 
 
 @app.post("/api/lookup-player")
 async def lookup_player(body: LookupRequest):
     try:
-        all_players = await get_all_players()
+        all_players = await get_all_players(body.rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not read player list: {str(e)}")
 
@@ -190,40 +221,18 @@ async def lookup_player(body: LookupRequest):
 
 
 @app.get("/api/round-dates")
-async def round_dates():
-    """Return all dates that have saved round results."""
+async def round_dates(rollup_id: int = Query(1)):
     try:
-        dates = await get_round_dates()
+        dates = await get_round_dates(rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load round dates: {str(e)}")
     return {"dates": dates}
 
-@app.get("/sw.js")
-async def service_worker():
-    from fastapi.responses import Response
-    js = "self.addEventListener('fetch', function(event) {});"
-    return Response(content=js, media_type="application/javascript")
-    
+
 @app.get("/api/round")
-async def round_by_date(date: str = Query(...)):
-    """Return results for a specific date (YYYY-MM-DD)."""
+async def round_by_date(date: str = Query(...), rollup_id: int = Query(1)):
     try:
-        from backend.db import _get_conn
-        import psycopg2.extras
-
-        def _fetch():
-            with _get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("""
-                        SELECT p.name, r.score, r.new_handicap
-                        FROM rounds r
-                        JOIN players p ON p.id = r.player_id
-                        WHERE r.date = %s
-                        ORDER BY r.score DESC
-                    """, (date,))
-                    return [dict(r) for r in cur.fetchall()]
-
-        results = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+        results = await get_round_by_date(date, rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load round: {str(e)}")
     if not results:
@@ -232,10 +241,9 @@ async def round_by_date(date: str = Query(...)):
 
 
 @app.get("/api/player-history")
-async def player_history(name: str = Query(...)):
-    """Return full round history for a player."""
+async def player_history(name: str = Query(...), rollup_id: int = Query(1)):
     try:
-        history = await get_player_history(name)
+        history = await get_player_history(name, rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load player history: {str(e)}")
     if not history:
@@ -247,3 +255,18 @@ async def player_history(name: str = Query(...)):
             for r in history
         ]
     }
+
+
+class AddRollupRequest(BaseModel):
+    name: str
+    ig_search_term: str
+
+
+@app.post("/api/rollups/add")
+async def add_rollup(body: AddRollupRequest):
+    """Add a new rollup or update its search term if it already exists."""
+    try:
+        rollup_id = await get_or_create_rollup(body.name, body.ig_search_term.upper())
+    except Exception as e:
+        raise HTTPException(500, f"Could not add rollup: {str(e)}")
+    return {"ok": True, "id": rollup_id, "name": body.name, "ig_search_term": body.ig_search_term.upper()}
