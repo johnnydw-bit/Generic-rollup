@@ -137,10 +137,11 @@ async def scrape_players(
                 if not names:
                     raise Exception(f"Found '{ig_search_term}' rollup but the signed-up list is empty.")
 
-                tee_times = _count_tee_times(wrapper, names)
+                tee_times, tee_start = _count_tee_times(wrapper, names)
                 return {
                     "names": names,
                     "tee_times": tee_times,
+                    "tee_start": tee_start,
                 }
 
         raise Exception(
@@ -149,19 +150,18 @@ async def scrape_players(
         )
 
 
-def _count_tee_times(wrapper, names: list[str]) -> int:
+def _count_tee_times(wrapper, names: list[str]) -> tuple[int, str]:
     import re
     import math
 
-    # Look for the time range span e.g. <span class="comp-time-info">10:00-10:20</span>
     time_span = wrapper.find("span", class_="comp-time-info")
     if time_span:
         match = re.search(r'(\d{2}):(\d{2})-(\d{2}):(\d{2})', time_span.get_text())
         if match:
             start = int(match.group(1)) * 60 + int(match.group(2))
             end   = int(match.group(3)) * 60 + int(match.group(4))
+            start_time = f"{match.group(1)}:{match.group(2)}"
             if end > start:
-                return (end - start) // 8 + 1
+                return (end - start) // 8 + 1, start_time
 
-    # Fallback
-    return math.ceil(len(names) / 4)
+    return math.ceil(len(names) / 4), ""
