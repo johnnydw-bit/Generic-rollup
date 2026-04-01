@@ -729,23 +729,34 @@ function goBack() { showScreen('screen1'); }
 // Init
 // ═══════════════════════════════════════
 async function init() {
+  loadSession();
+  await loadRollups();
+
+  // Pre-fill login fields if we have saved credentials
+  if (session.igUsername) document.getElementById('igUsername').value = session.igUsername;
+  if (session.igPin)      document.getElementById('igPin').value = session.igPin;
+
+  if (hasValidSession()) {
+    enterApp();
+  } else {
+    showScreen('screen0');
+  }
+}
+
+async function initHomeScreen() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('roundDate').value = today;
 
-  // Set default filter dates (last 3 rounds = ~3 months back as initial range)
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   document.getElementById('filterFrom').value = threeMonthsAgo.toISOString().split('T')[0];
   document.getElementById('filterTo').value = today;
 
   try {
-    const resp = await fetch('/auth/status');
+    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
     const data = await resp.json();
     updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
   } catch(e) { updateStatus('Ready'); }
-
-  // Pre-load players list for history screen
-  loadAllPlayers();
 
   const day = new Date(today + 'T12:00:00').getDay();
   if (day === 1 || day === 4) loadPlayers();
