@@ -1,6 +1,7 @@
 """
-Intelligent Golf scraper for MOTH's Rollup.
+Intelligent Golf scraper for Bramley Golf Club rollups.
 Uses httpx only - no browser required.
+Matches any rollup by search term rather than hardcoded MOTH.
 """
 
 from datetime import datetime
@@ -24,9 +25,20 @@ HEADERS = {
 }
 
 
-async def scrape_players(username: str, pin: str, date_str: str) -> dict:
+async def scrape_players(
+    username: str,
+    pin: str,
+    date_str: str,
+    ig_search_term: str = "MOTH",
+) -> dict:
     """
-    Scrape MOTH's Rollup player names and tee time count for the given date.
+    Scrape rollup player names and tee time count for the given date.
+
+    Args:
+        username:         IG member ID
+        pin:              IG PIN
+        date_str:         Date in YYYY-MM-DD format
+        ig_search_term:   String to match against the rollup contact name (e.g. 'MOTH', 'SENIOR')
 
     Returns:
         {
@@ -94,14 +106,14 @@ async def scrape_players(username: str, pin: str, date_str: str) -> dict:
         if "login" in str(resp.url).lower():
             raise Exception("Session expired or login failed.")
 
-        # Step 5: Find MOTH's rollup
+        # Step 5: Find the rollup matching ig_search_term
         soup = BeautifulSoup(resp.text, "html.parser")
         rollup_wrappers = soup.find_all("div", class_="isRollup")
 
         if not rollup_wrappers:
             raise Exception(
                 f"No rollups found on the booking page for {date_str}. "
-                "Check the date is a Monday or Thursday."
+                "Check the date is correct."
             )
 
         for wrapper in rollup_wrappers:
@@ -115,15 +127,15 @@ async def scrape_players(username: str, pin: str, date_str: str) -> dict:
                 elif "Signed up" in t:
                     signed_up_div = div
 
-            if contact_div and "MOTH" in contact_div.get_text().upper():
+            if contact_div and ig_search_term.upper() in contact_div.get_text().upper():
                 if not signed_up_div:
-                    raise Exception("Found MOTH's Rollup but no players have signed up yet.")
+                    raise Exception(f"Found '{ig_search_term}' rollup but no players have signed up yet.")
                 italic = signed_up_div.find("i")
                 if not italic:
-                    raise Exception("Found MOTH's Rollup but could not parse player names.")
+                    raise Exception(f"Found '{ig_search_term}' rollup but could not parse player names.")
                 names = [n.strip() for n in italic.get_text(strip=True).split(",") if n.strip()]
                 if not names:
-                    raise Exception("Found MOTH's Rollup but the signed-up list is empty.")
+                    raise Exception(f"Found '{ig_search_term}' rollup but the signed-up list is empty.")
 
                 tee_times = _count_tee_times(wrapper, names)
                 return {
@@ -132,8 +144,8 @@ async def scrape_players(username: str, pin: str, date_str: str) -> dict:
                 }
 
         raise Exception(
-            f"Could not find MOTH's Rollup on the booking page for {date_str}. "
-            "The rollup may not be scheduled for this date."
+            f"Could not find a rollup matching '{ig_search_term}' on the booking page for {date_str}. "
+            "Check the rollup name and date are correct."
         )
 
 
