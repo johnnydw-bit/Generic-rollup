@@ -740,7 +740,13 @@ async function init() {
   }
 }
 
-async function initHomeScreen() {
+  function enterApp() {
+  document.getElementById('s1RollupName').textContent = session.rollupName;
+  showScreen('screen1');
+  initHomeScreen();
+}
+
+  async function initHomeScreen() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('roundDate').value = today;
 
