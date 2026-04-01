@@ -1089,11 +1089,6 @@ async function loadPlayers() {
   clearS1Error();
   const date = document.getElementById('roundDate').value;
   if (!date) { showS1Error('Please select a round date.'); return; }
-  const day = new Date(date + 'T12:00:00').getDay();
-  if (day !== 1 && day !== 4) {
-    showS1Error("MOTH's Rollup is on Mondays and Thursdays only. Tap on the date field to select the round you want.");
-    return;
-  }
   updateStatus('Loading players from Intelligent Golf…', 'neutral');
   try {
     const resp = await fetch('/api/load-players', {
@@ -1117,7 +1112,6 @@ async function loadPlayers() {
     else openScoreEntry();
   } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
 }
-
 // ═══════════════════════════════════════
 // Team structure calculator (unchanged)
 // ═══════════════════════════════════════
