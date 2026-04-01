@@ -1,5 +1,5 @@
 # MOTH's Rollup - main.py
-# v2: multi-rollup support — rollup_id passed through all endpoints
+# v2 04/01: multi-rollup support — rollup_id passed through all endpoints
 
 import os
 import asyncio
