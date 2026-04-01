@@ -695,11 +695,15 @@ function saveLogin() {
     errEl.style.display = 'block';
     return;
   }
-  if (!session.rollupId) {
+
+  const sel = document.getElementById('rollupSelect');
+  const selectedRollup = availableRollups.find(r => r.id === parseInt(sel.value));
+  if (!selectedRollup) {
     errEl.textContent = 'Please select a rollup.';
     errEl.style.display = 'block';
     return;
   }
+  selectRollup(selectedRollup);
 
   session.igUsername = username;
   session.igPin      = pin;
@@ -707,13 +711,6 @@ function saveLogin() {
   errEl.style.display = 'none';
   enterApp();
 }
-
-function enterApp() {
-  document.getElementById('s1RollupName').textContent = session.rollupName;
-  showScreen('screen1');
-  initHomeScreen();
-}
-
 // ═══════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════
@@ -758,8 +755,6 @@ async function initHomeScreen() {
     updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
   } catch(e) { updateStatus('Ready'); }
 
-  const day = new Date(today + 'T12:00:00').getDay();
-  if (day === 1 || day === 4) loadPlayers();
 }
 
 async function loadAllPlayers() {
