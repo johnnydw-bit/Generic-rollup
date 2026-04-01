@@ -247,8 +247,10 @@
 
     <div>
       <div class="login-section">Select Rollup</div>
-      <div id="rollupList"></div>
-      <button class="add-rollup-btn" onclick="showAddRollup()">＋ Add new rollup</button>
+      <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
+        <option value="">Choose a rollup…</option>
+      </select>
+      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
     </div>
 
     <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
@@ -631,21 +633,21 @@ async function loadRollups() {
 }
 
 function renderRollupList() {
-  const container = document.getElementById('rollupList');
-  container.innerHTML = '';
+  const sel = document.getElementById('rollupSelect');
+  sel.innerHTML = '<option value="">Choose a rollup…</option>';
   availableRollups.forEach(r => {
-    const div = document.createElement('div');
-    div.className = 'rollup-option' + (r.id === session.rollupId ? ' selected' : '');
-    div.onclick = () => selectRollup(r);
-    div.innerHTML = `
-      <input type="radio" class="rollup-radio" ${r.id === session.rollupId ? 'checked' : ''}/>
-      <div>
-        <div class="rollup-option-name">${r.name}</div>
-        <div class="rollup-option-term">Search term: ${r.ig_search_term}</div>
-      </div>
-    `;
-    container.appendChild(div);
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = r.name;
+    if (r.id === session.rollupId) opt.selected = true;
+    sel.appendChild(opt);
   });
+}
+
+function onRollupSelectChange() {
+  const sel = document.getElementById('rollupSelect');
+  const rollup = availableRollups.find(r => r.id === parseInt(sel.value));
+  if (rollup) selectRollup(rollup);
 }
 
 function selectRollup(rollup) {
