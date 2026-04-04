@@ -206,19 +206,13 @@ class LookupRequest(BaseModel):
     rollup_id: int = 1
 
 
-@app.post("/api/lookup-player")
-async def lookup_player(body: LookupRequest):
+@app.get("/api/players")
+async def get_players(rollup_id: int = Query(1)):
     try:
-        all_players = await get_all_players(body.rollup_id)
+        players = await get_all_players(rollup_id)
     except Exception as e:
-        raise HTTPException(500, f"Could not read player list: {str(e)}")
-
-    for p in all_players:
-        if p["name"].strip().lower() == body.name.strip().lower():
-            return {"found": True, "name": p["name"], "handicap": p["handicap"]}
-
-    return {"found": False, "name": body.name}
-
+        raise HTTPException(500, f"Could not load players: {str(e)}")
+    return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
 
 @app.get("/api/round-dates")
 async def round_dates(rollup_id: int = Query(1)):
