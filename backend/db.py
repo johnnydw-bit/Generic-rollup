@@ -29,6 +29,12 @@ def _get_conn():
     pool = _get_pool()
     conn = pool.getconn()
     try:
+        # Test if connection is alive, reconnect if not
+        try:
+            conn.cursor().execute("SELECT 1")
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
         yield conn
         conn.commit()
     except Exception:
