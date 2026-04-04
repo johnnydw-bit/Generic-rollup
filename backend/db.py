@@ -1,6 +1,7 @@
 # MOTH's Rollup — backend/db.py
 # Uses psycopg2 (sync) wrapped in asyncio run_in_executor for FastAPI compatibility.
 # v2: rollup_id added throughout — all queries are scoped to a specific rollup.
+# v3: rollup_settings and app_credentials tables added.
 
 import os
 import asyncio
@@ -91,6 +92,70 @@ def _init_schema():
                     recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
+
+            # Per-rollup settings
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rollup_settings (
+                    id                          SERIAL PRIMARY KEY,
+                    rollup_id                   INTEGER NOT NULL UNIQUE REFERENCES rollups(id),
+
+                    -- Rollup identity
+                    display_name                TEXT NOT NULL DEFAULT '',
+                    ig_search_term              TEXT NOT NULL DEFAULT '',
+                    run_days                    TEXT NOT NULL DEFAULT '[]',
+
+                    -- Tee times
+                    tee_interval_minutes        INTEGER NOT NULL DEFAULT 8,
+
+                    -- Handicap adjustment table (stored as JSON array of threshold/value pairs)
+                    -- Format: [{"max_score": 17, "adjustment": 2}, {"max_score": 29, "adjustment": 1}, ...]
+                    -- Last entry has max_score null (catch-all for 43+)
+                    adjustment_table            TEXT NOT NULL DEFAULT '[
+                        {"max_score": 17, "adjustment": 2},
+                        {"max_score": 29, "adjustment": 1},
+                        {"max_score": 37, "adjustment": 0},
+                        {"max_score": 42, "adjustment": -1},
+                        {"max_score": null, "adjustment": -2}
+                    ]',
+
+                    -- Winner penalty
+                    winner_bonus_enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+                    winner_gap_penalty1         INTEGER NOT NULL DEFAULT 0,
+                    winner_gap_penalty2         INTEGER NOT NULL DEFAULT 0,
+
+                    -- Entry & prizes
+                    entry_fee                   NUMERIC(6,2) NOT NULL DEFAULT 0.00,
+                    prize_places                INTEGER NOT NULL DEFAULT 3,
+                    prize_pct_1st               INTEGER NOT NULL DEFAULT 60,
+                    prize_pct_2nd               INTEGER NOT NULL DEFAULT 30,
+                    prize_pct_3rd               INTEGER NOT NULL DEFAULT 10,
+                    prize_pct_4th               INTEGER NOT NULL DEFAULT 0,
+                    tie_handling                TEXT NOT NULL DEFAULT 'tournament',
+
+                    -- Team play
+                    preferred_team_size         INTEGER NOT NULL DEFAULT 4,
+                    team_scoring_method         TEXT NOT NULL DEFAULT 'best2',
+
+                    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            # Global credentials (single row, id=1)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS app_credentials (
+                    id          INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+                    ig_username TEXT NOT NULL DEFAULT '',
+                    ig_pin      TEXT NOT NULL DEFAULT '',
+                    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO app_credentials (id, ig_username, ig_pin)
+                VALUES (1, '', '')
+                ON CONFLICT (id) DO NOTHING
+            """)
+
+            # Indexes
             cur.execute("CREATE INDEX IF NOT EXISTS players_rollup_idx ON players(rollup_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rounds_rollup_idx ON rounds(rollup_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rounds_date_idx ON rounds(date DESC)")
@@ -312,3 +377,162 @@ def _get_round_by_date(date_str: str, rollup_id: int):
 
 async def get_round_by_date(date_str: str, rollup_id: int) -> list[dict]:
     return await _run(_get_round_by_date, date_str, rollup_id)
+
+
+# ---------------------------------------------------------------------------
+# Rollup settings
+# ---------------------------------------------------------------------------
+
+DEFAULT_ADJUSTMENT_TABLE = [
+    {"max_score": 17,   "adjustment": 2},
+    {"max_score": 29,   "adjustment": 1},
+    {"max_score": 37,   "adjustment": 0},
+    {"max_score": 42,   "adjustment": -1},
+    {"max_score": None, "adjustment": -2},
+]
+
+def _get_rollup_settings(rollup_id: int) -> dict:
+    import json
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM rollup_settings WHERE rollup_id = %s",
+                (rollup_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                # Return defaults — settings row created on first save
+                cur.execute(
+                    "SELECT name, ig_search_term FROM rollups WHERE id = %s",
+                    (rollup_id,)
+                )
+                rollup = cur.fetchone()
+                return {
+                    "rollup_id": rollup_id,
+                    "display_name": rollup["name"] if rollup else "",
+                    "ig_search_term": rollup["ig_search_term"] if rollup else "",
+                    "run_days": [],
+                    "tee_interval_minutes": 8,
+                    "adjustment_table": DEFAULT_ADJUSTMENT_TABLE,
+                    "winner_bonus_enabled": True,
+                    "winner_gap_penalty1": 0,
+                    "winner_gap_penalty2": 0,
+                    "entry_fee": 0.00,
+                    "prize_places": 3,
+                    "prize_pct_1st": 60,
+                    "prize_pct_2nd": 30,
+                    "prize_pct_3rd": 10,
+                    "prize_pct_4th": 0,
+                    "tie_handling": "tournament",
+                    "preferred_team_size": 4,
+                    "team_scoring_method": "best2",
+                }
+            d = dict(row)
+            d["run_days"] = json.loads(d["run_days"])
+            d["adjustment_table"] = json.loads(d["adjustment_table"])
+            d["entry_fee"] = float(d["entry_fee"])
+            return d
+
+
+async def get_rollup_settings(rollup_id: int) -> dict:
+    return await _run(_get_rollup_settings, rollup_id)
+
+
+def _save_rollup_settings(rollup_id: int, s: dict):
+    import json
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO rollup_settings (
+                    rollup_id, display_name, ig_search_term, run_days,
+                    tee_interval_minutes, adjustment_table,
+                    winner_bonus_enabled, winner_gap_penalty1, winner_gap_penalty2,
+                    entry_fee, prize_places,
+                    prize_pct_1st, prize_pct_2nd, prize_pct_3rd, prize_pct_4th,
+                    tie_handling, preferred_team_size, team_scoring_method,
+                    updated_at
+                ) VALUES (
+                    %s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s, %s,%s,%s,%s, %s,%s,%s, NOW()
+                )
+                ON CONFLICT (rollup_id) DO UPDATE SET
+                    display_name            = EXCLUDED.display_name,
+                    ig_search_term          = EXCLUDED.ig_search_term,
+                    run_days                = EXCLUDED.run_days,
+                    tee_interval_minutes    = EXCLUDED.tee_interval_minutes,
+                    adjustment_table        = EXCLUDED.adjustment_table,
+                    winner_bonus_enabled    = EXCLUDED.winner_bonus_enabled,
+                    winner_gap_penalty1     = EXCLUDED.winner_gap_penalty1,
+                    winner_gap_penalty2     = EXCLUDED.winner_gap_penalty2,
+                    entry_fee               = EXCLUDED.entry_fee,
+                    prize_places            = EXCLUDED.prize_places,
+                    prize_pct_1st           = EXCLUDED.prize_pct_1st,
+                    prize_pct_2nd           = EXCLUDED.prize_pct_2nd,
+                    prize_pct_3rd           = EXCLUDED.prize_pct_3rd,
+                    prize_pct_4th           = EXCLUDED.prize_pct_4th,
+                    tie_handling            = EXCLUDED.tie_handling,
+                    preferred_team_size     = EXCLUDED.preferred_team_size,
+                    team_scoring_method     = EXCLUDED.team_scoring_method,
+                    updated_at              = NOW()
+            """, (
+                rollup_id,
+                s["display_name"],
+                s["ig_search_term"],
+                json.dumps(s["run_days"]),
+                s["tee_interval_minutes"],
+                json.dumps(s["adjustment_table"]),
+                s["winner_bonus_enabled"],
+                s["winner_gap_penalty1"],
+                s["winner_gap_penalty2"],
+                s["entry_fee"],
+                s["prize_places"],
+                s["prize_pct_1st"],
+                s["prize_pct_2nd"],
+                s["prize_pct_3rd"],
+                s["prize_pct_4th"],
+                s["tie_handling"],
+                s["preferred_team_size"],
+                s["team_scoring_method"],
+            ))
+            # Also keep the rollups table in sync for name/search term
+            cur.execute("""
+                UPDATE rollups
+                SET name = %s, ig_search_term = %s
+                WHERE id = %s
+            """, (s["display_name"], s["ig_search_term"], rollup_id))
+
+
+async def save_rollup_settings(rollup_id: int, settings: dict) -> None:
+    await _run(_save_rollup_settings, rollup_id, settings)
+
+
+# ---------------------------------------------------------------------------
+# App credentials (global)
+# ---------------------------------------------------------------------------
+
+def _get_credentials() -> dict:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT ig_username, ig_pin FROM app_credentials WHERE id = 1")
+            row = cur.fetchone()
+            return dict(row) if row else {"ig_username": "", "ig_pin": ""}
+
+
+async def get_credentials() -> dict:
+    return await _run(_get_credentials)
+
+
+def _save_credentials(ig_username: str, ig_pin: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO app_credentials (id, ig_username, ig_pin, updated_at)
+                VALUES (1, %s, %s, NOW())
+                ON CONFLICT (id) DO UPDATE SET
+                    ig_username = EXCLUDED.ig_username,
+                    ig_pin      = EXCLUDED.ig_pin,
+                    updated_at  = NOW()
+            """, (ig_username, ig_pin))
+
+
+async def save_credentials(ig_username: str, ig_pin: str) -> None:
+    await _run(_save_credentials, ig_username, ig_pin)
