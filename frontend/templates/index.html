@@ -763,24 +763,6 @@ async function init() {
 
 }
 
-async function loadAllPlayers() {
-  try {
-    const resp = await fetch('/api/load-players', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({date: new Date().toISOString().split('T')[0]}),
-    });
-    // This will fail if today isn't a Mon/Thu — use a direct players endpoint instead
-  } catch(e) {}
-  // Populate player select from last round or all players
-  try {
-    const resp = await fetch(`/api/last-round?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    // Build player list from all round dates eventually — for now seed from last round
-    const sel = document.getElementById('historyPlayerSelect');
-    // We'll populate properly when history screen opens
-  } catch(e) {}
-}
-
 function updateStatus(msg, type = 'neutral') {
   const el = document.getElementById('s1Status');
   el.textContent = msg;
