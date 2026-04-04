@@ -1,5 +1,5 @@
 <!-- MOTH's Rollup - frontend/templates/index.html -->
-<!-- Updated: 2026-04-01 — added history results browser + player history graph -->
+<!-- Updated: 2026-04-04 — dynamic rollup names throughout, player history fix -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#2D2B5B"/>
-  <title>MOTH's Rollup</title>
+  <title>Bramley Rollup</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <link rel="apple-touch-icon" href="/static/icon-192.png"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -250,7 +250,7 @@
       <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
         <option value="">Choose a rollup…</option>
       </select>
-      <button class="add-rollup-btn" onclick="AddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
+      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
     </div>
 
     <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
@@ -284,7 +284,7 @@
       <span class="error-retry">Tap Load Players to retry</span>
     </div>
     <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="ResultsScreen()">
+      <button class="big-btn btn-outline" onclick="showResultsScreen()">
         <span class="bi">📋</span>
         <span class="bl">Results</span>
         <span class="bs">Browse round history</span>
@@ -315,8 +315,8 @@
   <div class="header">
     <button class="header-back" onclick="goBack()">‹</button>
     <div class="header-title" style="text-align:center">
-      <div class="club" id="s2DateLabel">MOTH's Rollup</div>
-      <div class="society">Score entry</div>
+      <div class="club" id="s2DateLabel">Rollup</div>
+      <div class="society" id="s2RollupLabel">Score entry</div>
     </div>
     <div class="header-spacer"></div>
   </div>
@@ -387,7 +387,7 @@
   <div class="header">
     <button class="header-back" onclick="goBack()">‹</button>
     <div class="header-title" style="text-align:center">
-      <div class="club">MOTH's Rollup</div>
+      <div class="club" id="s3RollupName">Rollup</div>
       <div class="society">Results</div>
     </div>
     <div class="header-spacer"></div>
@@ -432,7 +432,7 @@
     <button class="header-back" onclick="goBack()">‹</button>
     <div class="header-title" style="text-align:center">
       <div class="club" id="s4PlayerLabel">Player History</div>
-      <div class="society">Score &amp; handicap trends</div>
+      <div class="society" id="s4RollupLabel">Score &amp; handicap trends</div>
     </div>
     <div class="header-spacer"></div>
   </div>
@@ -497,7 +497,7 @@
   <div class="dialog">
     <div class="dialog-title">New player found</div>
     <div class="dialog-name" id="newPlayerName"></div>
-    <div class="dialog-body">Not in the MOTHS list yet. Enter a starting handicap to add them.</div>
+    <div class="dialog-body">Not in the <span id="newPlayerRollupName"></span> list yet. Enter a starting handicap to add them.</div>
     <div class="field-group">
       <div class="field-label" style="text-align:center">Starting handicap</div>
       <input class="hc-number" id="newPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
@@ -552,6 +552,25 @@
   </div>
 </div>
 
+<div class="overlay" id="addRollupOverlay">
+  <div class="dialog">
+    <div class="dialog-title">Add Rollup</div>
+    <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
+    <div class="field-group">
+      <div class="field-label">Rollup name</div>
+      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Rollup"/>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Search term (from IG contact name)</div>
+      <input class="name-input" id="newRollupTerm" type="text" placeholder="e.g. SENIOR"/>
+    </div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addRollupOverlay')">Cancel</button>
+      <button class="dialog-btn btn-confirm" onclick="confirmAddRollup()">Add</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 // ═══════════════════════════════════════
@@ -586,8 +605,8 @@ const TEAM_NAMES = ['', 'Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5', 'Team 
 // ═══════════════════════════════════════
 // Login / Session
 // ═══════════════════════════════════════
-const LS_USERNAME = 'ig_username';
-const LS_PIN      = 'ig_pin';
+const LS_USERNAME    = 'ig_username';
+const LS_PIN         = 'ig_pin';
 const LS_ROLLUP_ID   = 'rollup_id';
 const LS_ROLLUP_NAME = 'rollup_name';
 const LS_ROLLUP_TERM = 'rollup_term';
@@ -596,8 +615,8 @@ let session = {
   igUsername: '',
   igPin: '',
   rollupId: 1,
-  rollupName: "MOTH's Rollup",
-  rollupTerm: 'MOTH',
+  rollupName: 'Rollup',
+  rollupTerm: '',
 };
 
 let availableRollups = [];
@@ -606,8 +625,8 @@ function loadSession() {
   session.igUsername  = localStorage.getItem(LS_USERNAME) || '';
   session.igPin       = localStorage.getItem(LS_PIN) || '';
   session.rollupId    = parseInt(localStorage.getItem(LS_ROLLUP_ID) || '1');
-  session.rollupName  = localStorage.getItem(LS_ROLLUP_NAME) || "MOTH's Rollup";
-  session.rollupTerm  = localStorage.getItem(LS_ROLLUP_TERM) || 'MOTH';
+  session.rollupName  = localStorage.getItem(LS_ROLLUP_NAME) || 'Rollup';
+  session.rollupTerm  = localStorage.getItem(LS_ROLLUP_TERM) || '';
 }
 
 function saveSession() {
@@ -677,7 +696,6 @@ async function confirmAddRollup() {
     const data = await resp.json();
     closeOverlay('addRollupOverlay');
     await loadRollups();
-    // Auto-select the new rollup
     const newRollup = availableRollups.find(r => r.name === name);
     if (newRollup) selectRollup(newRollup);
   } catch(e) {
@@ -711,6 +729,7 @@ function saveLogin() {
   errEl.style.display = 'none';
   enterApp();
 }
+
 // ═══════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════
@@ -729,7 +748,6 @@ async function init() {
   loadSession();
   await loadRollups();
 
-  // Pre-fill login fields if we have saved credentials
   if (session.igUsername) document.getElementById('igUsername').value = session.igUsername;
   if (session.igPin)      document.getElementById('igPin').value = session.igPin;
 
@@ -740,13 +758,17 @@ async function init() {
   }
 }
 
-  function enterApp() {
+function enterApp() {
+  // Update all rollup name references throughout the UI
   document.getElementById('s1RollupName').textContent = session.rollupName;
+  document.getElementById('s2RollupLabel').textContent = session.rollupName;
+  document.getElementById('s3RollupName').textContent = session.rollupName;
+  document.getElementById('s4RollupLabel').textContent = session.rollupName;
   showScreen('screen1');
   initHomeScreen();
 }
 
-  async function initHomeScreen() {
+async function initHomeScreen() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('roundDate').value = today;
 
@@ -760,7 +782,6 @@ async function init() {
     const data = await resp.json();
     updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
   } catch(e) { updateStatus('Ready'); }
-
 }
 
 function updateStatus(msg, type = 'neutral') {
@@ -782,20 +803,18 @@ function clearS1Error() { document.getElementById('s1Error').style.display = 'no
 // ═══════════════════════════════════════
 async function showResultsScreen() {
   showScreen('screen3');
-  // Load all round dates
   try {
     const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
     const data = await resp.json();
     state.allRoundDates = data.dates || [];
     const sel = document.getElementById('roundDateSelect');
     sel.innerHTML = '<option value="">Select a round…</option>';
-    state.allRoundDates.forEach((d, i) => {
+    state.allRoundDates.forEach((d) => {
       const opt = document.createElement('option');
       opt.value = d;
       opt.textContent = formatDateLabel(d);
       sel.appendChild(opt);
     });
-    // Auto-load most recent
     if (state.allRoundDates.length > 0) {
       state.currentRoundIdx = 0;
       sel.value = state.allRoundDates[0];
@@ -857,8 +876,6 @@ function renderResults(players, dateStr) {
     const tr = document.createElement('tr');
     if (i < 3) tr.className = rowClass[i];
     const medalCell = i < 3 ? `<span class="medal ${medals[i]}">${i + 1}</span>` : `<span style="font-size:10px;color:#aaa">${i + 1}</span>`;
-    // HC change calculation — new_handicap is after the round
-    // We don't store prior HC in rounds table, so show new HC only with a tap-to-history hint
     tr.innerHTML = `
       <td class="c">${medalCell}</td>
       <td style="cursor:pointer;font-weight:${i===0?'700':'400'}" onclick="openPlayerFromResults('${p.name}')">${p.name}</td>
@@ -879,7 +896,6 @@ function openPlayerFromResults(name) {
 // ═══════════════════════════════════════
 async function showPlayerHistory(preselect) {
   showScreen('screen4');
-  // If called from nav/home (no preselect), reset the screen
   if (!preselect) {
     document.getElementById('historyPlayerSelect').value = '';
     document.getElementById('s4PlayerLabel').textContent = 'Player History';
@@ -888,24 +904,25 @@ async function showPlayerHistory(preselect) {
     document.getElementById('phEmpty').style.display = 'block';
     if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
   }
- // Load players into select if not already done
-const sel = document.getElementById('historyPlayerSelect');
-if (sel.options.length <= 1) {
+
+  // Load players into select if not already done
+  const sel = document.getElementById('historyPlayerSelect');
+  if (sel.options.length <= 1) {
     try {
-        const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
-        const data = await resp.json();
-        const players = data.players || [];
-        sel.innerHTML = '<option value="">Choose a player…</option>';
-        players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.name;
-            opt.textContent = `${p.name} (${p.handicap})`;
-            sel.appendChild(opt);
-        });
+      const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
+      const data = await resp.json();
+      const players = data.players || [];
+      sel.innerHTML = '<option value="">Choose a player…</option>';
+      players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = `${p.name} (${p.handicap})`;
+        sel.appendChild(opt);
+      });
     } catch(e) {
-        console.error('Failed to load players:', e);
+      console.error('Failed to load players:', e);
     }
-}
+  }
 
   if (preselect) {
     sel.value = preselect;
@@ -937,13 +954,11 @@ async function loadPlayerHistory(name) {
     const data = await resp.json();
     let rounds = data.rounds || [];
 
-    // Apply date filter
     const from = document.getElementById('filterFrom').value;
     const to = document.getElementById('filterTo').value;
     if (from) rounds = rounds.filter(r => r.date >= from);
     if (to) rounds = rounds.filter(r => r.date <= to);
 
-    // Default: show last 3 if no filter applied and more than 3 exist
     if (!from && !to && rounds.length > 3) rounds = rounds.slice(0, 3);
 
     state.historyData = rounds;
@@ -962,10 +977,8 @@ async function loadPlayerHistory(name) {
 }
 
 function renderPlayerHistory(name, rounds) {
-  // Rounds come newest first from API — reverse for chart (oldest left)
   const chronological = [...rounds].reverse();
 
-  // Stats
   const scores = rounds.map(r => r.score);
   const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
   const best = Math.max(...scores);
@@ -977,7 +990,6 @@ function renderPlayerHistory(name, rounds) {
     <div class="stat-card"><div class="stat-val">${currentHC}</div><div class="stat-lbl">Current HC</div></div>
   `;
 
-  // Chart
   const labels = chronological.map(r => {
     const d = new Date(r.date + 'T12:00:00');
     return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
@@ -1038,7 +1050,6 @@ function renderPlayerHistory(name, rounds) {
     }
   });
 
-  // Table
   const tbody = document.getElementById('phTableBody');
   tbody.innerHTML = '';
   rounds.forEach((r, i) => {
@@ -1091,17 +1102,17 @@ async function loadPlayers() {
     else openScoreEntry();
   } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
 }
+
 // ═══════════════════════════════════════
-// Team structure calculator (unchanged)
+// Team structure calculator
 // ═══════════════════════════════════════
 function getAllValidStructures(n, preferredSize) {
   if (n < 4) return [];
   const seen = new Set();
   const results = [];
-  // Max teams is constrained by available tee times (one team per tee time)
   const maxTeams = state.teeTimes || n;
   for (let numTeams = 2; numTeams <= n; numTeams++) {
-    if (numTeams > maxTeams) continue;  // exceeds available tee times
+    if (numTeams > maxTeams) continue;
     const base = Math.floor(n / numTeams);
     const remainder = n % numTeams;
     const largeSize = remainder > 0 ? base + 1 : base;
@@ -1436,10 +1447,7 @@ async function saveRound() {
       body: JSON.stringify({ date: state.roundDate, players: state.players, team_mode: state.gameMode === 'team', rollup_id: session.rollupId }),
     });
     if (!resp.ok) { const err = await resp.json(); alert('Save failed: ' + (err.detail || 'Unknown error')); btn.textContent = 'Save Round'; btn.disabled = false; return; }
-    const data = await resp.json();
-    // Show in results screen
     await showResultsScreen();
-    // The results screen will auto-load the most recent — which is now this round
   } catch(e) { alert('Network error saving round.'); btn.textContent = 'Save Round'; btn.disabled = false; }
 }
 
@@ -1458,6 +1466,7 @@ function processNewPlayerQueue() {
   if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
   state.currentNewPlayer = state.newPlayerQueue.shift();
   document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
+  document.getElementById('newPlayerRollupName').textContent = session.rollupName;
   document.getElementById('newPlayerHC').value = '';
   document.getElementById('newPlayerOverlay').classList.add('open');
 }
@@ -1563,24 +1572,5 @@ function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; lo
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
 document.addEventListener('DOMContentLoaded', init);
 </script>
-
-<div class="overlay" id="addRollupOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add Rollup</div>
-    <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
-    <div class="field-group">
-      <div class="field-label">Rollup name</div>
-      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Rollup"/>
-    </div>
-    <div class="field-group">
-      <div class="field-label">Search term (from IG contact name)</div>
-      <input class="name-input" id="newRollupTerm" type="text" placeholder="e.g. SENIOR"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addRollupOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmAddRollup()">Add</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
