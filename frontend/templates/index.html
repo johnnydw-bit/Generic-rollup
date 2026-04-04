@@ -250,7 +250,7 @@
       <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
         <option value="">Choose a rollup…</option>
       </select>
-      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
+      <button class="add-rollup-btn" onclick="AddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
     </div>
 
     <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
@@ -272,7 +272,7 @@
       <div class="club" id="s1RollupName">Bramley Golf Club</div>
       <div class="society">Rollup Manager</div>
     </div>
-    <button class="settings-btn" onclick="showScreen('screen0')" title="Settings">⚙️</button>
+    <button class="settings-btn" onclick="Screen('screen0')" title="Settings">⚙️</button>
   </div>
   <div class="s1-body">
     <div class="field-group">
@@ -284,7 +284,7 @@
       <span class="error-retry">Tap Load Players to retry</span>
     </div>
     <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="showResultsScreen()">
+      <button class="big-btn btn-outline" onclick="ResultsScreen()">
         <span class="bi">📋</span>
         <span class="bl">Results</span>
         <span class="bs">Browse round history</span>
@@ -907,26 +907,23 @@ async function showPlayerHistory(preselect) {
     if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
   }
  // Load players into select if not already done
-  const sel = document.getElementById('historyPlayerSelect');
-  if (sel.options.length <= 1) {
+const sel = document.getElementById('historyPlayerSelect');
+if (sel.options.length <= 1) {
     try {
-      const resp = await fetch(/api/last-round?rollup_id=${session.rollupId});
-      const data = await resp.json();
-      // Get player names from all round dates to build full list
-      const datesResp = await fetch('/api/round-dates');
-      const datesData = await datesResp.json();
-      const allDates = datesData.dates || [];
-      // Collect unique names from most recent round + any preselect
-      const names = new Set(data.players.map(p => p.name));
-      sel.innerHTML = '<option value="">Choose a player…</option>';
-      [...names].sort().forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;
-        opt.textContent = n;
-        sel.appendChild(opt);
-      });
-    } catch(e) {}
-  }
+        const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
+        const data = await resp.json();
+        const players = data.players || [];
+        sel.innerHTML = '<option value="">Choose a player…</option>';
+        players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = `${p.name} (${p.handicap})`;
+            sel.appendChild(opt);
+        });
+    } catch(e) {
+        console.error('Failed to load players:', e);
+    }
+}
 
   if (preselect) {
     sel.value = preselect;
