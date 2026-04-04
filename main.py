@@ -1,5 +1,6 @@
 # MOTH's Rollup - main.py
 # v2 04/01: multi-rollup support — rollup_id passed through all endpoints
+# v3 04/04: rollup settings and credentials endpoints added
 
 import os
 import asyncio
@@ -26,6 +27,10 @@ from backend.db import (
     get_player_history,
     get_round_dates,
     get_round_by_date,
+    get_rollup_settings,
+    save_rollup_settings,
+    get_credentials,
+    save_credentials,
     get_pool,
     close_pool,
 )
@@ -206,13 +211,19 @@ class LookupRequest(BaseModel):
     rollup_id: int = 1
 
 
-@app.get("/api/players")
-async def get_players(rollup_id: int = Query(1)):
+@app.post("/api/lookup-player")
+async def lookup_player(body: LookupRequest):
     try:
-        players = await get_all_players(rollup_id)
+        all_players = await get_all_players(body.rollup_id)
     except Exception as e:
-        raise HTTPException(500, f"Could not load players: {str(e)}")
-    return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
+        raise HTTPException(500, f"Could not read player list: {str(e)}")
+
+    for p in all_players:
+        if p["name"].strip().lower() == body.name.strip().lower():
+            return {"found": True, "name": p["name"], "handicap": p["handicap"]}
+
+    return {"found": False, "name": body.name}
+
 
 @app.get("/api/round-dates")
 async def round_dates(rollup_id: int = Query(1)):
@@ -251,6 +262,15 @@ async def player_history(name: str = Query(...), rollup_id: int = Query(1)):
     }
 
 
+@app.get("/api/players")
+async def get_players(rollup_id: int = Query(1)):
+    try:
+        players = await get_all_players(rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load players: {str(e)}")
+    return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
+
+
 class AddRollupRequest(BaseModel):
     name: str
     ig_search_term: str
@@ -264,3 +284,79 @@ async def add_rollup(body: AddRollupRequest):
     except Exception as e:
         raise HTTPException(500, f"Could not add rollup: {str(e)}")
     return {"ok": True, "id": rollup_id, "name": body.name, "ig_search_term": body.ig_search_term.upper()}
+
+
+# ---------------------------------------------------------------------------
+# Settings endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings")
+async def get_settings(rollup_id: int = Query(...)):
+    try:
+        settings = await get_rollup_settings(rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load settings: {str(e)}")
+    return settings
+
+
+class RollupSettingsRequest(BaseModel):
+    rollup_id: int
+    display_name: str
+    ig_search_term: str
+    run_days: list[str]
+    tee_interval_minutes: int = 8
+    adjustment_table: list[dict]
+    winner_bonus_enabled: bool = True
+    winner_gap_penalty1: int = 0
+    winner_gap_penalty2: int = 0
+    entry_fee: float = 0.00
+    prize_places: int = 3
+    prize_pct_1st: int = 60
+    prize_pct_2nd: int = 30
+    prize_pct_3rd: int = 10
+    prize_pct_4th: int = 0
+    tie_handling: str = "tournament"
+    preferred_team_size: int = 4
+    team_scoring_method: str = "best2"
+
+
+@app.post("/api/settings")
+async def post_settings(body: RollupSettingsRequest):
+    # Validate prize percentages sum to 100
+    total_pct = body.prize_pct_1st + body.prize_pct_2nd + body.prize_pct_3rd + body.prize_pct_4th
+    if total_pct != 100:
+        raise HTTPException(400, f"Prize percentages must sum to 100 (currently {total_pct})")
+    try:
+        await save_rollup_settings(body.rollup_id, body.dict())
+    except Exception as e:
+        raise HTTPException(500, f"Could not save settings: {str(e)}")
+    return {"ok": True}
+
+
+@app.get("/api/credentials")
+async def get_creds():
+    try:
+        creds = await get_credentials()
+    except Exception as e:
+        raise HTTPException(500, f"Could not load credentials: {str(e)}")
+    # Never return the PIN in plaintext — return masked version
+    return {
+        "ig_username": creds["ig_username"],
+        "ig_pin_set": bool(creds["ig_pin"]),
+    }
+
+
+class CredentialsRequest(BaseModel):
+    ig_username: str
+    ig_pin: str
+
+
+@app.post("/api/credentials")
+async def post_credentials(body: CredentialsRequest):
+    if not body.ig_username or not body.ig_pin:
+        raise HTTPException(400, "Both Member ID and PIN are required")
+    try:
+        await save_credentials(body.ig_username, body.ig_pin)
+    except Exception as e:
+        raise HTTPException(500, f"Could not save credentials: {str(e)}")
+    return {"ok": True}
