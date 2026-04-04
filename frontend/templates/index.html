@@ -906,23 +906,27 @@ async function showPlayerHistory(preselect) {
     document.getElementById('phEmpty').style.display = 'block';
     if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
   }
-  // Load players into select if not already done
-const sel = document.getElementById('historyPlayerSelect');
-if (sel.options.length <= 1) {
+ // Load players into select if not already done
+  const sel = document.getElementById('historyPlayerSelect');
+  if (sel.options.length <= 1) {
     try {
-        const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
-        const players = await resp.json();
-        sel.innerHTML = '<option value="">Choose a player…</option>';
-        players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.name;
-            opt.textContent = `${p.name} (${p.handicap})`;
-            sel.appendChild(opt);
-        });
-    } catch(e) {
-        console.error('Failed to load players for history:', e);
-    }
-}
+      const resp = await fetch(/api/last-round?rollup_id=${session.rollupId});
+      const data = await resp.json();
+      // Get player names from all round dates to build full list
+      const datesResp = await fetch('/api/round-dates');
+      const datesData = await datesResp.json();
+      const allDates = datesData.dates || [];
+      // Collect unique names from most recent round + any preselect
+      const names = new Set(data.players.map(p => p.name));
+      sel.innerHTML = '<option value="">Choose a player…</option>';
+      [...names].sort().forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
 
   if (preselect) {
     sel.value = preselect;
