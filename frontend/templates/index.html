@@ -263,7 +263,18 @@
   <div class="s0-body">
     <div class="login-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/></div>
     <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Select your rollup to continue</div>
+    <div class="login-subtitle">Sign in to manage your rollup</div>
+    <div>
+      <div class="login-section">Intelligent Golf Login</div>
+      <div class="field-group" style="margin-bottom:10px;">
+        <div class="field-label">Member ID</div>
+        <input class="field-input" id="igUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
+      </div>
+      <div class="field-group">
+        <div class="field-label">PIN</div>
+        <input class="field-input" id="igPin" type="password" placeholder="Your IG PIN" autocomplete="current-password" inputmode="numeric"/>
+      </div>
+    </div>
     <div>
       <div class="login-section">Select Rollup</div>
       <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
@@ -288,6 +299,7 @@
       <div class="society">Rollup Manager</div>
     </div>
     <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
+    <button class="settings-btn" onclick="signOut()" title="Sign out" style="font-size:16px;">↩</button>
   </div>
   <div class="s1-body">
     <div class="field-group">
@@ -521,22 +533,6 @@
             <input class="day-cb" type="checkbox" id="daySat" value="Sat"/><label class="day-label" for="daySat">Sat</label>
             <input class="day-cb" type="checkbox" id="daySun" value="Sun"/><label class="day-label" for="daySun">Sun</label>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Credentials -->
-    <div class="settings-section">
-      <div class="settings-section-header">Intelligent Golf Credentials</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Member ID</div>
-          <input class="settings-input" id="setIgUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-        </div>
-        <div class="field-group">
-          <div class="field-label">PIN</div>
-          <input class="settings-input" id="setIgPin" type="password" placeholder="Enter PIN to update" autocomplete="current-password" inputmode="numeric"/>
-          <div style="font-size:10px;color:#888;margin-top:2px;" id="pinSetStatus"></div>
         </div>
       </div>
     </div>
@@ -834,7 +830,8 @@ function saveSession() {
 }
 
 function hasValidSession() {
-  return !!(session.rollupId && session.rollupName);
+  return !!(session.rollupId && session.rollupName &&
+    localStorage.getItem('ig_username') && localStorage.getItem('ig_pin'));
 }
 
 async function loadRollups() {
@@ -936,15 +933,30 @@ async function confirmAddRollup() {
   } catch(e) { alert('Could not add rollup. Please try again.'); }
 }
 
+function signOut() {
+  localStorage.removeItem('ig_username');
+  localStorage.removeItem('ig_pin');
+  localStorage.removeItem(LS_ROLLUP_ID);
+  localStorage.removeItem(LS_ROLLUP_NAME);
+  localStorage.removeItem(LS_ROLLUP_TERM);
+  session = { rollupId: 1, rollupName: '', rollupTerm: '' };
+  // Pre-fill username on screen0 if they want to switch rollup only
+  showScreen('screen0');
+}
+
 function saveLogin() {
   const errEl = document.getElementById('loginError');
+  const username = document.getElementById('igUsername').value.trim();
+  const pin = document.getElementById('igPin').value.trim();
   const sel = document.getElementById('rollupSelect');
   const selectedRollup = availableRollups.find(r => r.id === parseInt(sel.value));
-  if (!selectedRollup) {
-    errEl.textContent = 'Please select a rollup.';
-    errEl.style.display = 'block';
-    return;
-  }
+
+  if (!username) { errEl.textContent = 'Please enter your IG Member ID.'; errEl.style.display = 'block'; return; }
+  if (!pin) { errEl.textContent = 'Please enter your IG PIN.'; errEl.style.display = 'block'; return; }
+  if (!selectedRollup) { errEl.textContent = 'Please select a rollup.'; errEl.style.display = 'block'; return; }
+
+  localStorage.setItem('ig_username', username);
+  localStorage.setItem('ig_pin', pin);
   selectRollup(selectedRollup);
   saveSession();
   errEl.style.display = 'none';
@@ -976,6 +988,9 @@ function goBack() {
 async function init() {
   loadSession();
   await loadRollups();
+  // Pre-fill username on screen0 if previously used
+  const savedUsername = localStorage.getItem('ig_username');
+  if (savedUsername) document.getElementById('igUsername').value = savedUsername;
   if (hasValidSession()) {
     enterApp();
   } else {
@@ -1030,21 +1045,17 @@ async function showSettingsScreen() {
   document.getElementById('settingsActiveRollup').textContent = session.rollupName;
   setSettingsStatus('Loading…', 'neutral');
   try {
-    const [settResp, credResp] = await Promise.all([
-      fetch(`/api/settings?rollup_id=${session.rollupId}`),
-      fetch('/api/credentials'),
-    ]);
+    const settResp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
     const sett = await settResp.json();
-    const cred = await credResp.json();
     state.rollupSettings = sett;
-    populateSettingsForm(sett, cred);
+    populateSettingsForm(sett);
     setSettingsStatus('Settings loaded', 'success');
   } catch(e) {
     setSettingsStatus('Could not load settings', 'danger');
   }
 }
 
-function populateSettingsForm(s, cred) {
+function populateSettingsForm(s) {
   document.getElementById('setDisplayName').value = s.display_name || '';
   document.getElementById('setIgTerm').value = s.ig_search_term || '';
 
@@ -1076,12 +1087,6 @@ function populateSettingsForm(s, cred) {
   if (pts) pts.checked = true;
 
   document.getElementById('setTeamScoring').value = s.team_scoring_method || 'best2';
-
-  document.getElementById('setIgUsername').value = cred.ig_username || '';
-  document.getElementById('setIgPin').value = '';
-  document.getElementById('pinSetStatus').textContent = cred.ig_pin_set
-    ? 'PIN is set — enter new PIN to change'
-    : 'No PIN saved yet';
 }
 
 function renderAdjTable(table) {
@@ -1195,23 +1200,6 @@ async function saveSettings() {
       ['s1RollupName','s2RollupLabel','s3RollupName','s4RollupLabel','s5RollupName']
         .forEach(id => document.getElementById(id).textContent = session.rollupName);
     }
-
-    const username = document.getElementById('setIgUsername').value.trim();
-    const pin = document.getElementById('setIgPin').value.trim();
-    if (username) {
-      const body = { ig_username: username, ig_pin: pin || '' };
-      const credResp = await fetch('/api/credentials', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-      });
-      if (credResp.ok) {
-        document.getElementById('pinSetStatus').textContent = 'PIN is set — enter new PIN to change';
-        document.getElementById('setIgPin').value = '';
-      }
-    }
-
-    if (pin) localStorage.setItem('ig_pin', pin);
-    if (username) localStorage.setItem('ig_username', username);
 
     await loadRollups();
     setSettingsStatus('Settings saved ✓', 'success');
@@ -1447,17 +1435,11 @@ async function loadPlayers() {
   const date = document.getElementById('roundDate').value;
   if (!date) { showS1Error('Please select a round date.'); return; }
 
-  let igUsername = localStorage.getItem('ig_username') || '';
-  let igPin = localStorage.getItem('ig_pin') || '';
-
-  try {
-    const credResp = await fetch('/api/credentials');
-    const cred = await credResp.json();
-    if (cred.ig_username) igUsername = cred.ig_username;
-  } catch(e) {}
+  const igUsername = localStorage.getItem('ig_username') || '';
+  const igPin = localStorage.getItem('ig_pin') || '';
 
   if (!igUsername || !igPin) {
-    showS1Error('IG credentials not set. Please configure them in Settings ⚙️');
+    showS1Error('IG credentials not set. Please sign out and sign in again.');
     return;
   }
 
