@@ -54,12 +54,12 @@ templates = Jinja2Templates(directory="frontend/templates")
 
 @app.on_event("startup")
 async def startup():
-    await get_pool()
+    await db.init_db()
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    await close_pool()
+    await db.close_db()
 
 
 @app.get("/sw.js")
