@@ -55,11 +55,7 @@ def _init_schema():
                     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
-            cur.execute("""
-                INSERT INTO rollups (name, ig_search_term)
-                VALUES ('MOTH''s Rollup', 'MOTH')
-                ON CONFLICT (name) DO NOTHING
-            """)
+            # No seed rollup — rollups are created and managed via the app UI
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS players (
                     id          SERIAL PRIMARY KEY,
@@ -341,12 +337,16 @@ DEFAULT_ADJUSTMENT_TABLE = [
 def _get_rollup_settings(rollup_id: int) -> dict:
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                "SELECT * FROM rollup_settings WHERE rollup_id = %s",
-                (rollup_id,)
-            )
+            # Always join rollups so name/term are from the canonical table
+            cur.execute("""
+                SELECT rs.*, r.name AS rollup_name, r.ig_search_term AS rollup_term
+                FROM rollup_settings rs
+                JOIN rollups r ON r.id = rs.rollup_id
+                WHERE rs.rollup_id = %s
+            """, (rollup_id,))
             row = cur.fetchone()
             if not row:
+                # No settings row yet — return defaults from rollups table
                 cur.execute(
                     "SELECT name, ig_search_term FROM rollups WHERE id = %s",
                     (rollup_id,)
@@ -373,9 +373,12 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "team_scoring_method":  "best2",
                 }
             d = dict(row)
-            d["run_days"] = json.loads(d["run_days"])
+            # Always use rollups table as source of truth for name/term
+            d["display_name"]    = d["rollup_name"]
+            d["ig_search_term"]  = d["rollup_term"]
+            d["run_days"]        = json.loads(d["run_days"])
             d["adjustment_table"] = json.loads(d["adjustment_table"])
-            d["entry_fee"] = float(d["entry_fee"])
+            d["entry_fee"]       = float(d["entry_fee"])
             return d
 
 
