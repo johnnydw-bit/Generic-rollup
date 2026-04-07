@@ -1,1846 +1,480 @@
-<!-- Bramley Golf Club - Rollup Manager - frontend/templates/index.html -->
-<!-- Updated: 2026-04-04 — settings screen added -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="theme-color" content="#2D2B5B"/>
-  <title>Bramley Rollup</title>
-  <link rel="manifest" href="/static/manifest.json"/>
-  <link rel="apple-touch-icon" href="/static/icon-192.png"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; }
-
-    .header { background: #2D2B5B; padding: 12px 16px 10px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
-    .header-logo { width: 44px; height: 44px; border-radius: 50%; background: #fff; flex-shrink: 0; overflow: hidden; padding: 3px; }
-    .header-logo img { width: 100%; height: 100%; object-fit: contain; }
-    .header-title { flex: 1; }
-    .header-title .club { color: #fff; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
-    .header-title .society { color: #FFD700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
-    .header-back { color: #FFD700; font-size: 26px; line-height: 1; background: none; border: none; cursor: pointer; flex-shrink: 0; }
-    .header-spacer { width: 26px; flex-shrink: 0; }
-
-    .screen { display: none; flex-direction: column; flex: 1; }
-    .screen.active { display: flex; }
-
-    .field-group { display: flex; flex-direction: column; gap: 4px; }
-    .field-label { font-size: 10px; color: #2D2B5B; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-    .field-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; -webkit-appearance: none; }
-    .field-input:focus { outline: none; border-color: #2D2B5B; }
-    .btn-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .big-btn { border-radius: 12px; padding: 16px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; cursor: pointer; font-family: inherit; }
-    .big-btn .bi { font-size: 24px; }
-    .big-btn .bl { font-size: 13px; font-weight: 600; text-align: center; line-height: 1.3; }
-    .big-btn .bs { font-size: 10px; opacity: 0.7; text-align: center; }
-    .btn-navy { background: #2D2B5B; color: #fff; }
-    .btn-outline { background: #fff; color: #2D2B5B; border: 1.5px solid #2D2B5B !important; }
-    .btn-gold { background: #FFD700; color: #2D2B5B; border: none !important; }
-    .status-bar { text-align: center; font-size: 11px; font-weight: 500; padding: 6px; border-radius: 20px; }
-    .status-neutral { background: #2D2B5B15; color: #2D2B5B; }
-    .status-success { background: #EAF3DE; color: #3B6D11; }
-    .status-danger { background: #FCEBEB; color: #A32D2D; }
-    .error-box { background: #FCEBEB; border: 1px solid #A32D2D30; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #A32D2D; line-height: 1.5; }
-    .error-retry { font-size: 11px; font-weight: 600; text-decoration: underline; margin-top: 4px; display: block; }
-
-    .toggle-row { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1.5px solid #2D2B5B; }
-    .toggle-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; font-family: inherit; background: #fff; color: #2D2B5B; transition: background 0.15s; }
-    .toggle-btn.active { background: #2D2B5B; color: #FFD700; }
-
-    .s1-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-
-    .autosave-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; background: #fff; border-bottom: 1px solid #ccc; }
-    .autosave-right { display: flex; align-items: center; gap: 4px; }
-    .autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: #3B6D11; }
-    .autosave-label { font-size: 10px; color: #3B6D11; }
-    .unassigned-warning { font-size: 10px; color: #A32D2D; font-weight: 600; }
-
-    .team-size-btn { flex: 1; padding: 8px 4px; font-size: 11px; font-weight: 600; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; cursor: pointer; font-family: inherit; }
-    .team-size-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .team-structure-info { font-size: 11px; color: #2D2B5B; font-weight: 600; padding: 4px 0; min-height: 18px; }
-    .team-structure-info.error { color: #A32D2D; }
-    .structure-options { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-    .structure-option-btn { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: left; }
-    .structure-option-btn.selected { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-
-    .team-scoreboard { background: #fff; border-bottom: 1px solid #ccc; padding: 6px 8px; }
-    .team-scoreboard-title { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .team-scores-row { display: flex; gap: 6px; flex-wrap: wrap; }
-    .team-score-pill { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
-
-    .grid-wrap { flex: 1; overflow-y: auto; background: #fff; }
-    table.xl { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; table-layout: fixed; }
-    table.xl thead th:nth-child(1) { width: 34%; }
-    table.xl thead th:nth-child(2) { width: 10%; }
-    table.xl thead th:nth-child(3) { width: 18%; }
-    table.xl thead th:nth-child(4) { width: 18%; }
-    table.xl thead th:nth-child(5) { width: 20%; }
-    table.xl thead tr { background: #D9D9D9; }
-    table.xl thead th { font-size: 11px; font-weight: 700; color: #000; padding: 3px 4px; border: 1px solid #999; text-align: center; }
-    table.xl thead th.left { text-align: left; }
-    table.xl tbody td { font-size: 11px; color: #000; padding: 2px 4px; border: 1px solid #ccc; background: #fff; vertical-align: middle; line-height: 1.6; }
-    table.xl tbody td.c { text-align: center; }
-    table.xl tbody td.sc { text-align: center; }
-    table.xl tbody td.nhc { text-align: center; white-space: nowrap; font-size: 9px; }
-    table.xl tbody td.sc input { width: 100%; border: none; background: transparent; font-size: 11px; text-align: center; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 0; outline: none; }
-    table.xl tbody td.remove-col { text-align: center; cursor: pointer; color: #A32D2D; font-size: 14px; font-weight: 700; }
-    table.xl tbody td.team-col { text-align: center; }
-    table.xl tbody td.team-col select { width: 100%; border: none; background: transparent; font-size: 10px; font-family: Arial, sans-serif; padding: 0; outline: none; }
-    table.xl tbody td.team-col.oversize { background: #FFEBEE !important; }
-    table.xl tbody tr.rank-gold td { background: #FFF9E0; }
-    table.xl tbody tr.rank-silver td { background: #F5F5F5; }
-    table.xl tbody tr.rank-bronze td { background: #FDF3ED; }
-    table.xl tbody tr.team-1 td { background: #E8F0FE; }
-    table.xl tbody tr.team-2 td { background: #FCE8E6; }
-    table.xl tbody tr.team-3 td { background: #E6F4EA; }
-    table.xl tbody tr.team-4 td { background: #FEF7E0; }
-    table.xl tbody tr.team-5 td { background: #F3E8FD; }
-    table.xl tbody tr.team-6 td { background: #E8F6FD; }
-    table.xl tbody tr.team-header td { font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 6px; }
-    table.xl tbody tr.team-header.team-1 td { background: #C5D8FF; color: #1a3a7a; }
-    table.xl tbody tr.team-header.team-2 td { background: #FFCDD2; color: #7a1a1a; }
-    table.xl tbody tr.team-header.team-3 td { background: #C8E6C9; color: #1a4a1a; }
-    table.xl tbody tr.team-header.team-4 td { background: #FFF9C4; color: #5a4a00; }
-    table.xl tbody tr.team-header.team-5 td { background: #E1BEE7; color: #4a1a5a; }
-    table.xl tbody tr.team-header.team-6 td { background: #B3E5FC; color: #0d3a5a; }
-    .team-pill-1 { background: #C5D8FF; color: #1a3a7a; }
-    .team-pill-2 { background: #FFCDD2; color: #7a1a1a; }
-    .team-pill-3 { background: #C8E6C9; color: #1a4a1a; }
-    .team-pill-4 { background: #FFF9C4; color: #5a4a00; }
-    .team-pill-5 { background: #E1BEE7; color: #4a1a5a; }
-    .team-pill-6 { background: #B3E5FC; color: #0d3a5a; }
-
-    .results-nav { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f8f8f8; border-bottom: 1px solid #ddd; }
-    .nav-arrow { background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; cursor: pointer; font-family: inherit; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-    .nav-arrow:disabled { background: #ccc; color: #888; cursor: default; }
-    .date-select { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
-    .results-wrap { flex: 1; overflow-y: auto; background: #fff; }
-    table.rt { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; }
-    table.rt thead tr { background: #2D2B5B; }
-    table.rt thead th { font-size: 12px; font-weight: 600; color: #FFD700; padding: 5px 6px; border: 1px solid #2D2B5B; text-align: center; }
-    table.rt thead th.left { text-align: left; }
-    table.rt tbody td { font-size: 12px; color: #000; padding: 3px 6px; border: 1px solid #ccc; background: #fff; vertical-align: middle; cursor: pointer; }
-    table.rt tbody td.c { text-align: center; }
-    table.rt tbody tr.gold td { background: #FFF9E0; }
-    table.rt tbody tr.silver td { background: #F5F5F5; }
-    table.rt tbody tr.bronze td { background: #FDF3ED; }
-    table.rt tbody tr:hover td { filter: brightness(0.96); }
-    .medal { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; }
-    .medal.g { background: #FFD700; color: #7A5C00; }
-    .medal.s { background: #C0C0C0; color: #444; }
-    .medal.b { background: #CD7F32; color: #fff; }
-    .hc-change { font-size: 9px; color: #666; }
-    .hc-change.down { color: #3B6D11; }
-    .hc-change.up { color: #A32D2D; }
-    .results-footer { padding: 10px; background: #f5f5f0; }
-
-    .ph-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
-    .player-select-wrap { position: relative; }
-    .player-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
-    .player-select:focus { outline: none; border-color: #2D2B5B; }
-    .filter-row { display: flex; gap: 8px; align-items: flex-end; }
-    .filter-row .field-group { flex: 1; }
-    .filter-row input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #000; }
-    .filter-row input:focus { outline: none; border-color: #2D2B5B; }
-    .apply-btn { padding: 8px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .chart-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; padding: 12px; }
-    .chart-title { font-size: 11px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-    .ph-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .stat-card { background: #fff; border-radius: 10px; border: 1px solid #ddd; padding: 10px 8px; text-align: center; }
-    .stat-val { font-size: 22px; font-weight: 700; color: #2D2B5B; }
-    .stat-lbl { font-size: 10px; color: #888; margin-top: 2px; }
-    .ph-table-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; overflow: hidden; }
-    table.ph { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    table.ph thead tr { background: #2D2B5B; }
-    table.ph thead th { font-size: 11px; font-weight: 600; color: #FFD700; padding: 5px 8px; text-align: center; }
-    table.ph thead th.left { text-align: left; }
-    table.ph tbody td { font-size: 12px; padding: 5px 8px; border-bottom: 1px solid #eee; text-align: center; }
-    table.ph tbody td.left { text-align: left; }
-    table.ph tbody tr:last-child td { border-bottom: none; }
-    .no-data { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
-
-    .nav-bar { display: flex; background: #2D2B5B; border-top: 1px solid #1a1840; }
-    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; color: #ffffff80; gap: 2px; }
-    .nav-item.active { color: #FFD700; }
-    .nav-item .ni { font-size: 20px; }
-    .nav-item .nl { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; }
-
-    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
-    .overlay.open { display: flex; }
-    .dialog { background: #fff; border-radius: 16px; padding: 20px; width: 88%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
-    .dialog-title { font-size: 15px; font-weight: 700; color: #2D2B5B; text-align: center; }
-    .dialog-body { font-size: 12px; color: #555; text-align: center; line-height: 1.6; }
-    .dialog-name { font-size: 13px; font-weight: 600; color: #2D2B5B; text-align: center; background: #f0f0f0; border-radius: 8px; padding: 8px; }
-    .dialog-btns { display: flex; gap: 10px; }
-    .dialog-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .btn-cancel { background: #e8e8e8; color: #555; }
-    .btn-confirm { background: #2D2B5B; color: #FFD700; }
-    .btn-danger { background: #A32D2D; color: #fff; }
-    .hc-number { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #2D2B5B; font-size: 20px; font-weight: 700; text-align: center; color: #2D2B5B; background: #fff; }
-    .hc-number:focus { outline: none; box-shadow: 0 0 0 3px #2D2B5B20; }
-    .name-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; }
-    .name-input:focus { outline: none; border-color: #2D2B5B; }
-
-    .s0-body { padding: 24px 20px; display: flex; flex-direction: column; gap: 18px; flex: 1; justify-content: center; }
-    .login-logo { display: flex; justify-content: center; margin-bottom: 8px; }
-    .login-logo img { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #2D2B5B; object-fit: contain; background: #fff; padding: 4px; }
-    .login-title { text-align: center; font-size: 20px; font-weight: 700; color: #2D2B5B; }
-    .login-subtitle { text-align: center; font-size: 12px; color: #888; margin-top: -10px; }
-    .login-section { font-size: 10px; color: #2D2B5B; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
-    .add-rollup-btn { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px dashed #2D2B5B60; background: transparent; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .settings-btn { background: none; border: none; cursor: pointer; color: #FFD700; font-size: 20px; flex-shrink: 0; }
-
-    /* Screen 5 - Settings */
-    .settings-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 0; }
-    .settings-section { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 14px; overflow: hidden; }
-    .settings-section-header { background: #2D2B5B; color: #FFD700; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 14px; }
-    .settings-section-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-    .settings-input { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; background: #fff; color: #000; -webkit-appearance: none; font-family: inherit; }
-    .settings-input:focus { outline: none; border-color: #2D2B5B; }
-    .settings-input-sm { width: 70px; padding: 7px 8px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #000; text-align: center; font-family: inherit; -webkit-appearance: none; }
-    .settings-input-sm:focus { outline: none; border-color: #2D2B5B; }
-    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .settings-row-label { font-size: 13px; color: #333; flex: 1; }
-    .settings-row-sub { font-size: 11px; color: #888; margin-top: 2px; }
-    .day-checkboxes { display: flex; gap: 6px; flex-wrap: wrap; }
-    .day-cb { display: none; }
-    .day-label { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 12px; font-weight: 600; color: #2D2B5B; cursor: pointer; user-select: none; }
-    .day-cb:checked + .day-label { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .radio-opt { display: none; }
-    .radio-label { padding: 7px 14px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 12px; font-weight: 600; color: #2D2B5B; cursor: pointer; user-select: none; white-space: nowrap; }
-    .radio-opt:checked + .radio-label { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .adj-table { width: 100%; border-collapse: collapse; }
-    .adj-table th { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 6px; text-align: center; border-bottom: 1px solid #eee; }
-    .adj-table th.left { text-align: left; }
-    .adj-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; font-size: 12px; text-align: center; vertical-align: middle; }
-    .adj-table td.left { text-align: left; color: #555; }
-    .adj-table tr:last-child td { border-bottom: none; }
-    .prize-grid { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-    .prize-grid-label { font-size: 12px; color: #555; }
-    .prize-pct-input { width: 60px; padding: 7px 8px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; text-align: center; font-family: inherit; -webkit-appearance: none; }
-    .prize-pct-input:focus { outline: none; border-color: #2D2B5B; }
-    .prize-pct-symbol { font-size: 13px; color: #888; }
-    .prize-total-row { display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: 12px; color: #888; padding-top: 6px; border-top: 1px solid #eee; margin-top: 4px; }
-    .prize-total-val { font-weight: 700; font-size: 14px; }
-    .prize-total-val.ok { color: #3B6D11; }
-    .prize-total-val.err { color: #A32D2D; }
-    .toggle-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 24px; transition: 0.2s; }
-    .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
-    input:checked + .toggle-slider { background: #2D2B5B; }
-    input:checked + .toggle-slider:before { transform: translateX(20px); }
-    .settings-save-bar { padding: 12px 14px; background: #f5f5f0; border-top: 1px solid #ddd; display: flex; gap: 10px; align-items: center; }
-    .settings-status { font-size: 11px; padding: 6px 10px; border-radius: 8px; flex: 1; text-align: center; }
-  </style>
-</head>
-<body>
-
-<!-- SCREEN 0 - Rollup Select -->
-<div id="screen0" class="screen active">
-  <div class="header">
-    <div class="header-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/></div>
-    <div class="header-title">
-      <div class="club">Bramley Golf Club</div>
-      <div class="society">Rollup Manager</div>
-    </div>
-  </div>
-  <div class="s0-body">
-    <div class="login-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/></div>
-    <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Select your rollup to continue</div>
-    <div>
-      <div class="login-section">Select Rollup</div>
-      <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
-        <option value="">Choose a rollup…</option>
-      </select>
-      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
-    </div>
-    <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
-      <span class="bl">Continue</span>
-    </button>
-    <div id="loginError" style="display:none;font-size:12px;color:#A32D2D;text-align:center;"></div>
-  </div>
-</div>
-
-
-<!-- SCREEN 1 - Home -->
-<div id="screen1" class="screen">
-  <div class="header">
-    <div class="header-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/></div>
-    <div class="header-title">
-      <div class="club" id="s1RollupName">Bramley Golf Club</div>
-      <div class="society">Rollup Manager</div>
-    </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
-  </div>
-  <div class="s1-body">
-    <div class="field-group">
-      <div class="field-label">Round date</div>
-      <input class="field-input" id="roundDate" type="date"/>
-    </div>
-    <div id="s1Error" style="display:none" class="error-box">
-      <span id="s1ErrorMsg"></span>
-      <span class="error-retry">Tap Load Players to retry</span>
-    </div>
-    <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="showResultsScreen()">
-        <span class="bi">📋</span><span class="bl">Results</span><span class="bs">Browse round history</span>
-      </button>
-      <button class="big-btn btn-navy" onclick="loadPlayers()">
-        <span class="bi">⛳</span><span class="bl">Load players</span><span class="bs">Sets up new round</span>
-      </button>
-    </div>
-    <button class="big-btn btn-gold" onclick="showPlayerHistory()" style="width:100%">
-      <span class="bi">📈</span><span class="bl">Player history</span><span class="bs">Scores &amp; handicap trends</span>
-    </button>
-    <div id="s1Status" class="status-bar status-neutral">Loading…</div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item active" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
-  </div>
-</div>
-
-
-<!-- SCREEN 2 - Score Entry -->
-<div id="screen2" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s2DateLabel">Rollup</div>
-      <div class="society" id="s2RollupLabel">Score entry</div>
-    </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
-  </div>
-  <div class="autosave-bar">
-    <span class="unassigned-warning" id="unassignedWarning" style="display:none"></span>
-    <div class="autosave-right">
-      <div class="autosave-dot" id="saveDot"></div>
-      <span class="autosave-label" id="saveLabel">Ready</span>
-    </div>
-  </div>
-  <div style="padding:8px 10px; background:#f8f8f8; border-bottom:1px solid #ddd;">
-    <div class="field-label" style="margin-bottom:5px;">Game type</div>
-    <div class="toggle-row">
-      <button class="toggle-btn active" id="modeIndividual" onclick="setGameMode('individual')">Individual</button>
-      <button class="toggle-btn" id="modeTeam" onclick="setGameMode('team')">Team</button>
-    </div>
-  </div>
-  <div id="teamConfig" style="display:none; padding:8px 10px; background:#f0f0f8; border-bottom:1px solid #ddd;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-      <div class="field-label">Team size preference</div>
-      <div id="teeTimesInfo" style="font-size:10px;color:#2D2B5B;font-weight:600;background:#E8F0FE;padding:2px 8px;border-radius:10px;display:none;"></div>
-    </div>
-    <div style="display:flex; gap:6px; margin-bottom:6px;">
-      <button class="team-size-btn active" id="size2" onclick="setTeamSize(2)">Pairs (2)</button>
-      <button class="team-size-btn" id="size3" onclick="setTeamSize(3)">Triples (3)</button>
-      <button class="team-size-btn" id="size4" onclick="setTeamSize(4)">Fours (4)</button>
-    </div>
-    <div id="structureOptions" style="display:none; margin-bottom:6px;">
-      <div class="field-label" style="margin-bottom:4px;">Select team structure</div>
-      <div class="structure-options" id="structureOptionsList"></div>
-    </div>
-    <div class="team-structure-info" id="teamStructureInfo"></div>
-    <div style="margin-top:8px; display:flex; gap:8px;">
-      <button onclick="randomAssign()" style="flex:1;padding:9px;background:#2D2B5B;color:#FFD700;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🎲 Random assign</button>
-      <button onclick="addWalkupPlayer()" style="flex:1;padding:9px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add player</button>
-    </div>
-  </div>
-  <div id="teamScoreboard" style="display:none;" class="team-scoreboard">
-    <div class="team-scoreboard-title">Team scores (top 2)</div>
-    <div class="team-scores-row" id="teamScoresPills"></div>
-  </div>
-  <div class="grid-wrap">
-    <table class="xl">
-      <thead><tr>
-        <th class="left">Player</th><th>HC</th><th>Score</th><th>New HC</th><th id="lastColHeader">✕</th>
-      </tr></thead>
-      <tbody id="scoreGrid"></tbody>
-    </table>
-  </div>
-  <div style="padding:6px 10px; background:#f8f8f8; border-top:1px solid #ddd;" id="addPlayerBar">
-    <button onclick="addWalkupPlayer()" style="width:100%;padding:8px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add walk-up player</button>
-  </div>
-  <div style="padding:10px;">
-    <button id="saveRoundBtn" onclick="saveRound()" style="width:100%;padding:14px;background:#2D2B5B;color:#FFD700;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Save Round</button>
-  </div>
-</div>
-
-
-<!-- SCREEN 3 - Results -->
-<div id="screen3" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s3RollupName">Rollup</div>
-      <div class="society">Results</div>
-    </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
-  </div>
-  <div class="results-nav">
-    <button class="nav-arrow" id="prevRoundBtn" onclick="stepRound(1)">‹</button>
-    <select class="date-select" id="roundDateSelect" onchange="loadRoundByDate(this.value)">
-      <option value="">Select a round…</option>
-    </select>
-    <button class="nav-arrow" id="nextRoundBtn" onclick="stepRound(-1)">›</button>
-  </div>
-  <div class="results-wrap">
-    <div id="resultsLoading" style="display:none;text-align:center;padding:30px;color:#888;font-size:13px;">Loading…</div>
-    <table class="rt" id="resultsTable">
-      <thead><tr>
-        <th style="width:28px"></th><th class="left">Player</th><th>Score</th><th>HC</th><th>Change</th>
-      </tr></thead>
-      <tbody id="resultsGrid"></tbody>
-    </table>
-  </div>
-  <div class="results-footer">
-    <div id="s3Status" class="status-bar status-neutral">Select a round above</div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item active" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
-  </div>
-</div>
-
-
-<!-- SCREEN 4 - Player History -->
-<div id="screen4" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s4PlayerLabel">Player History</div>
-      <div class="society" id="s4RollupLabel">Score &amp; handicap trends</div>
-    </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
-  </div>
-  <div class="ph-body">
-    <div class="field-group">
-      <div class="field-label">Select player</div>
-      <div class="player-select-wrap">
-        <select class="player-select" id="historyPlayerSelect" onchange="onPlayerSelectChange()">
-          <option value="">Choose a player…</option>
-        </select>
-      </div>
-    </div>
-    <div class="filter-row">
-      <div class="field-group"><div class="field-label">From</div><input type="date" id="filterFrom"/></div>
-      <div class="field-group"><div class="field-label">To</div><input type="date" id="filterTo"/></div>
-      <button class="apply-btn" onclick="applyFilter()">Apply</button>
-    </div>
-    <div id="phContent" style="display:none;">
-      <div class="ph-stats" id="phStats"></div>
-      <div style="height:12px;"></div>
-      <div class="chart-wrap">
-        <div class="chart-title">Score &amp; Handicap per Round</div>
-        <canvas id="historyChart" height="200"></canvas>
-      </div>
-      <div style="height:12px;"></div>
-      <div class="ph-table-wrap">
-        <table class="ph">
-          <thead><tr><th class="left">Date</th><th>Score</th><th>HC After</th><th>Change</th></tr></thead>
-          <tbody id="phTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div id="phNoData" class="no-data" style="display:none;">No rounds found for this player in the selected range.</div>
-    <div id="phEmpty" class="no-data">Select a player to view their history.</div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item active" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
-  </div>
-</div>
-
-
-<!-- SCREEN 5 - Settings -->
-<div id="screen5" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s5RollupName">Settings</div>
-      <div class="society">Rollup configuration</div>
-    </div>
-    <div class="header-spacer"></div>
-  </div>
-
-  <div class="settings-body">
-
-    <!-- Rollup Identity -->
-    <div class="settings-section">
-      <div class="settings-section-header">Rollup Identity</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Display name</div>
-          <input class="settings-input" id="setDisplayName" type="text" placeholder="e.g. MOTH's Rollup"/>
-        </div>
-        <div class="field-group">
-          <div class="field-label">IG search term</div>
-          <input class="settings-input" id="setIgTerm" type="text" placeholder="e.g. MOTH"/>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Runs on</div>
-          <div class="day-checkboxes">
-            <input class="day-cb" type="checkbox" id="dayMon" value="Mon"/><label class="day-label" for="dayMon">Mon</label>
-            <input class="day-cb" type="checkbox" id="dayTue" value="Tue"/><label class="day-label" for="dayTue">Tue</label>
-            <input class="day-cb" type="checkbox" id="dayWed" value="Wed"/><label class="day-label" for="dayWed">Wed</label>
-            <input class="day-cb" type="checkbox" id="dayThu" value="Thu"/><label class="day-label" for="dayThu">Thu</label>
-            <input class="day-cb" type="checkbox" id="dayFri" value="Fri"/><label class="day-label" for="dayFri">Fri</label>
-            <input class="day-cb" type="checkbox" id="daySat" value="Sat"/><label class="day-label" for="daySat">Sat</label>
-            <input class="day-cb" type="checkbox" id="daySun" value="Sun"/><label class="day-label" for="daySun">Sun</label>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Credentials -->
-    <div class="settings-section">
-      <div class="settings-section-header">Intelligent Golf Credentials</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Member ID</div>
-          <input class="settings-input" id="setIgUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-        </div>
-        <div class="field-group">
-          <div class="field-label">PIN</div>
-          <input class="settings-input" id="setIgPin" type="password" placeholder="Enter PIN to update" autocomplete="current-password" inputmode="numeric"/>
-          <div style="font-size:10px;color:#888;margin-top:2px;" id="pinSetStatus"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tee Times -->
-    <div class="settings-section">
-      <div class="settings-section-header">Tee Times</div>
-      <div class="settings-section-body">
-        <div class="settings-row">
-          <div>
-            <div class="settings-row-label">Interval between tee times</div>
-            <div class="settings-row-sub">Used to calculate available tee slots</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setTeeInterval" type="number" min="1" max="30" value="8"/>
-            <span style="font-size:12px;color:#888;">min</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Handicap Adjustment Table -->
-    <div class="settings-section">
-      <div class="settings-section-header">Handicap Adjustment Table</div>
-      <div class="settings-section-body">
-        <table class="adj-table">
-          <thead>
-            <tr>
-              <th class="left">Range</th>
-              <th>Upper limit</th>
-              <th>Adjustment</th>
-            </tr>
-          </thead>
-          <tbody id="adjTableBody"></tbody>
-        </table>
-        <div style="font-size:10px;color:#888;margin-top:4px;">Upper limit is the max score for that band. Last row has no upper limit.</div>
-      </div>
-    </div>
-
-    <!-- Winner Penalty -->
-    <div class="settings-section">
-      <div class="settings-section-header">Winner Penalty</div>
-      <div class="settings-section-body">
-        <div class="toggle-switch-row">
-          <div>
-            <div class="settings-row-label">Apply -1 to round winner</div>
-            <div class="settings-row-sub">Always applied on top of adjustment table</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="setWinnerBonus" checked/>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">Extra -1 if winner beats 2nd by ≥</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setGapPenalty1" type="number" min="0" max="20" value="0"/>
-            <span style="font-size:11px;color:#888;">pts (0=off)</span>
-          </div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">Extra -2 if winner beats 2nd by ≥</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setGapPenalty2" type="number" min="0" max="20" value="0"/>
-            <span style="font-size:11px;color:#888;">pts (0=off)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Entry & Prizes -->
-    <div class="settings-section">
-      <div class="settings-section-header">Entry &amp; Prizes</div>
-      <div class="settings-section-body">
-        <div class="settings-row">
-          <div class="settings-row-label">Entry fee</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:14px;color:#555;">£</span>
-            <input class="settings-input-sm" id="setEntryFee" type="number" min="0" step="0.50" value="0" style="width:80px;"/>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Prize places</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp1" value="1"/><label class="radio-label" for="pp1">1st only</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp2" value="2"/><label class="radio-label" for="pp2">Top 2</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp3" value="3" checked/><label class="radio-label" for="pp3">Top 3</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp4" value="4"/><label class="radio-label" for="pp4">Top 4</label>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Prize split %</div>
-          <div class="prize-grid">
-            <span class="prize-grid-label">🥇 1st</span>
-            <input class="prize-pct-input" id="setPct1" type="number" min="0" max="100" value="60" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">🥈 2nd</span>
-            <input class="prize-pct-input" id="setPct2" type="number" min="0" max="100" value="30" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">🥉 3rd</span>
-            <input class="prize-pct-input" id="setPct3" type="number" min="0" max="100" value="10" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">4th</span>
-            <input class="prize-pct-input" id="setPct4" type="number" min="0" max="100" value="0" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-          </div>
-          <div class="prize-total-row">
-            Total: <span class="prize-total-val ok" id="prizeTotalVal">100%</span>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Tie handling</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="tieHandling" id="tieTournament" value="tournament" checked/><label class="radio-label" for="tieTournament">Share prizes</label>
-            <input class="radio-opt" type="radio" name="tieHandling" id="tieCountback" value="countback"/><label class="radio-label" for="tieCountback">Countback (manual)</label>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Team Play -->
-    <div class="settings-section">
-      <div class="settings-section-header">Team Play</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Preferred team size</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="prefTeamSize" id="pts4" value="4" checked/><label class="radio-label" for="pts4">Fours preferred</label>
-            <input class="radio-opt" type="radio" name="prefTeamSize" id="pts3" value="3"/><label class="radio-label" for="pts3">Threes preferred</label>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Default scoring method</div>
-          <select class="settings-input" id="setTeamScoring">
-            <option value="best1">Best 1 score</option>
-            <option value="best2" selected>Best 2 scores</option>
-            <option value="best3">Best 3 scores</option>
-            <option value="all">All scores</option>
-            <option value="worst2">Best of worst 2</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div style="height:8px;"></div>
-  </div>
-
-  <div class="settings-save-bar">
-    <div class="settings-status status-neutral" id="settingsStatus">Load settings to begin</div>
-    <button onclick="saveSettings()" style="padding:10px 20px;background:#2D2B5B;color:#FFD700;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Save</button>
-  </div>
-</div>
-
-
-<!-- DIALOGS -->
-<div class="overlay" id="newPlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">New player found</div>
-    <div class="dialog-name" id="newPlayerName"></div>
-    <div class="dialog-body">Not in the <span id="newPlayerRollupName"></span> list yet. Enter a starting handicap to add them.</div>
-    <div class="field-group">
-      <div class="field-label" style="text-align:center">Starting handicap</div>
-      <input class="hc-number" id="newPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="skipNewPlayer()">Skip</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmNewPlayer()">Add player</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="reloadOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Reload players from IG?</div>
-    <div class="dialog-body">This will clear all entered scores and reload the player list from Intelligent Golf.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('reloadOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmReload()">Reload</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="removePlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Remove player?</div>
-    <div class="dialog-name" id="removePlayerName"></div>
-    <div class="dialog-body">This player will be removed from the round. They signed up but did not show.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('removePlayerOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmRemovePlayer()">Remove</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="walkupOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add walk-up player</div>
-    <div class="dialog-body">Enter player name — if they're in the system their handicap will be loaded automatically.</div>
-    <div class="field-group">
-      <div class="field-label">Player name</div>
-      <input class="name-input" id="walkupName" type="text" placeholder="First Last" autocomplete="off" onkeydown="if(event.key==='Enter') lookupWalkupPlayer()"/>
-    </div>
-    <div id="walkupHCRow" style="display:none;" class="field-group">
-      <div class="field-label">Starting handicap</div>
-      <input class="hc-number" id="walkupHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
-    </div>
-    <div id="walkupStatus" style="font-size:12px; color:#3B6D11; text-align:center; min-height:16px;"></div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('walkupOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" id="walkupLookupBtn" onclick="lookupWalkupPlayer()">Look up</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="addRollupOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add Rollup</div>
-    <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
-    <div class="field-group">
-      <div class="field-label">Rollup name</div>
-      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Rollup"/>
-    </div>
-    <div class="field-group">
-      <div class="field-label">Search term (from IG contact name)</div>
-      <input class="name-input" id="newRollupTerm" type="text" placeholder="e.g. SENIOR"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addRollupOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmAddRollup()">Add</button>
-    </div>
-  </div>
-</div>
-
-
-<script>
-// ═══════════════════════════════════════
-// State
-// ═══════════════════════════════════════
-let state = {
-  currentScreen: 'screen1',
-  prevScreen: 'screen1',
-  players: [],
-  roundDate: '',
-  newPlayerQueue: [],
-  currentNewPlayer: null,
-  playerToRemove: null,
-  gameMode: 'individual',
-  teamSize: 2,
-  selectedStructure: null,
-  teamScores: [],
-  walkupFoundHC: null,
-  teeTimes: null,
-  teeStart: '',
-  allRoundDates: [],
-  currentRoundIdx: 0,
-  allPlayers: [],
-  historyData: [],
-  historyChart: null,
-  rollupSettings: null,
-};
-
-const TEAM_NAMES = ['', 'Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5', 'Team 6'];
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-
-// ═══════════════════════════════════════
-// Session
-// ═══════════════════════════════════════
-const LS_ROLLUP_ID   = 'rollup_id';
-const LS_ROLLUP_NAME = 'rollup_name';
-const LS_ROLLUP_TERM = 'rollup_term';
-
-let session = { rollupId: 1, rollupName: 'Rollup', rollupTerm: '' };
-let availableRollups = [];
-
-function loadSession() {
-  session.rollupId   = parseInt(localStorage.getItem(LS_ROLLUP_ID) || '1');
-  session.rollupName = localStorage.getItem(LS_ROLLUP_NAME) || '';
-  session.rollupTerm = localStorage.getItem(LS_ROLLUP_TERM) || '';
-}
-
-function saveSession() {
-  localStorage.setItem(LS_ROLLUP_ID,   session.rollupId);
-  localStorage.setItem(LS_ROLLUP_NAME, session.rollupName);
-  localStorage.setItem(LS_ROLLUP_TERM, session.rollupTerm);
-}
-
-function hasValidSession() {
-  return !!(session.rollupId && session.rollupName);
-}
-
-async function loadRollups() {
-  try {
-    const resp = await fetch('/api/rollups');
-    const data = await resp.json();
-    availableRollups = data.rollups || [];
-  } catch(e) { availableRollups = []; }
-  renderRollupList();
-}
-
-function renderRollupList() {
-  const sel = document.getElementById('rollupSelect');
-  sel.innerHTML = '<option value="">Choose a rollup…</option>';
-  availableRollups.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.id;
-    opt.textContent = r.name;
-    if (r.id === session.rollupId) opt.selected = true;
-    sel.appendChild(opt);
-  });
-}
-
-function onRollupSelectChange() {
-  const sel = document.getElementById('rollupSelect');
-  const rollup = availableRollups.find(r => r.id === parseInt(sel.value));
-  if (rollup) selectRollup(rollup);
-}
-
-function selectRollup(rollup) {
-  session.rollupId   = rollup.id;
-  session.rollupName = rollup.name;
-  session.rollupTerm = rollup.ig_search_term;
-  renderRollupList();
-}
-
-function showAddRollup() {
-  document.getElementById('newRollupName').value = '';
-  document.getElementById('newRollupTerm').value = '';
-  document.getElementById('addRollupOverlay').classList.add('open');
-}
-
-async function confirmAddRollup() {
-  const name = document.getElementById('newRollupName').value.trim();
-  const term = document.getElementById('newRollupTerm').value.trim().toUpperCase();
-  if (!name || !term) { alert('Please enter both a rollup name and search term.'); return; }
-  try {
-    await fetch('/api/rollups/add', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, ig_search_term: term}),
-    });
-    closeOverlay('addRollupOverlay');
-    await loadRollups();
-    const newRollup = availableRollups.find(r => r.name === name);
-    if (newRollup) selectRollup(newRollup);
-  } catch(e) { alert('Could not add rollup. Please try again.'); }
-}
-
-function saveLogin() {
-  const errEl = document.getElementById('loginError');
-  const sel = document.getElementById('rollupSelect');
-  const selectedRollup = availableRollups.find(r => r.id === parseInt(sel.value));
-  if (!selectedRollup) {
-    errEl.textContent = 'Please select a rollup.';
-    errEl.style.display = 'block';
-    return;
-  }
-  selectRollup(selectedRollup);
-  saveSession();
-  errEl.style.display = 'none';
-  enterApp();
-}
-
-// ═══════════════════════════════════════
-// Navigation
-// ═══════════════════════════════════════
-function showScreen(id) {
-  state.prevScreen = state.currentScreen;
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  state.currentScreen = id;
-}
-
-function goBack() {
-  if (state.currentScreen === 'screen5') {
-    const dest = (state.prevScreen && state.prevScreen !== 'screen5') ? state.prevScreen : 'screen1';
-    showScreen(dest);
-  } else {
-    showScreen('screen1');
-  }
-}
-
-// ═══════════════════════════════════════
-// Init
-// ═══════════════════════════════════════
-async function init() {
-  loadSession();
-  await loadRollups();
-  if (hasValidSession()) {
-    enterApp();
-  } else {
-    showScreen('screen0');
-  }
-}
-
-function enterApp() {
-  document.getElementById('s1RollupName').textContent = session.rollupName;
-  document.getElementById('s2RollupLabel').textContent = session.rollupName;
-  document.getElementById('s3RollupName').textContent = session.rollupName;
-  document.getElementById('s4RollupLabel').textContent = session.rollupName;
-  document.getElementById('s5RollupName').textContent = session.rollupName;
-  showScreen('screen1');
-  initHomeScreen();
-}
-
-async function initHomeScreen() {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('roundDate').value = today;
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-  document.getElementById('filterFrom').value = threeMonthsAgo.toISOString().split('T')[0];
-  document.getElementById('filterTo').value = today;
-  try {
-    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
-  } catch(e) { updateStatus('Ready'); }
-}
-
-function updateStatus(msg, type = 'neutral') {
-  const el = document.getElementById('s1Status');
-  el.textContent = msg;
-  el.className = `status-bar status-${type}`;
-}
-
-function showS1Error(msg) {
-  document.getElementById('s1ErrorMsg').textContent = msg;
-  document.getElementById('s1Error').style.display = 'block';
-  updateStatus('Load failed', 'danger');
-}
-
-function clearS1Error() { document.getElementById('s1Error').style.display = 'none'; }
-
-// ═══════════════════════════════════════
-// Settings screen
-// ═══════════════════════════════════════
-async function showSettingsScreen() {
-  showScreen('screen5');
-  document.getElementById('s5RollupName').textContent = session.rollupName;
-  setSettingsStatus('Loading…', 'neutral');
-  try {
-    const [settResp, credResp] = await Promise.all([
-      fetch(`/api/settings?rollup_id=${session.rollupId}`),
-      fetch('/api/credentials'),
-    ]);
-    const sett = await settResp.json();
-    const cred = await credResp.json();
-    state.rollupSettings = sett;
-    populateSettingsForm(sett, cred);
-    setSettingsStatus('Settings loaded', 'success');
-  } catch(e) {
-    setSettingsStatus('Could not load settings', 'danger');
-  }
-}
-
-function populateSettingsForm(s, cred) {
-  document.getElementById('setDisplayName').value = s.display_name || '';
-  document.getElementById('setIgTerm').value = s.ig_search_term || '';
-
-  DAYS.forEach(d => {
-    document.getElementById('day' + d).checked = (s.run_days || []).includes(d);
-  });
-
-  document.getElementById('setTeeInterval').value = s.tee_interval_minutes || 8;
-  renderAdjTable(s.adjustment_table || []);
-
-  document.getElementById('setWinnerBonus').checked = s.winner_bonus_enabled !== false;
-  document.getElementById('setGapPenalty1').value = s.winner_gap_penalty1 || 0;
-  document.getElementById('setGapPenalty2').value = s.winner_gap_penalty2 || 0;
-  document.getElementById('setEntryFee').value = s.entry_fee || 0;
-
-  const pp = document.querySelector(`input[name="prizePlaces"][value="${s.prize_places || 3}"]`);
-  if (pp) pp.checked = true;
-
-  document.getElementById('setPct1').value = s.prize_pct_1st ?? 60;
-  document.getElementById('setPct2').value = s.prize_pct_2nd ?? 30;
-  document.getElementById('setPct3').value = s.prize_pct_3rd ?? 10;
-  document.getElementById('setPct4').value = s.prize_pct_4th ?? 0;
-  updatePrizeTotal();
-
-  const th = document.querySelector(`input[name="tieHandling"][value="${s.tie_handling || 'tournament'}"]`);
-  if (th) th.checked = true;
-
-  const pts = document.querySelector(`input[name="prefTeamSize"][value="${s.preferred_team_size || 4}"]`);
-  if (pts) pts.checked = true;
-
-  document.getElementById('setTeamScoring').value = s.team_scoring_method || 'best2';
-
-  document.getElementById('setIgUsername').value = cred.ig_username || '';
-  document.getElementById('setIgPin').value = '';
-  document.getElementById('pinSetStatus').textContent = cred.ig_pin_set
-    ? 'PIN is set — enter new PIN to change'
-    : 'No PIN saved yet';
-}
-
-function renderAdjTable(table) {
-  const tbody = document.getElementById('adjTableBody');
-  tbody.innerHTML = '';
-  table.forEach((row, i) => {
-    const isLast = i === table.length - 1;
-    const fromScore = i === 0 ? '0' : (parseInt(table[i-1].max_score) + 1).toString();
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="left">${fromScore}${isLast ? '+' : '–'}</td>
-      <td><input class="settings-input-sm" type="number" min="1" max="99"
-        value="${isLast ? '' : (row.max_score ?? '')}"
-        ${isLast ? 'placeholder="—" disabled style="opacity:0.4;width:60px;"' : 'style="width:60px;"'}
-        data-adj-max="${i}"/></td>
-      <td>
-        <select class="settings-input-sm" data-adj-val="${i}" style="width:72px;">
-          ${[3,2,1,0,-1,-2,-3].map(v =>
-            `<option value="${v}" ${row.adjustment===v?'selected':''}>${v>0?'+'+v:v}</option>`
-          ).join('')}
-        </select>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function updatePrizeTotal() {
-  const total = ['setPct1','setPct2','setPct3','setPct4']
-    .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
-  const el = document.getElementById('prizeTotalVal');
-  el.textContent = total + '%';
-  el.className = 'prize-total-val ' + (total === 100 ? 'ok' : 'err');
-}
-
-function readAdjTable() {
-  const rows = document.querySelectorAll('#adjTableBody tr');
-  const table = [];
-  rows.forEach((tr, i) => {
-    const maxInput = tr.querySelector(`[data-adj-max="${i}"]`);
-    const valSelect = tr.querySelector(`[data-adj-val="${i}"]`);
-    const maxScore = (maxInput && !maxInput.disabled && maxInput.value !== '')
-      ? parseInt(maxInput.value) : null;
-    const adjustment = valSelect ? parseInt(valSelect.value) : 0;
-    table.push({ max_score: maxScore, adjustment });
-  });
-  return table;
-}
-
-async function saveSettings() {
-  const total = ['setPct1','setPct2','setPct3','setPct4']
-    .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
-  if (total !== 100) {
-    setSettingsStatus('Prize percentages must sum to 100%', 'danger');
-    return;
-  }
-
-  const settings = {
-    rollup_id:            session.rollupId,
-    display_name:         document.getElementById('setDisplayName').value.trim(),
-    ig_search_term:       document.getElementById('setIgTerm').value.trim().toUpperCase(),
-    run_days:             DAYS.filter(d => document.getElementById('day' + d).checked),
-    tee_interval_minutes: parseInt(document.getElementById('setTeeInterval').value) || 8,
-    adjustment_table:     readAdjTable(),
-    winner_bonus_enabled: document.getElementById('setWinnerBonus').checked,
-    winner_gap_penalty1:  parseInt(document.getElementById('setGapPenalty1').value) || 0,
-    winner_gap_penalty2:  parseInt(document.getElementById('setGapPenalty2').value) || 0,
-    entry_fee:            parseFloat(document.getElementById('setEntryFee').value) || 0,
-    prize_places:         parseInt(document.querySelector('input[name="prizePlaces"]:checked')?.value || 3),
-    prize_pct_1st:        parseInt(document.getElementById('setPct1').value) || 0,
-    prize_pct_2nd:        parseInt(document.getElementById('setPct2').value) || 0,
-    prize_pct_3rd:        parseInt(document.getElementById('setPct3').value) || 0,
-    prize_pct_4th:        parseInt(document.getElementById('setPct4').value) || 0,
-    tie_handling:         document.querySelector('input[name="tieHandling"]:checked')?.value || 'tournament',
-    preferred_team_size:  parseInt(document.querySelector('input[name="prefTeamSize"]:checked')?.value || 4),
-    team_scoring_method:  document.getElementById('setTeamScoring').value,
-  };
-
-  setSettingsStatus('Saving…', 'neutral');
-
-  try {
-    const resp = await fetch('/api/settings', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(settings),
-    });
-    if (!resp.ok) {
-      const err = await resp.json();
-      setSettingsStatus(err.detail || 'Save failed', 'danger');
-      return;
-    }
-
-    // Update session name/term if changed
-    if (settings.display_name && settings.display_name !== session.rollupName) {
-      session.rollupName = settings.display_name;
-      session.rollupTerm = settings.ig_search_term;
-      saveSession();
-      ['s1RollupName','s2RollupLabel','s3RollupName','s4RollupLabel','s5RollupName']
-        .forEach(id => document.getElementById(id).textContent = session.rollupName);
-    }
-
-    // Save credentials if username present and PIN field filled
-    const username = document.getElementById('setIgUsername').value.trim();
-    const pin = document.getElementById('setIgPin').value.trim();
-    if (username) {
-      const body = { ig_username: username, ig_pin: pin || '' };
-      const credResp = await fetch('/api/credentials', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-      });
-      if (credResp.ok) {
-        document.getElementById('pinSetStatus').textContent = 'PIN is set — enter new PIN to change';
-        document.getElementById('setIgPin').value = '';
-      }
-    }
-
-    // Also save PIN to localStorage for backwards compat with load-players
-    if (pin) localStorage.setItem('ig_pin', pin);
-    if (username) localStorage.setItem('ig_username', username);
-
-    await loadRollups();
-    setSettingsStatus('Settings saved ✓', 'success');
-
-  } catch(e) {
-    setSettingsStatus('Network error — could not save', 'danger');
-  }
-}
-
-function setSettingsStatus(msg, type) {
-  const el = document.getElementById('settingsStatus');
-  el.textContent = msg;
-  el.className = `settings-status status-${type}`;
-}
-
-// ═══════════════════════════════════════
-// Results screen
-// ═══════════════════════════════════════
-async function showResultsScreen() {
-  showScreen('screen3');
-  try {
-    const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    state.allRoundDates = data.dates || [];
-    const sel = document.getElementById('roundDateSelect');
-    sel.innerHTML = '<option value="">Select a round…</option>';
-    state.allRoundDates.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = formatDateLabel(d);
-      sel.appendChild(opt);
-    });
-    if (state.allRoundDates.length > 0) {
-      state.currentRoundIdx = 0;
-      sel.value = state.allRoundDates[0];
-      await loadRoundByDate(state.allRoundDates[0]);
-    }
-    updateRoundNavButtons();
-  } catch(e) {
-    document.getElementById('s3Status').textContent = 'Could not load round dates.';
-  }
-}
-
-function formatDateLabel(d) {
-  const dt = new Date(d + 'T12:00:00');
-  return dt.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-}
-
-async function loadRoundByDate(dateStr) {
-  if (!dateStr) return;
-  state.currentRoundIdx = state.allRoundDates.indexOf(dateStr);
-  document.getElementById('roundDateSelect').value = dateStr;
-  document.getElementById('resultsLoading').style.display = 'block';
-  document.getElementById('resultsTable').style.display = 'none';
-  try {
-    const resp = await fetch(`/api/round?date=${dateStr}&rollup_id=${session.rollupId}`);
-    if (!resp.ok) throw new Error('Not found');
-    const data = await resp.json();
-    renderResults(data.players, data.date);
-  } catch(e) {
-    document.getElementById('s3Status').textContent = 'Could not load results for this date.';
-  } finally {
-    document.getElementById('resultsLoading').style.display = 'none';
-    document.getElementById('resultsTable').style.display = 'table';
-  }
-  updateRoundNavButtons();
-}
-
-function stepRound(dir) {
-  const newIdx = state.currentRoundIdx + dir;
-  if (newIdx < 0 || newIdx >= state.allRoundDates.length) return;
-  loadRoundByDate(state.allRoundDates[newIdx]);
-}
-
-function updateRoundNavButtons() {
-  document.getElementById('prevRoundBtn').disabled = state.currentRoundIdx >= state.allRoundDates.length - 1;
-  document.getElementById('nextRoundBtn').disabled = state.currentRoundIdx <= 0;
-}
-
-function renderResults(players, dateStr) {
-  document.getElementById('s3Status').textContent = formatDateLabel(dateStr);
-  document.getElementById('s3Status').className = 'status-bar status-neutral';
-  const tbody = document.getElementById('resultsGrid');
-  tbody.innerHTML = '';
-  const medals = ['g','s','b'];
-  const rowClass = ['gold','silver','bronze'];
-  const sorted = [...players].filter(p => p.score !== null && p.score !== undefined)
-    .sort((a, b) => Number(b.score) - Number(a.score));
-  sorted.forEach((p, i) => {
-    const tr = document.createElement('tr');
-    if (i < 3) tr.className = rowClass[i];
-    const medalCell = i < 3
-      ? `<span class="medal ${medals[i]}">${i+1}</span>`
-      : `<span style="font-size:10px;color:#aaa">${i+1}</span>`;
-    tr.innerHTML = `
-      <td class="c">${medalCell}</td>
-      <td style="cursor:pointer;font-weight:${i===0?'700':'400'}" onclick="openPlayerFromResults('${p.name}')">${p.name}</td>
-      <td class="c" style="font-weight:600">${p.score}</td>
-      <td class="c" style="font-size:11px">${p.new_handicap ?? ''}</td>
-      <td class="c"><span style="font-size:10px;color:#2D2B5B;text-decoration:underline" onclick="openPlayerFromResults('${p.name}')">📈</span></td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function openPlayerFromResults(name) { showPlayerHistory(name); }
-
-// ═══════════════════════════════════════
-// Player History
-// ═══════════════════════════════════════
-async function showPlayerHistory(preselect) {
-  showScreen('screen4');
-  if (!preselect) {
-    document.getElementById('historyPlayerSelect').value = '';
-    document.getElementById('s4PlayerLabel').textContent = 'Player History';
-    document.getElementById('phContent').style.display = 'none';
-    document.getElementById('phNoData').style.display = 'none';
-    document.getElementById('phEmpty').style.display = 'block';
-    if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-  }
-  const sel = document.getElementById('historyPlayerSelect');
-  if (sel.options.length <= 1) {
-    try {
-      const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
-      const data = await resp.json();
-      const players = data.players || [];
-      sel.innerHTML = '<option value="">Choose a player…</option>';
-      players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.name;
-        opt.textContent = `${p.name} (${p.handicap})`;
-        sel.appendChild(opt);
-      });
-    } catch(e) { console.error('Failed to load players:', e); }
-  }
-  if (preselect) {
-    sel.value = preselect;
-    document.getElementById('s4PlayerLabel').textContent = preselect;
-    await loadPlayerHistory(preselect);
-  }
-}
-
-function onPlayerSelectChange() {
-  const name = document.getElementById('historyPlayerSelect').value;
-  if (!name) return;
-  document.getElementById('s4PlayerLabel').textContent = name;
-  loadPlayerHistory(name);
-}
-
-async function applyFilter() {
-  const name = document.getElementById('historyPlayerSelect').value;
-  if (!name) return;
-  loadPlayerHistory(name);
-}
-
-async function loadPlayerHistory(name) {
-  document.getElementById('phContent').style.display = 'none';
-  document.getElementById('phNoData').style.display = 'none';
-  document.getElementById('phEmpty').style.display = 'none';
-  try {
-    const resp = await fetch(`/api/player-history?name=${encodeURIComponent(name)}&rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    let rounds = data.rounds || [];
-    const from = document.getElementById('filterFrom').value;
-    const to = document.getElementById('filterTo').value;
-    if (from) rounds = rounds.filter(r => r.date >= from);
-    if (to) rounds = rounds.filter(r => r.date <= to);
-    if (!from && !to && rounds.length > 3) rounds = rounds.slice(0, 3);
-    state.historyData = rounds;
-    if (rounds.length === 0) { document.getElementById('phNoData').style.display = 'block'; return; }
-    renderPlayerHistory(name, rounds);
-    document.getElementById('phContent').style.display = 'block';
-  } catch(e) { document.getElementById('phNoData').style.display = 'block'; }
-}
-
-function renderPlayerHistory(name, rounds) {
-  const chronological = [...rounds].reverse();
-  const scores = rounds.map(r => r.score);
-  const avg = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1);
-  const best = Math.max(...scores);
-  const currentHC = rounds[0].new_handicap;
-  document.getElementById('phStats').innerHTML = `
-    <div class="stat-card"><div class="stat-val">${avg}</div><div class="stat-lbl">Avg score</div></div>
-    <div class="stat-card"><div class="stat-val">${best}</div><div class="stat-lbl">Best score</div></div>
-    <div class="stat-card"><div class="stat-val">${currentHC}</div><div class="stat-lbl">Current HC</div></div>`;
-  const labels = chronological.map(r => {
-    const d = new Date(r.date + 'T12:00:00');
-    return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-  });
-  if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-  const ctx = document.getElementById('historyChart').getContext('2d');
-  state.historyChart = new Chart(ctx, {
-    data: {
-      labels,
-      datasets: [
-        { type:'bar', label:'Score', data:chronological.map(r=>r.score), backgroundColor:'#2D2B5B33', borderColor:'#2D2B5B', borderWidth:1.5, yAxisID:'yScore', order:2 },
-        { type:'line', label:'Handicap', data:chronological.map(r=>r.new_handicap), borderColor:'#FFD700', backgroundColor:'#FFD70033', borderWidth:2.5, pointBackgroundColor:'#FFD700', pointRadius:4, tension:0.3, yAxisID:'yHC', order:1 }
-      ]
-    },
-    options: {
-      responsive: true,
-      interaction: { mode:'index', intersect:false },
-      plugins: { legend: { labels: { font: { size:11 } } } },
-      scales: {
-        yScore: { type:'linear', position:'left', title:{ display:true, text:'Score', font:{size:10} }, ticks:{font:{size:10}} },
-        yHC: { type:'linear', position:'right', title:{ display:true, text:'Handicap', font:{size:10} }, ticks:{font:{size:10}}, grid:{drawOnChartArea:false} },
-        x: { ticks: { font:{size:10} } }
-      }
-    }
-  });
-  const tbody = document.getElementById('phTableBody');
-  tbody.innerHTML = '';
-  rounds.forEach((r, i) => {
-    const prev = rounds[i+1];
-    const hcChange = prev ? r.new_handicap - prev.new_handicap : null;
-    let changeEl = '—';
-    if (hcChange !== null) {
-      const cls = hcChange < 0 ? 'down' : hcChange > 0 ? 'up' : '';
-      const sign = hcChange > 0 ? '+' : '';
-      changeEl = `<span class="hc-change ${cls}">${sign}${hcChange}</span>`;
-    }
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="left">${formatDateLabel(r.date)}</td><td style="font-weight:600">${r.score}</td><td>${r.new_handicap}</td><td>${changeEl}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// ═══════════════════════════════════════
-// Load Players
-// ═══════════════════════════════════════
-async function loadPlayers() {
-  clearS1Error();
-  const date = document.getElementById('roundDate').value;
-  if (!date) { showS1Error('Please select a round date.'); return; }
-
-  // Get credentials — prefer DB, fall back to localStorage
-  let igUsername = localStorage.getItem('ig_username') || '';
-  let igPin = localStorage.getItem('ig_pin') || '';
-
-  try {
-    const credResp = await fetch('/api/credentials');
-    const cred = await credResp.json();
-    if (cred.ig_username) igUsername = cred.ig_username;
-  } catch(e) {}
-
-  if (!igUsername || !igPin) {
-    showS1Error('IG credentials not set. Please configure them in Settings ⚙️');
-    return;
-  }
-
-  updateStatus('Loading players from Intelligent Golf…', 'neutral');
-  try {
-    const resp = await fetch('/api/load-players', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        date,
-        ig_username: igUsername,
-        ig_pin: igPin,
-        rollup_id: session.rollupId,
-        ig_search_term: session.rollupTerm,
-      }),
-    });
-    if (!resp.ok) { const err = await resp.json(); showS1Error(err.detail || 'Failed to load players.'); return; }
-    const data = await resp.json();
-    state.players = data.players;
-    state.roundDate = data.date;
-    state.teeTimes = data.tee_times || null;
-    state.teeStart = data.tee_start || '';
-    state.newPlayerQueue = data.new_players || [];
-    if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
-    else openScoreEntry();
-  } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
-}
-
-// ═══════════════════════════════════════
-// Team structure calculator
-// ═══════════════════════════════════════
-function getAllValidStructures(n, preferredSize) {
-  if (n < 4) return [];
-  const seen = new Set();
-  const results = [];
-  const maxTeams = state.teeTimes || n;
-  for (let numTeams = 2; numTeams <= n; numTeams++) {
-    if (numTeams > maxTeams) continue;
-    const base = Math.floor(n / numTeams);
-    const remainder = n % numTeams;
-    const largeSize = remainder > 0 ? base + 1 : base;
-    if (base < 2 || largeSize > 4) continue;
-    const key = `${numTeams}_${base}_${remainder}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push({ numTeams, smallSize:base, largeSize, numLarge:remainder, numSmall:numTeams-remainder,
-      diff: Math.abs(base - preferredSize), description: buildDescription(numTeams, base, remainder), valid:true });
-  }
-  results.sort((a, b) => a.diff - b.diff || a.numTeams - b.numTeams);
-  return results;
-}
-
-function buildDescription(numTeams, base, numLarge) {
-  const numSmall = numTeams - numLarge;
-  if (numLarge === 0) return `${numTeams} team${numTeams>1?'s':''} of ${base}`;
-  if (numSmall === 0) return `${numLarge} team${numLarge>1?'s':''} of ${base+1}`;
-  return `${numSmall} team${numSmall>1?'s':''} of ${base}, ${numLarge} of ${base+1}`;
-}
-
-function updateTeamStructureUI() {
-  const n = state.players.length;
-  const structures = getAllValidStructures(n, state.teamSize);
-  const infoEl = document.getElementById('teamStructureInfo');
-  const optionsEl = document.getElementById('structureOptions');
-  const listEl = document.getElementById('structureOptionsList');
-  if (structures.length === 0) {
-    infoEl.textContent = n < 4 ? 'Not enough players for teams' : `No valid team structure for ${n} players with teams of 2-4`;
-    infoEl.className = 'team-structure-info error';
-    optionsEl.style.display = 'none';
-    state.selectedStructure = null;
-    return;
-  }
-  if (!state.selectedStructure || !structures.find(s => s.description === state.selectedStructure.description))
-    state.selectedStructure = structures[0];
-  if (structures.length === 1) {
-    infoEl.textContent = `${n} players → ${structures[0].description}`;
-    infoEl.className = 'team-structure-info';
-    optionsEl.style.display = 'none';
-  } else {
-    infoEl.textContent = '';
-    optionsEl.style.display = 'block';
-    listEl.innerHTML = '';
-    structures.forEach(s => {
-      const btn = document.createElement('button');
-      btn.className = 'structure-option-btn' + (s.description === state.selectedStructure.description ? ' selected' : '');
-      btn.textContent = `${n} players → ${s.description}`;
-      btn.onclick = () => selectStructure(s);
-      listEl.appendChild(btn);
-    });
-  }
-}
-
-function selectStructure(structure) {
-  state.selectedStructure = structure;
-  state.players.forEach(p => p.team = null);
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-function getActiveStructure() {
-  if (state.selectedStructure) return state.selectedStructure;
-  const structures = getAllValidStructures(state.players.length, state.teamSize);
-  return structures.length > 0 ? structures[0] : null;
-}
-
-function setGameMode(mode) {
-  state.gameMode = mode;
-  document.getElementById('modeIndividual').classList.toggle('active', mode === 'individual');
-  document.getElementById('modeTeam').classList.toggle('active', mode === 'team');
-  document.getElementById('teamConfig').style.display = mode === 'team' ? 'block' : 'none';
-  const ttInfo = document.getElementById('teeTimesInfo');
-  if (mode === 'team' && state.teeTimes) {
-    ttInfo.textContent = `${state.teeTimes} tee time${state.teeTimes!==1?'s':''} · max ${state.teeTimes*4} players`;
-    ttInfo.style.display = 'inline';
-  } else { ttInfo.style.display = 'none'; }
-  document.getElementById('teamScoreboard').style.display = mode === 'team' ? 'block' : 'none';
-  document.getElementById('addPlayerBar').style.display = mode === 'individual' ? 'block' : 'none';
-  if (mode === 'individual') state.players.forEach(p => p.team = null);
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-function setTeamSize(size) {
-  state.teamSize = size;
-  [2,3,4].forEach(s => document.getElementById(`size${s}`).classList.toggle('active', s === size));
-  state.players.forEach(p => p.team = null);
-  state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-function getTeamCounts() {
-  const counts = {};
-  state.players.forEach(p => { if (p.team) counts[p.team] = (counts[p.team]||0)+1; });
-  return counts;
-}
-
-function getMaxTeamSize() { const s = getActiveStructure(); return s ? s.largeSize : 4; }
-
-function validateTeamAssignment(name, newTeam) {
-  if (!newTeam) return true;
-  const counts = getTeamCounts();
-  const currentTeam = state.players.find(p => p.name === name)?.team;
-  const newCount = (counts[newTeam]||0) + (currentTeam === newTeam ? 0 : 1);
-  const maxSize = getMaxTeamSize();
-  if (newCount > maxSize) { alert(`Team ${newTeam} is full (max ${maxSize} players for this structure).`); return false; }
-  return true;
-}
-
-function updateUnassignedWarning() {
-  const el = document.getElementById('unassignedWarning');
-  if (state.gameMode !== 'team') { el.style.display = 'none'; return; }
-  const unassigned = state.players.filter(p => !p.team).length;
-  if (unassigned > 0) { el.textContent = `${unassigned} player${unassigned>1?'s':''} unassigned`; el.style.display = 'inline'; }
-  else { el.style.display = 'none'; }
-}
-
-function checkAutoAssignLast() {
-  if (state.gameMode !== 'team') return;
-  const unassigned = state.players.filter(p => !p.team);
-  if (unassigned.length !== 1) return;
-  const structure = getActiveStructure();
-  if (!structure) return;
-  const counts = getTeamCounts();
-  const teamsWithRoom = [];
-  for (let t = 1; t <= structure.numTeams; t++) {
-    if ((counts[t]||0) < structure.largeSize) teamsWithRoom.push(t);
-  }
-  if (teamsWithRoom.length === 1) {
-    unassigned[0].team = teamsWithRoom[0];
-    state.players.sort((a,b) => (a.team||99)-(b.team||99));
-    updateUnassignedWarning(); renderGrid();
-  }
-}
-
-function randomAssign() {
-  const structure = getActiveStructure();
-  if (!structure) { alert('Cannot form valid teams with the current number of players.'); return; }
-  const n = state.players.length;
-  const indices = [...Array(n).keys()];
-  for (let i = n-1; i > 0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  const slots = [];
-  for (let t = 1; t <= structure.numTeams; t++) {
-    const size = t <= structure.numLarge ? structure.largeSize : structure.smallSize;
-    for (let s = 0; s < size; s++) slots.push(t);
-  }
-  indices.forEach((playerIdx, i) => { state.players[playerIdx].team = slots[i]; });
-  state.players.sort((a,b) => (a.team||99)-(b.team||99));
-  updateUnassignedWarning(); renderGrid();
-}
-
-function onTeamChange(name, teamNum) {
-  if (teamNum !== 0 && !validateTeamAssignment(name, teamNum)) { renderGrid(); return; }
-  const p = state.players.find(p => p.name === name);
-  if (p) p.team = teamNum === 0 ? null : teamNum;
-  state.players.sort((a,b) => (a.team||99)-(b.team||99));
-  updateUnassignedWarning(); checkAutoAssignLast(); renderGrid();
-}
-
-function getNumTeams() {
-  const assigned = state.players.filter(p => p.team).map(p => p.team);
-  return assigned.length ? Math.max(...assigned) : 0;
-}
-
-// ═══════════════════════════════════════
-// Score entry
-// ═══════════════════════════════════════
-function openScoreEntry() {
-  const dateLabel = new Date(state.roundDate+'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-  const teeStr = state.teeStart ? ` · Tee off ${state.teeStart}` : '';
-  document.getElementById('s2DateLabel').textContent = `${dateLabel}${teeStr}`;
-  document.getElementById('addPlayerBar').style.display = 'block';
-  updateTeamStructureUI(); renderGrid(); showScreen('screen2');
-}
-
-function renderGrid() {
-  const tbody = document.getElementById('scoreGrid');
-  tbody.innerHTML = '';
-  const isTeam = state.gameMode === 'team';
-  const numTeams = getNumTeams();
-  const counts = getTeamCounts();
-  const maxSize = getMaxTeamSize();
-  document.getElementById('lastColHeader').textContent = isTeam ? 'Team' : '✕';
-  document.getElementById('addPlayerBar').style.display = isTeam ? 'none' : 'block';
-  let currentTeam = null;
-  state.players.forEach((p, i) => {
-    if (isTeam && p.team && p.team !== currentTeam) {
-      currentTeam = p.team;
-      const headerRow = document.createElement('tr');
-      headerRow.className = `team-header team-${p.team}`;
-      const teamCount = counts[p.team]||0;
-      headerRow.innerHTML = `<td colspan="5">${TEAM_NAMES[p.team]} · ${teamCount} player${teamCount!==1?'s':''}${teamCount>maxSize?' ⚠ too many':''}</td>`;
-      tbody.appendChild(headerRow);
-    }
-    const tr = document.createElement('tr');
-    tr.setAttribute('data-name', p.name);
-    if (isTeam && p.team) tr.classList.add(`team-${p.team}`);
-    let lastCol;
-    if (isTeam) {
-      const teamCount = p.team ? (counts[p.team]||0) : 0;
-      const oversized = p.team && teamCount > maxSize;
-      const options = ['<option value="0">—</option>'];
-      for (let t = 1; t <= Math.max(6, numTeams+1); t++)
-        options.push(`<option value="${t}" ${p.team===t?'selected':''}>${TEAM_NAMES[t]}</option>`);
-      lastCol = `<td class="team-col${oversized?' oversize':''}"><select onchange="onTeamChange('${p.name}', parseInt(this.value))">${options.join('')}</select></td>`;
-    } else {
-      lastCol = `<td class="remove-col" onclick="promptRemovePlayer('${p.name}')">✕</td>`;
-    }
-    tr.innerHTML = `
-      <td>${p.name}</td>
-      <td class="c">${p.handicap??''}</td>
-      <td class="sc"><input type="tel" inputmode="numeric" value="${p.score??''}"
-        onchange="onScoreChange(${i}, this.value)" onkeydown="onScoreKey(event, ${i})"
-        style="width:100%;border:none;background:transparent;font-size:11px;text-align:center;font-family:Arial,sans-serif;padding:0;outline:none;"/></td>
-      <td class="nhc" data-nhc="${p.name}"></td>
-      ${lastCol}`;
-    tbody.appendChild(tr);
-  });
-  updateGridDisplay();
-}
-
-function updateGridDisplay() {
-  state.players.forEach(p => {
-    const cell = document.querySelector(`td[data-nhc="${p.name}"]`);
-    if (!cell) return;
-    if (p.new_handicap !== null && p.new_handicap !== undefined) {
-      const adj = p.adjustment;
-      const adjStr = adj > 0 ? `(+${adj})` : adj < 0 ? `(${adj})` : '(0)';
-      cell.innerHTML = `${p.new_handicap} <span style="font-size:9px">${adjStr}</span>`;
-    } else { cell.innerHTML = ''; }
-  });
-  if (state.gameMode === 'team') updateTeamScoreboard();
-  else updateIndividualRankings();
-}
-
-function updateIndividualRankings() {
-  const rows = document.querySelectorAll('#scoreGrid tr:not(.team-header)');
-  rows.forEach(r => r.classList.remove('rank-gold','rank-silver','rank-bronze'));
-  const scored = state.players.filter(p => p.score!==null && p.score!==undefined && p.score!=='')
-    .sort((a,b) => Number(b.score)-Number(a.score));
-  ['rank-gold','rank-silver','rank-bronze'].forEach((cls, rank) => {
-    if (!scored[rank]) return;
-    const row = document.querySelector(`#scoreGrid tr[data-name="${scored[rank].name}"]`);
-    if (row) row.classList.add(cls);
-  });
-}
-
-function updateTeamScoreboard() {
-  const pills = document.getElementById('teamScoresPills');
-  pills.innerHTML = '';
-  if (!state.teamScores || state.teamScores.length === 0) return;
-  state.teamScores.forEach(t => {
-    const pill = document.createElement('div');
-    pill.className = `team-score-pill team-pill-${t.team}`;
-    const rank = t.rank===1?'🥇':t.rank===2?'🥈':t.rank===3?'🥉':`${t.rank}.`;
-    pill.textContent = `${rank} ${TEAM_NAMES[t.team]}: ${t.total}`;
-    pills.appendChild(pill);
-  });
-}
-
-async function onScoreChange(idx, val) {
-  const score = val === '' ? null : parseInt(val);
-  if (score !== null && isNaN(score)) return;
-  state.players[idx].score = score;
-  await recalculate();
-}
-
-function onScoreKey(event, idx) {
-  if (event.key === 'Enter' || event.key === 'Tab') {
-    event.preventDefault();
-    const inputs = document.querySelectorAll('#scoreGrid input');
-    if (idx+1 < inputs.length) inputs[idx+1].focus(); else inputs[idx].blur();
-  }
-}
-
-async function recalculate() {
-  setSaveState('saving');
-  try {
-    const resp = await fetch('/api/autosave', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ date:state.roundDate, players:state.players, team_mode:state.gameMode==='team', rollup_id:session.rollupId }),
-    });
-    const data = await resp.json();
-    data.players.forEach(sp => {
-      const p = state.players.find(p => p.name === sp.name);
-      if (p) { p.new_handicap = sp.new_handicap; p.adjustment = sp.adjustment; p.score = sp.score; }
-    });
-    state.teamScores = data.team_scores || [];
-    updateGridDisplay();
-    setSaveState('saved');
-  } catch(e) { setSaveState('error'); }
-}
-
-async function saveRound() {
-  if (state.gameMode === 'team') {
-    const unassigned = state.players.filter(p => !p.team).length;
-    if (unassigned > 0) { alert(`${unassigned} player${unassigned>1?' are':' is'} not assigned to a team.`); return; }
-    const counts = getTeamCounts();
-    const maxSize = getMaxTeamSize();
-    if (Object.entries(counts).some(([,count]) => count > maxSize)) {
-      alert('Some teams have too many players. Please fix team assignments before saving.'); return;
-    }
-  }
-  const btn = document.getElementById('saveRoundBtn');
-  btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const resp = await fetch('/api/save-round', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ date:state.roundDate, players:state.players, team_mode:state.gameMode==='team', rollup_id:session.rollupId }),
-    });
-    if (!resp.ok) { const err = await resp.json(); alert('Save failed: '+(err.detail||'Unknown error')); btn.textContent='Save Round'; btn.disabled=false; return; }
-    await showResultsScreen();
-  } catch(e) { alert('Network error saving round.'); btn.textContent='Save Round'; btn.disabled=false; }
-}
-
-function setSaveState(s) {
-  const dot = document.getElementById('saveDot');
-  const label = document.getElementById('saveLabel');
-  if (s==='saving') { dot.style.background='#888'; label.style.color='#888'; label.textContent='Calculating…'; }
-  else if (s==='saved') { dot.style.background='#3B6D11'; label.style.color='#3B6D11'; label.textContent='Ready'; }
-  else { dot.style.background='#A32D2D'; label.style.color='#A32D2D'; label.textContent='Error'; }
-}
-
-// ═══════════════════════════════════════
-// New player queue
-// ═══════════════════════════════════════
-function processNewPlayerQueue() {
-  if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
-  state.currentNewPlayer = state.newPlayerQueue.shift();
-  document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
-  document.getElementById('newPlayerRollupName').textContent = session.rollupName;
-  document.getElementById('newPlayerHC').value = '';
-  document.getElementById('newPlayerOverlay').classList.add('open');
-}
-
-async function confirmNewPlayer() {
-  const hc = parseInt(document.getElementById('newPlayerHC').value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await fetch('/api/new-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:state.currentNewPlayer, handicap:hc, rollup_id:session.rollupId}) });
-  const p = state.players.find(p => p.name === state.currentNewPlayer);
-  if (p) { p.handicap = hc; p.new_player = false; }
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-function skipNewPlayer() {
-  state.players = state.players.filter(p => p.name !== state.currentNewPlayer);
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-function promptRemovePlayer(name) {
-  state.playerToRemove = name;
-  document.getElementById('removePlayerName').textContent = name;
-  document.getElementById('removePlayerOverlay').classList.add('open');
-}
-
-function confirmRemovePlayer() {
-  state.players = state.players.filter(p => p.name !== state.playerToRemove);
-  state.playerToRemove = null;
-  closeOverlay('removePlayerOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-function addWalkupPlayer() {
-  document.getElementById('walkupName').value = '';
-  document.getElementById('walkupHCRow').style.display = 'none';
-  document.getElementById('walkupStatus').textContent = '';
-  document.getElementById('walkupLookupBtn').textContent = 'Look up';
-  document.getElementById('walkupLookupBtn').onclick = lookupWalkupPlayer;
-  state.walkupFoundHC = null;
-  document.getElementById('walkupOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('walkupName').focus(), 100);
-}
-
-async function lookupWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) { alert('Please enter a player name.'); return; }
-  if (state.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
-    document.getElementById('walkupStatus').textContent = 'Player is already in the round.';
-    document.getElementById('walkupStatus').style.color = '#A32D2D'; return;
-  }
-  document.getElementById('walkupStatus').textContent = 'Looking up…';
-  document.getElementById('walkupStatus').style.color = '#888';
-  try {
-    const resp = await fetch('/api/lookup-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, rollup_id:session.rollupId}) });
-    const data = await resp.json();
-    if (data.found) {
-      state.walkupFoundHC = data.handicap;
-      document.getElementById('walkupStatus').textContent = `Found — handicap ${data.handicap}`;
-      document.getElementById('walkupStatus').style.color = '#3B6D11';
-      document.getElementById('walkupHCRow').style.display = 'none';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    } else {
-      state.walkupFoundHC = null;
-      document.getElementById('walkupStatus').textContent = 'New player — enter starting handicap';
-      document.getElementById('walkupStatus').style.color = '#2D2B5B';
-      document.getElementById('walkupHCRow').style.display = 'flex';
-      document.getElementById('walkupHC').value = '';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    }
-  } catch(e) {
-    document.getElementById('walkupStatus').textContent = 'Lookup failed — enter handicap manually';
-    document.getElementById('walkupStatus').style.color = '#A32D2D';
-    document.getElementById('walkupHCRow').style.display = 'flex';
-    document.getElementById('walkupLookupBtn').textContent = 'Add player';
-    document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-  }
-}
-
-async function confirmWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) return;
-  let hc = state.walkupFoundHC;
-  if (hc === null) {
-    hc = parseInt(document.getElementById('walkupHC').value);
-    if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-    await fetch('/api/new-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, handicap:hc, rollup_id:session.rollupId}) });
-  }
-  state.players.push({ name, handicap:hc, score:null, team:null, new_player:false });
-  closeOverlay('walkupOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
-function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
+# Bramley Rollup — backend/db.py
+# Per-request connections: opens a fresh connection for every DB operation,
+# closes it immediately after. Eliminates stale connection errors from Neon
+# dropping idle connections after ~5 minutes.
+
+import json
+import os
+import asyncio
+from functools import partial
+from contextlib import contextmanager
+
+import psycopg2
+import psycopg2.extras
+
+
+def _get_db_url() -> str:
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL environment variable not set.")
+    return db_url
+
+
+@contextmanager
+def _get_conn():
+    """Open a fresh connection, yield it, then close it — every time."""
+    conn = psycopg2.connect(_get_db_url())
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _run(func, *args, **kwargs):
+    """Run a sync DB function in a thread pool so FastAPI stays non-blocking."""
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, partial(func, *args, **kwargs))
+
+
+# ---------------------------------------------------------------------------
+# Schema init (called on startup)
+# ---------------------------------------------------------------------------
+
+def _init_schema():
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rollups (
+                    id              SERIAL PRIMARY KEY,
+                    name            TEXT UNIQUE NOT NULL,
+                    ig_search_term  TEXT NOT NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO rollups (name, ig_search_term)
+                VALUES ('MOTH''s Rollup', 'MOTH')
+                ON CONFLICT (name) DO NOTHING
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS players (
+                    id          SERIAL PRIMARY KEY,
+                    rollup_id   INTEGER NOT NULL REFERENCES rollups(id),
+                    name        TEXT NOT NULL,
+                    handicap    INTEGER NOT NULL DEFAULT 0,
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (rollup_id, name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rounds (
+                    id           SERIAL PRIMARY KEY,
+                    player_id    INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    rollup_id    INTEGER NOT NULL REFERENCES rollups(id),
+                    date         DATE NOT NULL,
+                    score        INTEGER NOT NULL,
+                    new_handicap INTEGER NOT NULL,
+                    recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rollup_settings (
+                    id                          SERIAL PRIMARY KEY,
+                    rollup_id                   INTEGER NOT NULL UNIQUE REFERENCES rollups(id),
+                    display_name                TEXT NOT NULL DEFAULT '',
+                    ig_search_term              TEXT NOT NULL DEFAULT '',
+                    run_days                    TEXT NOT NULL DEFAULT '[]',
+                    tee_interval_minutes        INTEGER NOT NULL DEFAULT 8,
+                    adjustment_table            TEXT NOT NULL DEFAULT '[
+                        {"max_score": 17, "adjustment": 2},
+                        {"max_score": 29, "adjustment": 1},
+                        {"max_score": 37, "adjustment": 0},
+                        {"max_score": 42, "adjustment": -1},
+                        {"max_score": null, "adjustment": -2}
+                    ]',
+                    winner_bonus_enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+                    winner_gap_penalty1         INTEGER NOT NULL DEFAULT 0,
+                    winner_gap_penalty2         INTEGER NOT NULL DEFAULT 0,
+                    entry_fee                   NUMERIC(6,2) NOT NULL DEFAULT 0.00,
+                    prize_places                INTEGER NOT NULL DEFAULT 3,
+                    prize_pct_1st               INTEGER NOT NULL DEFAULT 60,
+                    prize_pct_2nd               INTEGER NOT NULL DEFAULT 30,
+                    prize_pct_3rd               INTEGER NOT NULL DEFAULT 10,
+                    prize_pct_4th               INTEGER NOT NULL DEFAULT 0,
+                    tie_handling                TEXT NOT NULL DEFAULT 'tournament',
+                    preferred_team_size         INTEGER NOT NULL DEFAULT 4,
+                    team_scoring_method         TEXT NOT NULL DEFAULT 'best2',
+                    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS app_credentials (
+                    id          INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+                    ig_username TEXT NOT NULL DEFAULT '',
+                    ig_pin      TEXT NOT NULL DEFAULT '',
+                    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO app_credentials (id, ig_username, ig_pin)
+                VALUES (1, '', '')
+                ON CONFLICT (id) DO NOTHING
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS players_rollup_idx ON players(rollup_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_rollup_idx ON rounds(rollup_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_date_idx ON rounds(date DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_rollup_date_idx ON rounds(rollup_id, date DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rounds_player_date_idx ON rounds(player_id, date DESC)")
+
+
+async def init_db():
+    """Initialise schema on startup."""
+    await _run(_init_schema)
+
+
+async def close_db():
+    """No-op — no pool to close."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Rollups
+# ---------------------------------------------------------------------------
+
+def _get_all_rollups():
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, name, ig_search_term FROM rollups ORDER BY name")
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_all_rollups() -> list[dict]:
+    return await _run(_get_all_rollups)
+
+
+def _get_or_create_rollup(name: str, ig_search_term: str) -> int:
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO rollups (name, ig_search_term)
+                VALUES (%s, %s)
+                ON CONFLICT (name) DO UPDATE SET ig_search_term = EXCLUDED.ig_search_term
+                RETURNING id
+            """, (name, ig_search_term))
+            return cur.fetchone()[0]
+
+
+async def get_or_create_rollup(name: str, ig_search_term: str) -> int:
+    return await _run(_get_or_create_rollup, name, ig_search_term)
+
+
+# ---------------------------------------------------------------------------
+# Players
+# ---------------------------------------------------------------------------
+
+def _get_all_players(rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, name, handicap FROM players WHERE rollup_id = %s ORDER BY name",
+                (rollup_id,)
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_all_players(rollup_id: int) -> list[dict]:
+    return await _run(_get_all_players, rollup_id)
+
+
+def _add_new_player(rollup_id: int, name: str, handicap: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO players (rollup_id, name, handicap)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (rollup_id, name) DO UPDATE SET handicap = EXCLUDED.handicap
+            """, (rollup_id, name.strip(), handicap))
+
+
+async def add_new_player(rollup_id: int, name: str, handicap: int) -> None:
+    await _run(_add_new_player, rollup_id, name, handicap)
+
+
+# ---------------------------------------------------------------------------
+# Rounds
+# ---------------------------------------------------------------------------
+
+def _save_round_results(results: list[dict], date_str: str, rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name FROM players WHERE rollup_id = %s",
+                (rollup_id,)
+            )
+            name_to_id = {row[1].strip().lower(): row[0] for row in cur.fetchall()}
+
+            for r in results:
+                if r.get("score") is None or r.get("new_handicap") is None:
+                    continue
+                player_id = name_to_id.get(r["name"].strip().lower())
+                if player_id is None:
+                    continue
+                cur.execute(
+                    "UPDATE players SET handicap = %s WHERE id = %s",
+                    (r["new_handicap"], player_id)
+                )
+                cur.execute("""
+                    INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"]))
+
+
+async def save_round_results(results: list[dict], date_str: str, rollup_id: int) -> None:
+    await _run(_save_round_results, results, date_str, rollup_id)
+
+
+def _get_last_round_date(rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT MAX(date) FROM rounds WHERE rollup_id = %s",
+                (rollup_id,)
+            )
+            row = cur.fetchone()
+            return str(row[0]) if row and row[0] else "No previous round"
+
+
+async def get_last_round_date(rollup_id: int) -> str:
+    return await _run(_get_last_round_date, rollup_id)
+
+
+def _get_last_round_results(rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT MAX(date) AS last_date FROM rounds WHERE rollup_id = %s",
+                (rollup_id,)
+            )
+            row = cur.fetchone()
+            if not row or not row["last_date"]:
+                return []
+            cur.execute("""
+                SELECT p.name, r.score, r.new_handicap
+                FROM rounds r
+                JOIN players p ON p.id = r.player_id
+                WHERE r.rollup_id = %s AND r.date = %s
+                ORDER BY r.score DESC
+            """, (rollup_id, row["last_date"]))
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_last_round_results(rollup_id: int) -> list[dict]:
+    return await _run(_get_last_round_results, rollup_id)
+
+
+def _get_player_history(name: str, rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT r.date, r.score, r.new_handicap
+                FROM rounds r
+                JOIN players p ON p.id = r.player_id
+                WHERE r.rollup_id = %s AND LOWER(p.name) = LOWER(%s)
+                ORDER BY r.date DESC
+            """, (rollup_id, name.strip()))
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_player_history(name: str, rollup_id: int) -> list[dict]:
+    return await _run(_get_player_history, name, rollup_id)
+
+
+def _get_round_dates(rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT date FROM rounds WHERE rollup_id = %s ORDER BY date DESC",
+                (rollup_id,)
+            )
+            return [str(r[0]) for r in cur.fetchall()]
+
+
+async def get_round_dates(rollup_id: int) -> list[str]:
+    return await _run(_get_round_dates, rollup_id)
+
+
+def _get_round_by_date(date_str: str, rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.name, r.score, r.new_handicap
+                FROM rounds r
+                JOIN players p ON p.id = r.player_id
+                WHERE r.rollup_id = %s AND r.date = %s
+                ORDER BY r.score DESC
+            """, (rollup_id, date_str))
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_round_by_date(date_str: str, rollup_id: int) -> list[dict]:
+    return await _run(_get_round_by_date, date_str, rollup_id)
+
+
+# ---------------------------------------------------------------------------
+# Rollup settings
+# ---------------------------------------------------------------------------
+
+DEFAULT_ADJUSTMENT_TABLE = [
+    {"max_score": 17,   "adjustment": 2},
+    {"max_score": 29,   "adjustment": 1},
+    {"max_score": 37,   "adjustment": 0},
+    {"max_score": 42,   "adjustment": -1},
+    {"max_score": None, "adjustment": -2},
+]
+
+
+def _get_rollup_settings(rollup_id: int) -> dict:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM rollup_settings WHERE rollup_id = %s",
+                (rollup_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.execute(
+                    "SELECT name, ig_search_term FROM rollups WHERE id = %s",
+                    (rollup_id,)
+                )
+                rollup = cur.fetchone()
+                return {
+                    "rollup_id":            rollup_id,
+                    "display_name":         rollup["name"] if rollup else "",
+                    "ig_search_term":       rollup["ig_search_term"] if rollup else "",
+                    "run_days":             [],
+                    "tee_interval_minutes": 8,
+                    "adjustment_table":     DEFAULT_ADJUSTMENT_TABLE,
+                    "winner_bonus_enabled": True,
+                    "winner_gap_penalty1":  0,
+                    "winner_gap_penalty2":  0,
+                    "entry_fee":            0.00,
+                    "prize_places":         3,
+                    "prize_pct_1st":        60,
+                    "prize_pct_2nd":        30,
+                    "prize_pct_3rd":        10,
+                    "prize_pct_4th":        0,
+                    "tie_handling":         "tournament",
+                    "preferred_team_size":  4,
+                    "team_scoring_method":  "best2",
+                }
+            d = dict(row)
+            d["run_days"] = json.loads(d["run_days"])
+            d["adjustment_table"] = json.loads(d["adjustment_table"])
+            d["entry_fee"] = float(d["entry_fee"])
+            return d
+
+
+async def get_rollup_settings(rollup_id: int) -> dict:
+    return await _run(_get_rollup_settings, rollup_id)
+
+
+def _save_rollup_settings(rollup_id: int, s: dict):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO rollup_settings (
+                    rollup_id, display_name, ig_search_term, run_days,
+                    tee_interval_minutes, adjustment_table,
+                    winner_bonus_enabled, winner_gap_penalty1, winner_gap_penalty2,
+                    entry_fee, prize_places,
+                    prize_pct_1st, prize_pct_2nd, prize_pct_3rd, prize_pct_4th,
+                    tie_handling, preferred_team_size, team_scoring_method,
+                    updated_at
+                ) VALUES (
+                    %s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s, %s,%s,%s,%s, %s,%s,%s, NOW()
+                )
+                ON CONFLICT (rollup_id) DO UPDATE SET
+                    display_name            = EXCLUDED.display_name,
+                    ig_search_term          = EXCLUDED.ig_search_term,
+                    run_days                = EXCLUDED.run_days,
+                    tee_interval_minutes    = EXCLUDED.tee_interval_minutes,
+                    adjustment_table        = EXCLUDED.adjustment_table,
+                    winner_bonus_enabled    = EXCLUDED.winner_bonus_enabled,
+                    winner_gap_penalty1     = EXCLUDED.winner_gap_penalty1,
+                    winner_gap_penalty2     = EXCLUDED.winner_gap_penalty2,
+                    entry_fee               = EXCLUDED.entry_fee,
+                    prize_places            = EXCLUDED.prize_places,
+                    prize_pct_1st           = EXCLUDED.prize_pct_1st,
+                    prize_pct_2nd           = EXCLUDED.prize_pct_2nd,
+                    prize_pct_3rd           = EXCLUDED.prize_pct_3rd,
+                    prize_pct_4th           = EXCLUDED.prize_pct_4th,
+                    tie_handling            = EXCLUDED.tie_handling,
+                    preferred_team_size     = EXCLUDED.preferred_team_size,
+                    team_scoring_method     = EXCLUDED.team_scoring_method,
+                    updated_at              = NOW()
+            """, (
+                rollup_id,
+                s["display_name"],
+                s["ig_search_term"],
+                json.dumps(s["run_days"]),
+                s["tee_interval_minutes"],
+                json.dumps(s["adjustment_table"]),
+                s["winner_bonus_enabled"],
+                s["winner_gap_penalty1"],
+                s["winner_gap_penalty2"],
+                s["entry_fee"],
+                s["prize_places"],
+                s["prize_pct_1st"],
+                s["prize_pct_2nd"],
+                s["prize_pct_3rd"],
+                s["prize_pct_4th"],
+                s["tie_handling"],
+                s["preferred_team_size"],
+                s["team_scoring_method"],
+            ))
+            # Keep rollups table in sync
+            cur.execute("""
+                UPDATE rollups SET name = %s, ig_search_term = %s WHERE id = %s
+            """, (s["display_name"], s["ig_search_term"], rollup_id))
+
+
+async def save_rollup_settings(rollup_id: int, settings: dict) -> None:
+    await _run(_save_rollup_settings, rollup_id, settings)
+
+
+# ---------------------------------------------------------------------------
+# App credentials (global singleton)
+# ---------------------------------------------------------------------------
+
+def _get_credentials() -> dict:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT ig_username, ig_pin FROM app_credentials WHERE id = 1")
+            row = cur.fetchone()
+            return dict(row) if row else {"ig_username": "", "ig_pin": ""}
+
+
+async def get_credentials() -> dict:
+    return await _run(_get_credentials)
+
+
+def _save_credentials(ig_username: str, ig_pin: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO app_credentials (id, ig_username, ig_pin, updated_at)
+                VALUES (1, %s, %s, NOW())
+                ON CONFLICT (id) DO UPDATE SET
+                    ig_username = EXCLUDED.ig_username,
+                    ig_pin      = EXCLUDED.ig_pin,
+                    updated_at  = NOW()
+            """, (ig_username, ig_pin))
+
+
+async def save_credentials(ig_username: str, ig_pin: str) -> None:
+    await _run(_save_credentials, ig_username, ig_pin)
