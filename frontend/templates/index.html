@@ -203,6 +203,28 @@
     .tappable-rollup { cursor:pointer; }
     .tappable-rollup:active { opacity:0.7; }
 
+    /* Screen 6 - Player Manager */
+    .s6-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    .s6-toolbar { display: flex; gap: 8px; align-items: center; }
+    .s6-rollup-select { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; font-family: inherit; }
+    .s6-rollup-select:focus { outline: none; border-color: #2D2B5B; }
+    .s6-add-btn { padding: 9px 16px; background: #3B6D11; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .player-table-wrap { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden; }
+    table.pt { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
+    table.pt thead tr { background: #2D2B5B; }
+    table.pt thead th { font-size: 11px; font-weight: 600; color: #FFD700; padding: 8px 10px; text-align: left; }
+    table.pt thead th.c { text-align: center; }
+    table.pt tbody td { font-size: 13px; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    table.pt tbody td.c { text-align: center; }
+    table.pt tbody tr:last-child td { border-bottom: none; }
+    table.pt tbody tr:hover td { background: #f8f8ff; }
+    .pt-hc-input { width: 52px; padding: 4px 6px; border-radius: 6px; border: 1.5px solid #2D2B5B40; font-size: 13px; text-align: center; font-family: inherit; }
+    .pt-hc-input:focus { outline: none; border-color: #2D2B5B; }
+    .pt-save-btn { padding: 4px 10px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .pt-delete-btn { padding: 4px 8px; background: #FCEBEB; color: #A32D2D; border: 1px solid #A32D2D30; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .s6-empty { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
+    .s6-status { font-size: 11px; text-align: center; padding: 6px; border-radius: 8px; min-height: 24px; }
+
     /* Screen 5 - Settings */
     .settings-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 0; }
     .settings-section { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 14px; overflow: hidden; }
@@ -327,6 +349,7 @@
     <button class="nav-item active" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
     <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
     <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
+    <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
     <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
   </div>
 </div>
@@ -688,6 +711,46 @@
 </div>
 
 
+<!-- SCREEN 6 - Player Manager -->
+<div id="screen6" class="screen">
+  <div class="header">
+    <button class="header-back" onclick="goBack()">‹</button>
+    <div class="header-title" style="text-align:center">
+      <div class="club">Player Manager</div>
+      <div class="society">Add · Edit · Remove</div>
+    </div>
+    <div class="header-spacer"></div>
+  </div>
+
+  <div class="s6-body">
+    <div class="s6-toolbar">
+      <select class="s6-rollup-select" id="s6RollupSelect" onchange="loadPlayerManager()">
+        <option value="">Select rollup…</option>
+      </select>
+      <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
+    </div>
+
+    <div class="s6-status status-neutral" id="s6Status"></div>
+
+    <div class="player-table-wrap" id="s6TableWrap" style="display:none;">
+      <table class="pt">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th class="c">Handicap</th>
+            <th class="c">Rounds</th>
+            <th class="c">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="s6PlayerTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="s6-empty" id="s6Empty" style="display:none;">No players found for this rollup.</div>
+  </div>
+</div>
+
+
 <!-- ROLLUP SWITCHER -->
 <div class="rollup-switcher-overlay" id="rollupSwitcherOverlay">
   <div class="rollup-switcher-sheet">
@@ -757,7 +820,40 @@
   </div>
 </div>
 
-<div class="overlay" id="addRollupOverlay">
+<div class="overlay" id="addPlayerDialogOverlay">
+  <div class="dialog">
+    <div class="dialog-title">Add Player</div>
+    <div class="field-group">
+      <div class="field-label">Player name</div>
+      <input class="name-input" id="addPlayerName" type="text" placeholder="First Last" autocomplete="off"
+        onkeydown="if(event.key==='Enter') document.getElementById('addPlayerHC').focus()"/>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Starting handicap</div>
+      <input class="hc-number" id="addPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"
+        onkeydown="if(event.key==='Enter') confirmAddPlayerDialog()"/>
+    </div>
+    <div id="addPlayerError" style="display:none;font-size:11px;color:#A32D2D;text-align:center;"></div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addPlayerDialogOverlay')">Cancel</button>
+      <button class="dialog-btn btn-confirm" onclick="confirmAddPlayerDialog()">Add player</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="deletePlayerOverlay">
+  <div class="dialog">
+    <div class="dialog-title">Remove player?</div>
+    <div class="dialog-name" id="deletePlayerName"></div>
+    <div class="dialog-body">This will remove the player from the rollup. Their round history will be preserved.</div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('deletePlayerOverlay')">Cancel</button>
+      <button class="dialog-btn btn-danger" onclick="confirmDeletePlayer()">Remove</button>
+    </div>
+  </div>
+</div>
+
+
   <div class="dialog">
     <div class="dialog-title">Add Rollup</div>
     <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
@@ -908,6 +1004,7 @@ async function switchRollup(rollup) {
   else if (state.currentScreen === 'screen3') showResultsScreen();
   else if (state.currentScreen === 'screen4') showPlayerHistory();
   else if (state.currentScreen === 'screen5') showSettingsScreen();
+  else if (state.currentScreen === 'screen6') showPlayerManager();
   else showScreen('screen1');
 }
 
@@ -974,8 +1071,8 @@ function showScreen(id) {
 }
 
 function goBack() {
-  if (state.currentScreen === 'screen5') {
-    const dest = (state.prevScreen && state.prevScreen !== 'screen5') ? state.prevScreen : 'screen1';
+  if (state.currentScreen === 'screen5' || state.currentScreen === 'screen6') {
+    const dest = (state.prevScreen && state.prevScreen !== 'screen5' && state.prevScreen !== 'screen6') ? state.prevScreen : 'screen1';
     showScreen(dest);
   } else {
     showScreen('screen1');
@@ -1911,6 +2008,152 @@ async function confirmWalkupPlayer() {
   closeOverlay('walkupOverlay');
   state.selectedStructure = null;
   updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
+}
+
+// ═══════════════════════════════════════
+// Screen 6 - Player Manager
+// ═══════════════════════════════════════
+let s6State = { players: [], rollupId: null, playerToDelete: null };
+
+async function showPlayerManager() {
+  showScreen('screen6');
+  // Populate rollup dropdown
+  const sel = document.getElementById('s6RollupSelect');
+  sel.innerHTML = '<option value="">Select rollup…</option>';
+  availableRollups.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = r.name;
+    if (r.id === session.rollupId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (session.rollupId) {
+    sel.value = session.rollupId;
+    await loadPlayerManager();
+  }
+}
+
+async function loadPlayerManager() {
+  const sel = document.getElementById('s6RollupSelect');
+  const rollupId = parseInt(sel.value);
+  if (!rollupId) {
+    document.getElementById('s6TableWrap').style.display = 'none';
+    document.getElementById('s6Empty').style.display = 'none';
+    setS6Status('', 'neutral');
+    return;
+  }
+  s6State.rollupId = rollupId;
+  setS6Status('Loading…', 'neutral');
+  try {
+    const resp = await fetch(`/api/players/detail?rollup_id=${rollupId}`);
+    const data = await resp.json();
+    s6State.players = data.players || [];
+    renderPlayerTable();
+    setS6Status(`${s6State.players.length} player${s6State.players.length !== 1 ? 's' : ''}`, 'neutral');
+  } catch(e) {
+    setS6Status('Could not load players', 'danger');
+  }
+}
+
+function renderPlayerTable() {
+  const tbody = document.getElementById('s6PlayerTableBody');
+  tbody.innerHTML = '';
+  if (s6State.players.length === 0) {
+    document.getElementById('s6TableWrap').style.display = 'none';
+    document.getElementById('s6Empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('s6TableWrap').style.display = 'block';
+  document.getElementById('s6Empty').style.display = 'none';
+  s6State.players.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.name}</td>
+      <td class="c">
+        <input class="pt-hc-input" type="number" min="0" max="54"
+          value="${p.handicap}" id="hc_${p.id}"
+          onkeydown="if(event.key==='Enter') savePlayerHC(${p.id})"/>
+      </td>
+      <td class="c" style="font-size:12px;color:#888;">${p.round_count ?? '—'}</td>
+      <td class="c" style="display:flex;gap:4px;justify-content:center;">
+        <button class="pt-save-btn" onclick="savePlayerHC(${p.id})">Save</button>
+        <button class="pt-delete-btn" onclick="promptDeletePlayer(${p.id}, '${p.name.replace(/'/g, "\\'")}')">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function savePlayerHC(playerId) {
+  const input = document.getElementById(`hc_${playerId}`);
+  const hc = parseInt(input.value);
+  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Handicap must be 0–54.'); return; }
+  try {
+    const resp = await fetch('/api/players/update-handicap', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ player_id: playerId, handicap: hc, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    const p = s6State.players.find(p => p.id === playerId);
+    if (p) p.handicap = hc;
+    setS6Status('Saved ✓', 'success');
+    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
+  } catch(e) { setS6Status('Save failed', 'danger'); }
+}
+
+function promptDeletePlayer(playerId, name) {
+  s6State.playerToDelete = playerId;
+  document.getElementById('deletePlayerName').textContent = name;
+  document.getElementById('deletePlayerOverlay').classList.add('open');
+}
+
+async function confirmDeletePlayer() {
+  closeOverlay('deletePlayerOverlay');
+  try {
+    const resp = await fetch('/api/players/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ player_id: s6State.playerToDelete, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    s6State.players = s6State.players.filter(p => p.id !== s6State.playerToDelete);
+    s6State.playerToDelete = null;
+    renderPlayerTable();
+    setS6Status(`${s6State.players.length} players`, 'neutral');
+  } catch(e) { setS6Status('Delete failed', 'danger'); }
+}
+
+function showAddPlayerDialog() {
+  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
+  document.getElementById('addPlayerName').value = '';
+  document.getElementById('addPlayerHC').value = '';
+  document.getElementById('addPlayerError').style.display = 'none';
+  document.getElementById('addPlayerDialogOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('addPlayerName').focus(), 100);
+}
+
+async function confirmAddPlayerDialog() {
+  const name = document.getElementById('addPlayerName').value.trim();
+  const hc = parseInt(document.getElementById('addPlayerHC').value);
+  const errEl = document.getElementById('addPlayerError');
+  if (!name) { errEl.textContent = 'Please enter a player name.'; errEl.style.display = 'block'; return; }
+  if (isNaN(hc) || hc < 0 || hc > 54) { errEl.textContent = 'Handicap must be 0–54.'; errEl.style.display = 'block'; return; }
+  if (s6State.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    errEl.textContent = 'A player with this name already exists.'; errEl.style.display = 'block'; return;
+  }
+  try {
+    const resp = await fetch('/api/new-player', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, handicap: hc, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    closeOverlay('addPlayerDialogOverlay');
+    await loadPlayerManager();
+  } catch(e) { errEl.textContent = 'Could not add player. Try again.'; errEl.style.display = 'block'; }
+}
+
+function setS6Status(msg, type) {
+  const el = document.getElementById('s6Status');
+  el.textContent = msg;
+  el.className = `s6-status status-${type}`;
 }
 
 function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
