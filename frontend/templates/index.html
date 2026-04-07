@@ -220,11 +220,12 @@
     .adj-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; font-size: 12px; text-align: center; vertical-align: middle; }
     .adj-table td.left { text-align: left; color: #555; }
     .adj-table tr:last-child td { border-bottom: none; }
-    .prize-grid { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+    .prize-grid { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; }
     .prize-grid-label { font-size: 12px; color: #555; }
     .prize-pct-input { width: 60px; padding: 7px 8px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; text-align: center; font-family: inherit; -webkit-appearance: none; }
     .prize-pct-input:focus { outline: none; border-color: #2D2B5B; }
     .prize-pct-symbol { font-size: 13px; color: #888; }
+    .prize-amt { font-size: 12px; font-weight: 600; color: #3B6D11; min-width: 36px; text-align: right; }
     .prize-total-row { display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: 12px; color: #888; padding-top: 6px; border-top: 1px solid #eee; margin-top: 4px; }
     .prize-total-val { font-weight: 700; font-size: 14px; }
     .prize-total-val.ok { color: #3B6D11; }
@@ -243,7 +244,7 @@
 <body>
 
 <!-- SCREEN 0 - Rollup Select -->
-<div id="screen0" class="screen active">
+<div id="screen0" class="screen">
   <div class="header">
     <div class="header-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/></div>
     <div class="header-title">
@@ -609,19 +610,24 @@
         </div>
         <div class="field-group">
           <div class="field-label">Prize split %</div>
-          <div class="prize-grid">
+         <div class="prize-grid">
             <span class="prize-grid-label">🥇 1st</span>
             <input class="prize-pct-input" id="setPct1" type="number" min="0" max="100" value="60" oninput="updatePrizeTotal()"/>
             <span class="prize-pct-symbol">%</span>
+            <span class="prize-amt" id="prizeAmt1"></span>
             <span class="prize-grid-label">🥈 2nd</span>
             <input class="prize-pct-input" id="setPct2" type="number" min="0" max="100" value="30" oninput="updatePrizeTotal()"/>
             <span class="prize-pct-symbol">%</span>
+            <span class="prize-amt" id="prizeAmt2"></span>
             <span class="prize-grid-label">🥉 3rd</span>
             <input class="prize-pct-input" id="setPct3" type="number" min="0" max="100" value="10" oninput="updatePrizeTotal()"/>
             <span class="prize-pct-symbol">%</span>
+            <span class="prize-amt" id="prizeAmt3"></span>
             <span class="prize-grid-label">4th</span>
             <input class="prize-pct-input" id="setPct4" type="number" min="0" max="100" value="0" oninput="updatePrizeTotal()"/>
             <span class="prize-pct-symbol">%</span>
+            <span class="prize-amt" id="prizeAmt4"></span>
+          </div>
           </div>
           <div class="prize-total-row">
             Total: <span class="prize-total-val ok" id="prizeTotalVal">100%</span>
@@ -1035,11 +1041,22 @@ function renderAdjTable(table) {
 }
 
 function updatePrizeTotal() {
+  const fee = parseFloat(document.getElementById('setEntryFee').value) || 0;
+  const places = parseInt(document.querySelector('input[name="prizePlaces"]:checked')?.value || 3);
+  // Estimate pot using a typical field size of 20 — will be exact on scoring screen
+  const pot = fee * 20;
   const total = ['setPct1','setPct2','setPct3','setPct4']
     .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
   const el = document.getElementById('prizeTotalVal');
   el.textContent = total + '%';
   el.className = 'prize-total-val ' + (total === 100 ? 'ok' : 'err');
+  // Show £ amounts if entry fee set
+  [1,2,3,4].forEach(i => {
+    const amtEl = document.getElementById('prizeAmt' + i);
+    if (!amtEl) return;
+    const pct = parseInt(document.getElementById('setPct' + i).value) || 0;
+    amtEl.textContent = (fee > 0 && i <= places) ? '£' + ((pot * pct / 100).toFixed(2)) : '';
+  });
 }
 
 function applyPrizeDefaults() {
