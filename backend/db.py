@@ -186,6 +186,52 @@ async def get_all_players(rollup_id: int) -> list[dict]:
     return await _run(_get_all_players, rollup_id)
 
 
+def _get_all_players_detail(rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.id, p.name, p.handicap,
+                       COUNT(r.id) AS round_count
+                FROM players p
+                LEFT JOIN rounds r ON r.player_id = p.id
+                WHERE p.rollup_id = %s
+                GROUP BY p.id, p.name, p.handicap
+                ORDER BY p.name
+            """, (rollup_id,))
+            return [dict(row) for row in cur.fetchall()]
+
+
+async def get_all_players_detail(rollup_id: int) -> list[dict]:
+    return await _run(_get_all_players_detail, rollup_id)
+
+
+def _update_player_handicap(player_id: int, handicap: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE players SET handicap = %s WHERE id = %s",
+                (handicap, player_id)
+            )
+
+
+async def update_player_handicap(player_id: int, handicap: int) -> None:
+    await _run(_update_player_handicap, player_id, handicap)
+
+
+def _remove_player(player_id: int, rollup_id: int):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            # Rounds cascade-delete via FK, but only if player belongs to this rollup
+            cur.execute(
+                "DELETE FROM players WHERE id = %s AND rollup_id = %s",
+                (player_id, rollup_id)
+            )
+
+
+async def remove_player(player_id: int, rollup_id: int) -> None:
+    await _run(_remove_player, player_id, rollup_id)
+
+
 def _add_new_player(rollup_id: int, name: str, handicap: int):
     with _get_conn() as conn:
         with conn.cursor() as cur:
