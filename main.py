@@ -1,9 +1,8 @@
-# MOTH's Rollup - main.py
-# v2 04/01: multi-rollup support — rollup_id passed through all endpoints
+# Bramley Rollup - backend/main.py
 # v3 04/04: rollup settings and credentials endpoints added
+# v4 04/07: settings wired into handicap/team calculations; per-request DB connections
 
 import os
-import asyncio
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -31,14 +30,14 @@ from backend.db import (
     save_rollup_settings,
     get_credentials,
     save_credentials,
-    get_pool,
-    close_pool,
+    init_db,
+    close_db,
 )
 from backend.scraper import scrape_players
 
 load_dotenv()
 
-app = FastAPI(title="MOTH's Rollup")
+app = FastAPI(title="Bramley Rollup")
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,12 +53,12 @@ templates = Jinja2Templates(directory="frontend/templates")
 
 @app.on_event("startup")
 async def startup():
-    await db.init_db()
+    await init_db()
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    await db.close_db()
+    await close_db()
 
 
 @app.get("/sw.js")
@@ -74,15 +73,36 @@ async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+# ---------------------------------------------------------------------------
+# Rollups
+# ---------------------------------------------------------------------------
+
 @app.get("/api/rollups")
 async def rollups():
-    """Return all available rollups."""
     try:
         data = await get_all_rollups()
     except Exception as e:
         raise HTTPException(500, f"Could not load rollups: {str(e)}")
     return {"rollups": data}
 
+
+class AddRollupRequest(BaseModel):
+    name: str
+    ig_search_term: str
+
+
+@app.post("/api/rollups/add")
+async def add_rollup(body: AddRollupRequest):
+    try:
+        rollup_id = await get_or_create_rollup(body.name, body.ig_search_term.upper())
+    except Exception as e:
+        raise HTTPException(500, f"Could not add rollup: {str(e)}")
+    return {"ok": True, "id": rollup_id, "name": body.name, "ig_search_term": body.ig_search_term.upper()}
+
+
+# ---------------------------------------------------------------------------
+# Auth / status
+# ---------------------------------------------------------------------------
 
 @app.get("/auth/status")
 async def auth_status(rollup_id: int = Query(1)):
@@ -92,6 +112,10 @@ async def auth_status(rollup_id: int = Query(1)):
         last_date = None
     return {"last_round_date": last_date}
 
+
+# ---------------------------------------------------------------------------
+# Load players
+# ---------------------------------------------------------------------------
 
 class LoadRequest(BaseModel):
     date: str
@@ -115,6 +139,7 @@ async def load_players(body: LoadRequest):
 
     names = scrape_result["names"]
     tee_times = scrape_result["tee_times"]
+    tee_start = scrape_result.get("tee_start", "")
 
     if not names:
         raise HTTPException(404, "No players found for this date.")
@@ -137,12 +162,17 @@ async def load_players(body: LoadRequest):
             players.append({"name": name, "handicap": hc, "score": None, "team": None, "new_player": False})
 
     return {
-        "date": body.date,
-        "players": players,
+        "date":        body.date,
+        "players":     players,
         "new_players": new_players,
-        "tee_times": tee_times,
+        "tee_times":   tee_times,
+        "tee_start":   tee_start,
     }
 
+
+# ---------------------------------------------------------------------------
+# Players
+# ---------------------------------------------------------------------------
 
 class NewPlayerRequest(BaseModel):
     name: str
@@ -159,53 +189,6 @@ async def new_player(body: NewPlayerRequest):
     return {"ok": True, "name": body.name, "handicap": body.handicap}
 
 
-class ScoreUpdate(BaseModel):
-    date: str
-    players: list[dict]
-    team_mode: bool = False
-    rollup_id: int = 1
-
-
-@app.post("/api/autosave")
-async def autosave(body: ScoreUpdate):
-    results = calculate_new_handicaps(body.players, team_mode=body.team_mode)
-    for r in results:
-        r["adj_display"] = format_adjustment(r.get("adjustment"))
-
-    team_scores = []
-    if body.team_mode:
-        team_scores = calculate_team_scores(results)
-
-    return {"players": results, "team_scores": team_scores}
-
-
-@app.post("/api/save-round")
-async def save_round(body: ScoreUpdate):
-    results = calculate_new_handicaps(body.players, team_mode=body.team_mode)
-    try:
-        await save_round_results(results, body.date, body.rollup_id)
-    except Exception as e:
-        raise HTTPException(500, f"Failed to save to database: {str(e)}")
-    for r in results:
-        r["adj_display"] = format_adjustment(r.get("adjustment"))
-
-    team_scores = []
-    if body.team_mode:
-        team_scores = calculate_team_scores(results)
-
-    return {"ok": True, "players": results, "date": body.date, "team_scores": team_scores}
-
-
-@app.get("/api/last-round")
-async def last_round(rollup_id: int = Query(1)):
-    try:
-        results = await get_last_round_results(rollup_id)
-        date = await get_last_round_date(rollup_id)
-    except Exception as e:
-        raise HTTPException(500, f"Could not load last round: {str(e)}")
-    return {"players": results, "date": date}
-
-
 class LookupRequest(BaseModel):
     name: str
     rollup_id: int = 1
@@ -217,12 +200,86 @@ async def lookup_player(body: LookupRequest):
         all_players = await get_all_players(body.rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not read player list: {str(e)}")
-
     for p in all_players:
         if p["name"].strip().lower() == body.name.strip().lower():
             return {"found": True, "name": p["name"], "handicap": p["handicap"]}
-
     return {"found": False, "name": body.name}
+
+
+@app.get("/api/players")
+async def get_players(rollup_id: int = Query(1)):
+    try:
+        players = await get_all_players(rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load players: {str(e)}")
+    return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
+
+
+# ---------------------------------------------------------------------------
+# Scoring — autosave and save-round both load settings from DB
+# ---------------------------------------------------------------------------
+
+class ScoreUpdate(BaseModel):
+    date: str
+    players: list[dict]
+    team_mode: bool = False
+    rollup_id: int = 1
+
+
+@app.post("/api/autosave")
+async def autosave(body: ScoreUpdate):
+    try:
+        settings = await get_rollup_settings(body.rollup_id)
+    except Exception:
+        settings = None  # fall back to defaults in handicap.py
+
+    results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
+    for r in results:
+        r["adj_display"] = format_adjustment(r.get("adjustment"))
+
+    team_scores = []
+    if body.team_mode:
+        team_scores = calculate_team_scores(results, settings=settings)
+
+    return {"players": results, "team_scores": team_scores}
+
+
+@app.post("/api/save-round")
+async def save_round(body: ScoreUpdate):
+    try:
+        settings = await get_rollup_settings(body.rollup_id)
+    except Exception:
+        settings = None
+
+    results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
+
+    try:
+        await save_round_results(results, body.date, body.rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to save to database: {str(e)}")
+
+    for r in results:
+        r["adj_display"] = format_adjustment(r.get("adjustment"))
+
+    team_scores = []
+    if body.team_mode:
+        team_scores = calculate_team_scores(results, settings=settings)
+
+    return {"ok": True, "players": results, "date": body.date, "team_scores": team_scores}
+
+
+# ---------------------------------------------------------------------------
+# Results / history
+# ---------------------------------------------------------------------------
+
+@app.get("/api/last-round")
+async def last_round(rollup_id: int = Query(1)):
+    try:
+        results = await get_last_round_results(rollup_id)
+        date = await get_last_round_date(rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load last round: {str(e)}")
+    return {"players": results, "date": date}
 
 
 @app.get("/api/round-dates")
@@ -262,32 +319,8 @@ async def player_history(name: str = Query(...), rollup_id: int = Query(1)):
     }
 
 
-@app.get("/api/players")
-async def get_players(rollup_id: int = Query(1)):
-    try:
-        players = await get_all_players(rollup_id)
-    except Exception as e:
-        raise HTTPException(500, f"Could not load players: {str(e)}")
-    return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
-
-
-class AddRollupRequest(BaseModel):
-    name: str
-    ig_search_term: str
-
-
-@app.post("/api/rollups/add")
-async def add_rollup(body: AddRollupRequest):
-    """Add a new rollup or update its search term if it already exists."""
-    try:
-        rollup_id = await get_or_create_rollup(body.name, body.ig_search_term.upper())
-    except Exception as e:
-        raise HTTPException(500, f"Could not add rollup: {str(e)}")
-    return {"ok": True, "id": rollup_id, "name": body.name, "ig_search_term": body.ig_search_term.upper()}
-
-
 # ---------------------------------------------------------------------------
-# Settings endpoints
+# Settings
 # ---------------------------------------------------------------------------
 
 @app.get("/api/settings")
@@ -322,7 +355,6 @@ class RollupSettingsRequest(BaseModel):
 
 @app.post("/api/settings")
 async def post_settings(body: RollupSettingsRequest):
-    # Validate prize percentages sum to 100
     total_pct = body.prize_pct_1st + body.prize_pct_2nd + body.prize_pct_3rd + body.prize_pct_4th
     if total_pct != 100:
         raise HTTPException(400, f"Prize percentages must sum to 100 (currently {total_pct})")
@@ -333,30 +365,39 @@ async def post_settings(body: RollupSettingsRequest):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+
 @app.get("/api/credentials")
 async def get_creds():
     try:
         creds = await get_credentials()
     except Exception as e:
         raise HTTPException(500, f"Could not load credentials: {str(e)}")
-    # Never return the PIN in plaintext — return masked version
     return {
         "ig_username": creds["ig_username"],
-        "ig_pin_set": bool(creds["ig_pin"]),
+        "ig_pin_set":  bool(creds["ig_pin"]),
     }
 
 
 class CredentialsRequest(BaseModel):
     ig_username: str
-    ig_pin: str
+    ig_pin: str = ""
 
 
 @app.post("/api/credentials")
 async def post_credentials(body: CredentialsRequest):
-    if not body.ig_username or not body.ig_pin:
-        raise HTTPException(400, "Both Member ID and PIN are required")
+    if not body.ig_username:
+        raise HTTPException(400, "Member ID is required")
     try:
-        await save_credentials(body.ig_username, body.ig_pin)
+        # Only update PIN if a new one was supplied
+        if body.ig_pin:
+            await save_credentials(body.ig_username, body.ig_pin)
+        else:
+            # Update username only — fetch existing PIN and keep it
+            existing = await get_credentials()
+            await save_credentials(body.ig_username, existing["ig_pin"])
     except Exception as e:
         raise HTTPException(500, f"Could not save credentials: {str(e)}")
     return {"ok": True}
