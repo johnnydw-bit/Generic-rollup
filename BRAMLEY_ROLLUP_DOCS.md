@@ -10,7 +10,7 @@
 
 Bramley Rollup Manager is a Progressive Web App (PWA) for managing golf society rollups at Bramley Golf Club. It scrapes player sign-ups from Intelligent Golf (IG), records Stableford scores, calculates handicap adjustments, supports team play, and maintains a full round history per player.
 
-The app supports multiple independent rollup societies (e.g. MOTH's, Wednesday Men, Friday Men), each with their own player list, round history, and configurable settings.
+The app supports multiple independent rollups/societies (e.g. MOTH's, Wednesday Men, Friday Men), each with its own player list, round history, and configurable settings. Players can play in more than one roll-up with different handicaps for each.
 
 ---
 
