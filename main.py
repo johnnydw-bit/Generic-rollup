@@ -17,6 +17,9 @@ from dotenv import load_dotenv
 from backend.handicap import calculate_new_handicaps, calculate_team_scores, format_adjustment
 from backend.db import (
     get_all_players,
+    get_all_players_detail,
+    update_player_handicap,
+    remove_player,
     get_all_rollups,
     get_or_create_rollup,
     save_round_results,
@@ -213,6 +216,47 @@ async def get_players(rollup_id: int = Query(1)):
     except Exception as e:
         raise HTTPException(500, f"Could not load players: {str(e)}")
     return {"players": [{"name": p["name"], "handicap": p["handicap"]} for p in players]}
+
+
+@app.get("/api/players/detail")
+async def get_players_detail(rollup_id: int = Query(1)):
+    """Returns players with id and round count for the player manager."""
+    try:
+        players = await get_all_players_detail(rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load players: {str(e)}")
+    return {"players": players}
+
+
+class UpdateHandicapRequest(BaseModel):
+    player_id: int
+    handicap: int
+    rollup_id: int
+
+
+@app.post("/api/players/update-handicap")
+async def update_handicap(body: UpdateHandicapRequest):
+    if body.handicap < 0 or body.handicap > 54:
+        raise HTTPException(400, "Handicap must be 0–54")
+    try:
+        await update_player_handicap(body.player_id, body.handicap)
+    except Exception as e:
+        raise HTTPException(500, f"Could not update handicap: {str(e)}")
+    return {"ok": True}
+
+
+class DeletePlayerRequest(BaseModel):
+    player_id: int
+    rollup_id: int
+
+
+@app.post("/api/players/delete")
+async def delete_player(body: DeletePlayerRequest):
+    try:
+        await remove_player(body.player_id, body.rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not delete player: {str(e)}")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
