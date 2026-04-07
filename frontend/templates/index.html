@@ -764,7 +764,7 @@ let state = {
   currentNewPlayer: null,
   playerToRemove: null,
   gameMode: 'individual',
-  teamSize: 2,
+  teamSize: 4,
   selectedStructure: null,
   teamScores: [],
   walkupFoundHC: null,
@@ -1393,6 +1393,12 @@ async function loadPlayers() {
     state.teeTimes = data.tee_times || null;
     state.teeStart = data.tee_start || '';
     state.newPlayerQueue = data.new_players || [];
+    try {
+      const sResp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
+      const sett = await sResp.json();
+      state.rollupSettings = sett;
+      state.teamSize = sett.preferred_team_size || 4;
+    } catch(e) {}
     if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
     else openScoreEntry();
   } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
