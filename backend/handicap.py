@@ -1,35 +1,50 @@
-# MOTH's Rollup - backend/handicap.py
-# Updated: 2026-03-26
+# Bramley Rollup - backend/handicap.py
+# Updated: 2026-04-07 — all logic driven by rollup settings from DB
 
 """
-Handicap calculation for MOTH's Rollup.
+Handicap calculation for Bramley Rollup.
 
-Adjustment table (Stableford score -> handicap change):
-  0-17  -> +2
-  18-29 -> +1
-  30-37 -> 0
-  38-42 -> -1
-  43+   -> -2
-
-Individual mode: round winner (highest score) gets an extra -1.
-Team mode: winner bonus is suspended.
+All rules (adjustment table, winner penalty, team scoring method) are
+passed in via a settings dict loaded from the database, so no hardcoded
+values remain here.
 """
 
+DEFAULT_ADJUSTMENT_TABLE = [
+    {"max_score": 17,   "adjustment": 2},
+    {"max_score": 29,   "adjustment": 1},
+    {"max_score": 37,   "adjustment": 0},
+    {"max_score": 42,   "adjustment": -1},
+    {"max_score": None, "adjustment": -2},
+]
 
-def get_adjustment(score: int) -> int:
-    if score <= 17:
-        return 2
-    elif score <= 29:
-        return 1
-    elif score <= 37:
-        return 0
-    elif score <= 42:
-        return -1
-    else:
-        return -2
+DEFAULT_SETTINGS = {
+    "adjustment_table":     DEFAULT_ADJUSTMENT_TABLE,
+    "winner_bonus_enabled": True,
+    "winner_gap_penalty1":  0,   # extra -1 if gap vs 2nd >= this (0 = off)
+    "winner_gap_penalty2":  0,   # extra -2 if gap vs 2nd >= this (0 = off)
+    "team_scoring_method":  "best2",
+}
 
 
-def calculate_new_handicaps(players: list[dict], team_mode: bool = False) -> list[dict]:
+def get_adjustment(score: int, adjustment_table: list[dict]) -> int:
+    """
+    Look up the handicap adjustment for a given score using the provided table.
+    Table is a list of {"max_score": int|None, "adjustment": int} rows,
+    ordered low to high. The last row should have max_score=None (catch-all).
+    """
+    for row in adjustment_table:
+        max_score = row.get("max_score")
+        if max_score is None or score <= max_score:
+            return row["adjustment"]
+    # Fallback: return last row's adjustment
+    return adjustment_table[-1]["adjustment"]
+
+
+def calculate_new_handicaps(
+    players: list[dict],
+    team_mode: bool = False,
+    settings: dict | None = None,
+) -> list[dict]:
     """
     Given a list of player dicts with keys:
         name, handicap, score (int|None), team (int|None)
@@ -37,17 +52,42 @@ def calculate_new_handicaps(players: list[dict], team_mode: bool = False) -> lis
     Returns list with added keys:
         new_handicap, adjustment, winner
 
-    In team_mode, the winner bonus (-1) is suspended.
+    Settings drives:
+        - adjustment_table
+        - winner_bonus_enabled  (individual mode only)
+        - winner_gap_penalty1   (extra -1 if winner beats 2nd by >= N pts)
+        - winner_gap_penalty2   (extra -2 if winner beats 2nd by >= N pts)
     """
+    if settings is None:
+        settings = DEFAULT_SETTINGS
+
+    adj_table      = settings.get("adjustment_table", DEFAULT_ADJUSTMENT_TABLE)
+    winner_bonus   = settings.get("winner_bonus_enabled", True)
+    gap_penalty1   = settings.get("winner_gap_penalty1", 0)   # 0 = off
+    gap_penalty2   = settings.get("winner_gap_penalty2", 0)   # 0 = off
+
     scored = [p for p in players if p.get("score") is not None]
 
     winner_name = None
-    if scored and not team_mode:
-        max_score = max(p["score"] for p in scored)
+    winner_extra = 0  # additional penalty beyond the base -1
+
+    if scored and not team_mode and winner_bonus:
+        scores_sorted = sorted([p["score"] for p in scored], reverse=True)
+        max_score = scores_sorted[0]
+        second_score = scores_sorted[1] if len(scores_sorted) > 1 else max_score
+        gap = max_score - second_score
+
         for p in scored:
             if p["score"] == max_score:
                 winner_name = p["name"]
                 break
+
+        # Gap penalties (applied on top of the base winner -1)
+        if winner_name:
+            if gap_penalty2 > 0 and gap >= gap_penalty2:
+                winner_extra = -2
+            elif gap_penalty1 > 0 and gap >= gap_penalty1:
+                winner_extra = -1
 
     result = []
     for p in players:
@@ -59,28 +99,44 @@ def calculate_new_handicaps(players: list[dict], team_mode: bool = False) -> lis
             result.append({**p, "new_handicap": None, "adjustment": None, "winner": False})
             continue
 
-        adj = get_adjustment(score)
+        adj = get_adjustment(score, adj_table)
+
         if is_winner:
-            adj -= 1
+            adj -= 1          # base winner penalty
+            adj += winner_extra  # gap penalty (negative, so this increases the cut)
 
         new_hc = max(0, hc + adj)
 
         result.append({
             **p,
-            "adjustment": adj,
+            "adjustment":   adj,
             "new_handicap": new_hc,
-            "winner": is_winner,
+            "winner":       is_winner,
         })
 
     return result
 
 
-def calculate_team_scores(players: list[dict]) -> list[dict]:
+def calculate_team_scores(
+    players: list[dict],
+    settings: dict | None = None,
+) -> list[dict]:
     """
-    Calculate team rankings based on top-2 scores per team.
-    Returns list of {team, total, players, rank} sorted by total descending.
+    Calculate team rankings using the scoring method from settings.
+
+    Methods:
+        best1   — best 1 score per team
+        best2   — best 2 scores per team (default)
+        best3   — best 3 scores per team
+        all     — sum of all scores
+        worst2  — best of the worst 2 scores (useful for booby prize logic)
     """
-    teams = {}
+    if settings is None:
+        settings = DEFAULT_SETTINGS
+
+    method = settings.get("team_scoring_method", "best2")
+
+    teams: dict[int, list[int]] = {}
     for p in players:
         team = p.get("team")
         if team is None:
@@ -92,13 +148,28 @@ def calculate_team_scores(players: list[dict]) -> list[dict]:
 
     team_results = []
     for team_num, scores in teams.items():
-        scores_sorted = sorted(scores, reverse=True)
-        top2 = scores_sorted[:2]
-        total = sum(top2)
+        scores_desc = sorted(scores, reverse=True)
+
+        if method == "best1":
+            counted = scores_desc[:1]
+        elif method == "best2":
+            counted = scores_desc[:2]
+        elif method == "best3":
+            counted = scores_desc[:3]
+        elif method == "all":
+            counted = scores_desc
+        elif method == "worst2":
+            # Best of the two lowest scores
+            scores_asc = sorted(scores)
+            counted = sorted(scores_asc[:2], reverse=True)[:1]
+        else:
+            counted = scores_desc[:2]  # fallback to best2
+
+        total = sum(counted)
         team_results.append({
-            "team": team_num,
-            "total": total,
-            "scores_counted": len(top2),
+            "team":           team_num,
+            "total":          total,
+            "scores_counted": len(counted),
         })
 
     team_results.sort(key=lambda x: x["total"], reverse=True)
