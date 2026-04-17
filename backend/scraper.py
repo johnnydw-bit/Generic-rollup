@@ -55,4 +55,4 @@ async def scrape_players(
                 tee_times_raw.append(text)
 
         unique_tee_times = sorted(set(tee_times_raw))
-        tee_start = unique_tee_times[0] if unique_tee_times else
+        tee_start = unique_tee_times[0] if unique_tee_times else ""
