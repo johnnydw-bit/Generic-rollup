@@ -1,5 +1,5 @@
-<!-- Bramley Golf Club - Rollup Manager - frontend/templates/index.html -->
-<!-- Updated: 2026-04-04 — settings screen added -->
+<!-- Bramley Rollup Manager - frontend/templates/index.html -->
+<!-- Updated: 2026-04-17 — WHS mode, player manager screen6, sync WHS indices -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,6 +28,8 @@
     .screen { display: none; flex-direction: column; flex: 1; }
     .screen.active { display: flex; }
 
+    /* Screen 1 */
+    .s1-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
     .field-group { display: flex; flex-direction: column; gap: 4px; }
     .field-label { font-size: 10px; color: #2D2B5B; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
     .field-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; -webkit-appearance: none; }
@@ -47,18 +49,19 @@
     .error-box { background: #FCEBEB; border: 1px solid #A32D2D30; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #A32D2D; line-height: 1.5; }
     .error-retry { font-size: 11px; font-weight: 600; text-decoration: underline; margin-top: 4px; display: block; }
 
+    /* Toggle */
     .toggle-row { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1.5px solid #2D2B5B; }
     .toggle-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; font-family: inherit; background: #fff; color: #2D2B5B; transition: background 0.15s; }
     .toggle-btn.active { background: #2D2B5B; color: #FFD700; }
 
-    .s1-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-
+    /* Screen 2 */
     .autosave-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; background: #fff; border-bottom: 1px solid #ccc; }
     .autosave-right { display: flex; align-items: center; gap: 4px; }
     .autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: #3B6D11; }
     .autosave-label { font-size: 10px; color: #3B6D11; }
     .unassigned-warning { font-size: 10px; color: #A32D2D; font-weight: 600; }
 
+    /* Team config */
     .team-size-btn { flex: 1; padding: 8px 4px; font-size: 11px; font-weight: 600; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; cursor: pointer; font-family: inherit; }
     .team-size-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
     .team-structure-info { font-size: 11px; color: #2D2B5B; font-weight: 600; padding: 4px 0; min-height: 18px; }
@@ -67,11 +70,13 @@
     .structure-option-btn { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: left; }
     .structure-option-btn.selected { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
 
+    /* Team scoreboard */
     .team-scoreboard { background: #fff; border-bottom: 1px solid #ccc; padding: 6px 8px; }
     .team-scoreboard-title { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
     .team-scores-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .team-score-pill { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
 
+    /* Grid */
     .grid-wrap { flex: 1; overflow-y: auto; background: #fff; }
     table.xl { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; table-layout: fixed; }
     table.xl thead th:nth-child(1) { width: 34%; }
@@ -114,6 +119,7 @@
     .team-pill-5 { background: #E1BEE7; color: #4a1a5a; }
     .team-pill-6 { background: #B3E5FC; color: #0d3a5a; }
 
+    /* Screen 3 - Results */
     .results-nav { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f8f8f8; border-bottom: 1px solid #ddd; }
     .nav-arrow { background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; cursor: pointer; font-family: inherit; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
     .nav-arrow:disabled { background: #ccc; color: #888; cursor: default; }
@@ -138,6 +144,7 @@
     .hc-change.up { color: #A32D2D; }
     .results-footer { padding: 10px; background: #f5f5f0; }
 
+    /* Screen 4 - Player History */
     .ph-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
     .player-select-wrap { position: relative; }
     .player-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
@@ -163,12 +170,76 @@
     table.ph tbody tr:last-child td { border-bottom: none; }
     .no-data { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
 
+    /* Settings screen5 */
+    .settings-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    .settings-section { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden; }
+    .settings-section-title { font-size: 10px; font-weight: 700; color: #fff; background: #2D2B5B; padding: 7px 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .settings-row { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 4px; }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row-inline { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .settings-row-inline:last-child { border-bottom: none; }
+    .settings-label { font-size: 11px; font-weight: 600; color: #2D2B5B; }
+    .settings-sublabel { font-size: 10px; color: #888; margin-top: 2px; }
+    .settings-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2D2B5B30; font-size: 14px; background: #f9f9f9; color: #000; -webkit-appearance: none; font-family: inherit; }
+    .settings-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
+    .settings-input-sm { width: 80px; padding: 7px 10px; border-radius: 8px; border: 1px solid #2D2B5B30; font-size: 14px; background: #f9f9f9; color: #000; text-align: center; font-family: inherit; }
+    .settings-input-sm:focus { outline: none; border-color: #2D2B5B; background: #fff; }
+    .day-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .day-chip { padding: 5px 10px; border-radius: 20px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .day-chip.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
+    .adj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .adj-table th { font-size: 10px; font-weight: 600; color: #888; padding: 4px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+    .adj-table td { padding: 5px 6px; border-bottom: 1px solid #f5f5f5; text-align: center; }
+    .adj-table td:last-child { border-bottom: none; }
+    .adj-input { width: 50px; padding: 4px 6px; border-radius: 6px; border: 1px solid #2D2B5B30; font-size: 13px; text-align: center; font-family: inherit; background: #f9f9f9; }
+    .adj-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
+    .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 24px; cursor: pointer; transition: 0.2s; }
+    .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+    input:checked + .toggle-slider { background: #2D2B5B; }
+    input:checked + .toggle-slider:before { transform: translateX(20px); }
+    .prize-pct-row { display: flex; gap: 8px; align-items: center; }
+    .prize-pct-label { font-size: 12px; color: #2D2B5B; font-weight: 600; min-width: 40px; }
+    .place-radio-row { display: flex; gap: 6px; }
+    .place-radio-btn { flex: 1; padding: 7px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: center; }
+    .place-radio-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
+    .settings-save-bar { padding: 12px 14px; background: #f5f5f0; border-top: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 8px; }
+    .settings-save-btn { width: 100%; padding: 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .scoring-mode-row { display: flex; gap: 8px; }
+    .scoring-mode-btn { flex: 1; padding: 9px 6px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: center; }
+    .scoring-mode-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
+
+    /* Screen 6 - Player Manager */
+    .s6-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .s6-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8f8f8; border-bottom: 1px solid #e0e0e0; }
+    .s6-rollup-select { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; font-family: inherit; }
+    .s6-add-btn { padding: 9px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .s6-sync-btn { padding: 9px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .s6-status { padding: 6px 12px; font-size: 11px; text-align: center; }
+    .s6-table-wrap { flex: 1; overflow-y: auto; background: #fff; }
+    table.s6t { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
+    table.s6t thead tr { background: #2D2B5B; }
+    table.s6t thead th { font-size: 10px; font-weight: 600; color: #FFD700; padding: 6px 4px; text-align: center; }
+    table.s6t thead th.left { text-align: left; padding-left: 10px; }
+    table.s6t tbody td { font-size: 11px; padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; text-align: center; }
+    table.s6t tbody td.left { text-align: left; padding-left: 10px; }
+    table.s6t tbody tr:last-child td { border-bottom: none; }
+    .s6-hc-input { width: 44px; padding: 4px 6px; border-radius: 6px; border: 1px solid #2D2B5B30; font-size: 12px; text-align: center; font-family: inherit; background: #f9f9f9; }
+    .s6-hc-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
+    .s6-save-btn { padding: 4px 8px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .s6-save-whs-btn { padding: 4px 8px; background: #3B6D11; color: #fff; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .s6-del-btn { padding: 4px 7px; background: #A32D2D; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .prohibited-badge { font-size: 9px; display: inline-block; }
+
+    /* Nav bar */
     .nav-bar { display: flex; background: #2D2B5B; border-top: 1px solid #1a1840; }
     .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; color: #ffffff80; gap: 2px; }
     .nav-item.active { color: #FFD700; }
     .nav-item .ni { font-size: 20px; }
     .nav-item .nl { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; }
 
+    /* Dialogs */
     .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
     .overlay.open { display: flex; }
     .dialog { background: #fff; border-radius: 16px; padding: 20px; width: 88%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
@@ -185,107 +256,43 @@
     .name-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; }
     .name-input:focus { outline: none; border-color: #2D2B5B; }
 
+    /* Screen 0 - Login */
     .s0-body { padding: 24px 20px; display: flex; flex-direction: column; gap: 18px; flex: 1; justify-content: center; }
     .login-logo { display: flex; justify-content: center; margin-bottom: 8px; }
     .login-logo img { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #2D2B5B; object-fit: contain; background: #fff; padding: 4px; }
     .login-title { text-align: center; font-size: 20px; font-weight: 700; color: #2D2B5B; }
     .login-subtitle { text-align: center; font-size: 12px; color: #888; margin-top: -10px; }
     .login-section { font-size: 10px; color: #2D2B5B; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+    .login-divider { border: none; border-top: 1px solid #e0e0e0; margin: 4px 0; }
+    .rollup-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #2D2B5B40; background: #fff; cursor: pointer; margin-bottom: 6px; }
+    .rollup-option.selected { border-color: #2D2B5B; background: #f0f0f8; }
+    .rollup-option-name { font-size: 14px; font-weight: 600; color: #2D2B5B; }
+    .rollup-option-term { font-size: 11px; color: #888; }
+    .rollup-radio { width: 18px; height: 18px; accent-color: #2D2B5B; flex-shrink: 0; }
     .add-rollup-btn { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px dashed #2D2B5B60; background: transparent; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .settings-btn { background: none; border: none; cursor: pointer; color: #FFD700; font-size: 20px; flex-shrink: 0; }
-    .rollup-switcher-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:300; align-items:flex-end; justify-content:center; }
-    .rollup-switcher-overlay.open { display:flex; }
-    .rollup-switcher-sheet { background:#fff; border-radius:16px 16px 0 0; width:100%; max-width:480px; padding:20px; display:flex; flex-direction:column; gap:10px; }
-    .rollup-switcher-title { font-size:13px; font-weight:700; color:#2D2B5B; text-align:center; margin-bottom:4px; }
-    .rollup-option-btn { width:100%; padding:12px 16px; border-radius:10px; border:1.5px solid #2D2B5B40; background:#fff; color:#2D2B5B; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; text-align:left; display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-    .rollup-option-btn.current { background:#2D2B5B; color:#FFD700; border-color:#2D2B5B; }
-    .rollup-switch-cancel { width:100%; padding:12px; border-radius:10px; border:none; background:#f0f0f0; color:#555; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:4px; }
-    .tappable-rollup { cursor:pointer; }
-    .tappable-rollup:active { opacity:0.7; }
-
-    /* Screen 6 - Player Manager */
-    .s6-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
-    .s6-toolbar { display: flex; gap: 8px; align-items: center; }
-    .s6-rollup-select { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; font-family: inherit; }
-    .s6-rollup-select:focus { outline: none; border-color: #2D2B5B; }
-    .s6-add-btn { padding: 9px 16px; background: #3B6D11; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .player-table-wrap { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden; }
-    table.pt { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    table.pt thead tr { background: #2D2B5B; }
-    table.pt thead th { font-size: 11px; font-weight: 600; color: #FFD700; padding: 8px 10px; text-align: left; }
-    table.pt thead th.c { text-align: center; }
-    table.pt tbody td { font-size: 13px; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
-    table.pt tbody td.c { text-align: center; }
-    table.pt tbody tr:last-child td { border-bottom: none; }
-    table.pt tbody tr:hover td { background: #f8f8ff; }
-    .pt-hc-input { width: 52px; padding: 4px 6px; border-radius: 6px; border: 1.5px solid #2D2B5B40; font-size: 13px; text-align: center; font-family: inherit; }
-    .pt-hc-input:focus { outline: none; border-color: #2D2B5B; }
-    .pt-save-btn { padding: 4px 10px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .pt-delete-btn { padding: 4px 8px; background: #FCEBEB; color: #A32D2D; border: 1px solid #A32D2D30; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .s6-empty { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
-    .s6-status { font-size: 11px; text-align: center; padding: 6px; border-radius: 8px; min-height: 24px; }
-
-    /* Screen 5 - Settings */
-    .settings-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 0; }
-    .settings-section { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 14px; overflow: hidden; }
-    .settings-section-header { background: #2D2B5B; color: #FFD700; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 14px; }
-    .settings-section-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; width: 100%; }
-    .settings-input { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; background: #fff; color: #000; -webkit-appearance: none; font-family: inherit; }
-    .settings-input:focus { outline: none; border-color: #2D2B5B; }
-    .settings-input-sm { width: 70px; padding: 7px 8px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #000; text-align: center; font-family: inherit; -webkit-appearance: none; }
-    .settings-input-sm:focus { outline: none; border-color: #2D2B5B; }
-    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
-    .settings-row-label { font-size: 13px; color: #333; flex: 1; }
-    .settings-row-sub { font-size: 11px; color: #888; margin-top: 2px; }
-    .day-checkboxes { display: flex; gap: 6px; flex-wrap: wrap; }
-    .day-cb { display: none; }
-    .day-label { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 12px; font-weight: 600; color: #2D2B5B; cursor: pointer; user-select: none; }
-    .day-cb:checked + .day-label { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .radio-opt { display: none; }
-    .radio-label { padding: 7px 14px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 12px; font-weight: 600; color: #2D2B5B; cursor: pointer; user-select: none; white-space: nowrap; }
-    .radio-opt:checked + .radio-label { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .adj-table { width: 100%; border-collapse: collapse; }
-    .adj-table th { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 6px; text-align: center; border-bottom: 1px solid #eee; }
-    .adj-table th.left { text-align: left; }
-    .adj-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; font-size: 12px; text-align: center; vertical-align: middle; }
-    .adj-table td.left { text-align: left; color: #555; }
-    .adj-table tr:last-child td { border-bottom: none; }
-    .prize-grid { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-    .prize-grid-label { font-size: 12px; color: #555; }
-    .prize-pct-input { width: 60px; padding: 7px 8px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 14px; text-align: center; font-family: inherit; -webkit-appearance: none; }
-    .prize-pct-input:focus { outline: none; border-color: #2D2B5B; }
-    .prize-pct-symbol { font-size: 13px; color: #888; }
-    .prize-total-row { display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: 12px; color: #888; padding-top: 6px; border-top: 1px solid #eee; margin-top: 4px; }
-    .prize-total-val { font-weight: 700; font-size: 14px; }
-    .prize-total-val.ok { color: #3B6D11; }
-    .prize-total-val.err { color: #A32D2D; }
-    .toggle-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 24px; transition: 0.2s; }
-    .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
-    input:checked + .toggle-slider { background: #2D2B5B; }
-    input:checked + .toggle-slider:before { transform: translateX(20px); }
-    .settings-save-bar { padding: 12px 14px; background: #f5f5f0; border-top: 1px solid #ddd; display: flex; gap: 10px; align-items: center; }
-    .settings-status { font-size: 11px; padding: 6px 10px; border-radius: 8px; flex: 1; text-align: center; }
   </style>
 </head>
 <body>
 
-<!-- SCREEN 0 - Rollup Select -->
-<div id="screen0" class="screen">
+<!-- SCREEN 0 - Login -->
+<div id="screen0" class="screen active">
   <div class="header">
-    <div class="header-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/></div>
+    <div class="header-logo">
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
+    </div>
     <div class="header-title">
       <div class="club">Bramley Golf Club</div>
       <div class="society">Rollup Manager</div>
     </div>
   </div>
   <div class="s0-body">
-    <div class="login-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/></div>
+    <div class="login-logo">
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/>
+    </div>
     <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Sign in to manage your rollup</div>
+    <div class="login-subtitle">Sign in with your Intelligent Golf credentials</div>
+
     <div>
       <div class="login-section">Intelligent Golf Login</div>
       <div class="field-group" style="margin-bottom:10px;">
@@ -297,6 +304,9 @@
         <input class="field-input" id="igPin" type="password" placeholder="Your IG PIN" autocomplete="current-password" inputmode="numeric"/>
       </div>
     </div>
+
+    <hr class="login-divider"/>
+
     <div>
       <div class="login-section">Select Rollup</div>
       <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
@@ -304,53 +314,69 @@
       </select>
       <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
     </div>
+
     <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
       <span class="bl">Continue</span>
     </button>
+
     <div id="loginError" style="display:none;font-size:12px;color:#A32D2D;text-align:center;"></div>
   </div>
 </div>
 
 
-<!-- SCREEN 1 - Home -->
+<!-- SCREEN 1 -->
 <div id="screen1" class="screen">
   <div class="header">
-    <div class="header-logo"><img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/></div>
+    <div class="header-logo">
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
+    </div>
     <div class="header-title">
-      <div class="club tappable-rollup" id="s1RollupName" onclick="showRollupSwitcher()">Bramley Golf Club</div>
+      <div class="club" id="s1RollupName">Bramley Golf Club</div>
       <div class="society">Rollup Manager</div>
     </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
-    <button class="settings-btn" onclick="signOut()" title="Sign out" style="font-size:16px;">↩</button>
+    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
   <div class="s1-body">
     <div class="field-group">
-      <div class="field-label">Round date <span style="font-size:9px;font-weight:400;color:#888;text-transform:none;">(tap to change)</span></div>
-      <input class="field-input" id="roundDate" type="date" style="cursor:pointer;"/>
+      <div class="field-label">Round date</div>
+      <input class="field-input" id="roundDate" type="date"/>
     </div>
     <div id="s1Error" style="display:none" class="error-box">
       <span id="s1ErrorMsg"></span>
-      <span class="error-retry">Tap Load Players to retry</span>
+      <a class="error-retry" onclick="loadPlayers()">Retry</a>
+    </div>
+    <div id="s1Status" class="status-bar status-neutral" style="display:none;"></div>
+    <div class="btn-pair">
+      <button class="big-btn btn-navy" onclick="loadPlayers()">
+        <span class="bi">🏌️</span>
+        <span class="bl">Load Players</span>
+        <span class="bs">From Intelligent Golf</span>
+      </button>
+      <button class="big-btn btn-outline" onclick="showResultsScreen()">
+        <span class="bi">📋</span>
+        <span class="bl">View Results</span>
+        <span class="bs">Browse past rounds</span>
+      </button>
     </div>
     <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="showResultsScreen()">
-        <span class="bi">📋</span><span class="bl">Results</span><span class="bs">Browse round history</span>
+      <button class="big-btn btn-outline" onclick="showPlayerHistory()">
+        <span class="bi">📈</span>
+        <span class="bl">Player History</span>
+        <span class="bs">Scores &amp; handicaps</span>
       </button>
-      <button class="big-btn btn-navy" onclick="loadPlayers()">
-        <span class="bi">⛳</span><span class="bl">Load players</span><span class="bs">Sets up new round</span>
+      <button class="big-btn btn-gold" onclick="showPlayerManager()">
+        <span class="bi">👥</span>
+        <span class="bl">Players</span>
+        <span class="bs">Manage player list</span>
       </button>
     </div>
-    <button class="big-btn btn-gold" onclick="showPlayerHistory()" style="width:100%">
-      <span class="bi">📈</span><span class="bl">Player history</span><span class="bs">Scores &amp; handicap trends</span>
-    </button>
-    <div id="s1Status" class="status-bar status-neutral">Loading…</div>
+    <div id="lastRoundInfo" style="font-size:11px;color:#888;text-align:center;"></div>
   </div>
   <div class="nav-bar">
     <button class="nav-item active" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
     <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
     <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
     <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
   </div>
 </div>
 
@@ -358,64 +384,59 @@
 <!-- SCREEN 2 - Score Entry -->
 <div id="screen2" class="screen">
   <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s2DateLabel">Rollup</div>
-      <div class="society" id="s2RollupLabel">Score entry</div>
+    <button class="header-back" onclick="goBack()">↩</button>
+    <div class="header-title">
+      <div class="club" id="s2RollupName">Score Entry</div>
+      <div class="society" id="s2DateLabel"></div>
     </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
+    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
   <div class="autosave-bar">
-    <span class="unassigned-warning" id="unassignedWarning" style="display:none"></span>
+    <div id="prohibitedWarning" style="font-size:10px;color:#A32D2D;font-weight:700;display:none;"></div>
+    <div id="modeToggleWrap">
+      <div class="toggle-row">
+        <button class="toggle-btn active" id="indBtn" onclick="setGameMode('individual')">Individual</button>
+        <button class="toggle-btn" id="teamBtn" onclick="setGameMode('team')">Team</button>
+      </div>
+    </div>
     <div class="autosave-right">
       <div class="autosave-dot" id="saveDot"></div>
       <span class="autosave-label" id="saveLabel">Ready</span>
     </div>
   </div>
-  <div style="padding:8px 10px; background:#f8f8f8; border-bottom:1px solid #ddd;">
-    <div class="field-label" style="margin-bottom:5px;">Game type</div>
-    <div class="toggle-row">
-      <button class="toggle-btn active" id="modeIndividual" onclick="setGameMode('individual')">Individual</button>
-      <button class="toggle-btn" id="modeTeam" onclick="setGameMode('team')">Team</button>
-    </div>
-  </div>
-  <div id="teamConfig" style="display:none; padding:8px 10px; background:#f0f0f8; border-bottom:1px solid #ddd;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-      <div class="field-label">Team size preference</div>
-      <div id="teeTimesInfo" style="font-size:10px;color:#2D2B5B;font-weight:600;background:#E8F0FE;padding:2px 8px;border-radius:10px;display:none;"></div>
-    </div>
-    <div style="display:flex; gap:6px; margin-bottom:6px;">
-      <button class="team-size-btn active" id="size2" onclick="setTeamSize(2)">Pairs (2)</button>
-      <button class="team-size-btn" id="size3" onclick="setTeamSize(3)">Triples (3)</button>
-      <button class="team-size-btn" id="size4" onclick="setTeamSize(4)">Fours (4)</button>
-    </div>
-    <div id="structureOptions" style="display:none; margin-bottom:6px;">
-      <div class="field-label" style="margin-bottom:4px;">Select team structure</div>
-      <div class="structure-options" id="structureOptionsList"></div>
+  <div id="teamConfigBar" style="display:none;padding:8px 10px;background:#f8f8f8;border-bottom:1px solid #ddd;">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;color:#2D2B5B;font-weight:700;">Team size:</span>
+      <button class="team-size-btn active" id="ts2" onclick="setTeamSize(2)">Pairs</button>
+      <button class="team-size-btn" id="ts3" onclick="setTeamSize(3)">Threes</button>
+      <button class="team-size-btn" id="ts4" onclick="setTeamSize(4)">Fours</button>
+      <button style="padding:6px 10px;background:#FFD700;color:#2D2B5B;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" onclick="randomAssignTeams()">🎲 Random assign</button>
     </div>
     <div class="team-structure-info" id="teamStructureInfo"></div>
-    <div style="margin-top:8px; display:flex; gap:8px;">
-      <button onclick="randomAssign()" style="flex:1;padding:9px;background:#2D2B5B;color:#FFD700;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🎲 Random assign</button>
-      <button onclick="addWalkupPlayer()" style="flex:1;padding:9px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add player</button>
-    </div>
+    <div class="structure-options" id="structureOptions"></div>
   </div>
-  <div id="teamScoreboard" style="display:none;" class="team-scoreboard">
-    <div class="team-scoreboard-title">Team scores (top 2)</div>
-    <div class="team-scores-row" id="teamScoresPills"></div>
+  <div id="teamScoreboardWrap" style="display:none;" class="team-scoreboard">
+    <div class="team-scoreboard-title">Team Scores</div>
+    <div class="team-scores-row" id="teamScoresRow"></div>
   </div>
+  <div class="unassigned-warning" id="unassignedWarning" style="display:none;padding:4px 10px;"></div>
   <div class="grid-wrap">
     <table class="xl">
-      <thead><tr>
-        <th class="left">Player</th><th>HC</th><th>Score</th><th>New HC</th><th id="lastColHeader">✕</th>
-      </tr></thead>
-      <tbody id="scoreGrid"></tbody>
+      <thead>
+        <tr>
+          <th class="left">Player</th>
+          <th>HC</th>
+          <th>Score</th>
+          <th>New HC</th>
+          <th id="col5Head">Remove</th>
+        </tr>
+      </thead>
+      <tbody id="scoreBody"></tbody>
     </table>
   </div>
-  <div style="padding:6px 10px; background:#f8f8f8; border-top:1px solid #ddd;" id="addPlayerBar">
-    <button onclick="addWalkupPlayer()" style="width:100%;padding:8px;background:#3B6D11;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">➕ Add walk-up player</button>
-  </div>
-  <div style="padding:10px;">
-    <button id="saveRoundBtn" onclick="saveRound()" style="width:100%;padding:14px;background:#2D2B5B;color:#FFD700;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Save Round</button>
+  <div style="padding:8px 10px;background:#f8f8f8;border-top:1px solid #ddd;display:flex;gap:8px;">
+    <button onclick="addWalkupPlayer()" style="flex:1;padding:10px;background:#fff;color:#2D2B5B;border:1.5px solid #2D2B5B;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">＋ Walk-up</button>
+    <button onclick="saveRound()" style="flex:2;padding:10px;background:#2D2B5B;color:#FFD700;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Save Round</button>
   </div>
 </div>
 
@@ -423,37 +444,38 @@
 <!-- SCREEN 3 - Results -->
 <div id="screen3" class="screen">
   <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club tappable-rollup" id="s3RollupName" onclick="showRollupSwitcher()">Rollup</div>
-      <div class="society">Results</div>
+    <button class="header-back" onclick="goBack()">↩</button>
+    <div class="header-title">
+      <div class="club" id="s3RollupName">Results</div>
+      <div class="society">Past rounds</div>
     </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
+    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
   <div class="results-nav">
-    <button class="nav-arrow" id="prevRoundBtn" onclick="stepRound(1)">‹</button>
-    <select class="date-select" id="roundDateSelect" onchange="loadRoundByDate(this.value)">
-      <option value="">Select a round…</option>
-    </select>
-    <button class="nav-arrow" id="nextRoundBtn" onclick="stepRound(-1)">›</button>
+    <button class="nav-arrow" id="prevRoundBtn" onclick="navigateRound(-1)">‹</button>
+    <select class="date-select" id="roundDateSelect" onchange="onRoundDateChange()"></select>
+    <button class="nav-arrow" id="nextRoundBtn" onclick="navigateRound(1)">›</button>
   </div>
   <div class="results-wrap">
-    <div id="resultsLoading" style="display:none;text-align:center;padding:30px;color:#888;font-size:13px;">Loading…</div>
-    <table class="rt" id="resultsTable">
-      <thead><tr>
-        <th style="width:28px"></th><th class="left">Player</th><th>Score</th><th>HC</th><th>Change</th>
-      </tr></thead>
-      <tbody id="resultsGrid"></tbody>
+    <table class="rt">
+      <thead>
+        <tr>
+          <th class="left">Player</th>
+          <th>Score</th>
+          <th>HC After</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
     </table>
   </div>
   <div class="results-footer">
-    <div id="s3Status" class="status-bar status-neutral">Select a round above</div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item active" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
+    <div class="nav-bar" style="border-radius:12px;border:none;">
+      <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
+      <button class="nav-item active" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
+      <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
+      <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
+    </div>
   </div>
 </div>
 
@@ -461,27 +483,35 @@
 <!-- SCREEN 4 - Player History -->
 <div id="screen4" class="screen">
   <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s4PlayerLabel">Player History</div>
-      <div class="society tappable-rollup" id="s4RollupLabel" onclick="showRollupSwitcher()">Score &amp; handicap trends</div>
+    <button class="header-back" onclick="goBack()">↩</button>
+    <div class="header-title">
+      <div class="club" id="s4RollupName">Player History</div>
+      <div class="society">Scores &amp; handicaps</div>
     </div>
-    <button class="settings-btn" onclick="showSettingsScreen()" title="Settings">⚙️</button>
+    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
   <div class="ph-body">
     <div class="field-group">
-      <div class="field-label">Select player</div>
+      <div class="field-label">Player</div>
       <div class="player-select-wrap">
-        <select class="player-select" id="historyPlayerSelect" onchange="onPlayerSelectChange()">
+        <select class="player-select" id="playerSelect" onchange="onPlayerSelectChange()">
           <option value="">Choose a player…</option>
         </select>
       </div>
     </div>
+
     <div class="filter-row">
-      <div class="field-group"><div class="field-label">From</div><input type="date" id="filterFrom"/></div>
-      <div class="field-group"><div class="field-label">To</div><input type="date" id="filterTo"/></div>
+      <div class="field-group">
+        <div class="field-label">From</div>
+        <input type="date" id="filterFrom"/>
+      </div>
+      <div class="field-group">
+        <div class="field-label">To</div>
+        <input type="date" id="filterTo"/>
+      </div>
       <button class="apply-btn" onclick="applyFilter()">Apply</button>
     </div>
+
     <div id="phContent" style="display:none;">
       <div class="ph-stats" id="phStats"></div>
       <div style="height:12px;"></div>
@@ -492,19 +522,26 @@
       <div style="height:12px;"></div>
       <div class="ph-table-wrap">
         <table class="ph">
-          <thead><tr><th class="left">Date</th><th>Score</th><th>HC After</th><th>Change</th></tr></thead>
+          <thead><tr>
+            <th class="left">Date</th>
+            <th>Score</th>
+            <th>HC After</th>
+            <th>Change</th>
+          </tr></thead>
           <tbody id="phTableBody"></tbody>
         </table>
       </div>
     </div>
+
     <div id="phNoData" class="no-data" style="display:none;">No rounds found for this player in the selected range.</div>
     <div id="phEmpty" class="no-data">Select a player to view their history.</div>
   </div>
+
   <div class="nav-bar">
     <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
     <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
     <button class="nav-item active" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showSettingsScreen()"><span class="ni">⚙️</span><span class="nl">Settings</span></button>
+    <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
   </div>
 </div>
 
@@ -512,201 +549,236 @@
 <!-- SCREEN 5 - Settings -->
 <div id="screen5" class="screen">
   <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
-      <div class="club" id="s5RollupName">Settings</div>
-      <div class="society">Rollup configuration</div>
+    <button class="header-back" onclick="goBack()">↩</button>
+    <div class="header-title">
+      <div class="club">Settings</div>
+      <div class="society" id="s5RollupName"></div>
     </div>
     <div class="header-spacer"></div>
   </div>
-
   <div class="settings-body">
 
-    <!-- Active Rollup / Switcher -->
+    <!-- Section 1: Rollup Identity -->
     <div class="settings-section">
-      <div class="settings-section-header">Active Rollup</div>
-      <div class="settings-section-body">
-        <div class="settings-row">
-          <div class="settings-row-label" id="settingsActiveRollup" style="font-size:15px;font-weight:700;color:#2D2B5B;"></div>
-          <button onclick="showRollupSwitcher()" style="padding:8px 16px;background:#2D2B5B;color:#FFD700;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Switch</button>
+      <div class="settings-section-title">Rollup Identity</div>
+      <div class="settings-row">
+        <div class="settings-label">Rollup name</div>
+        <input class="settings-input" id="sDisplayName" type="text" placeholder="e.g. MOTH's Rollup"/>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">IG search term</div>
+        <div class="settings-sublabel">Matches the contact name in Intelligent Golf bookings</div>
+        <input class="settings-input" id="sIgTerm" type="text" placeholder="e.g. MOTH"/>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">Runs on</div>
+        <div class="day-chips" id="runDaysChips">
+          <button class="day-chip" data-day="Mon" onclick="toggleDay(this)">Mon</button>
+          <button class="day-chip" data-day="Tue" onclick="toggleDay(this)">Tue</button>
+          <button class="day-chip" data-day="Wed" onclick="toggleDay(this)">Wed</button>
+          <button class="day-chip" data-day="Thu" onclick="toggleDay(this)">Thu</button>
+          <button class="day-chip" data-day="Fri" onclick="toggleDay(this)">Fri</button>
+          <button class="day-chip" data-day="Sat" onclick="toggleDay(this)">Sat</button>
+          <button class="day-chip" data-day="Sun" onclick="toggleDay(this)">Sun</button>
         </div>
       </div>
     </div>
 
-    <!-- Rollup Identity -->
+    <!-- Section 2: IG Credentials -->
     <div class="settings-section">
-      <div class="settings-section-header">Rollup Identity</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Display name</div>
-          <input class="settings-input" id="setDisplayName" type="text" placeholder="e.g. MOTH's Rollup"/>
+      <div class="settings-section-title">Intelligent Golf Credentials</div>
+      <div class="settings-row">
+        <div class="settings-label">Member ID</div>
+        <input class="settings-input" id="sIgUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">PIN</div>
+        <div class="settings-sublabel">Stored in this browser only — never sent to our servers</div>
+        <input class="settings-input" id="sIgPin" type="password" placeholder="Leave blank to keep current PIN" autocomplete="current-password" inputmode="numeric"/>
+      </div>
+    </div>
+
+    <!-- Section 3: Tee Times -->
+    <div class="settings-section">
+      <div class="settings-section-title">Tee Times</div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Tee interval</div>
+          <div class="settings-sublabel">Minutes between tee slots</div>
         </div>
-        <div class="field-group">
-          <div class="field-label">IG search term</div>
-          <input class="settings-input" id="setIgTerm" type="text" placeholder="e.g. MOTH"/>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Runs on</div>
-          <div class="day-checkboxes">
-            <input class="day-cb" type="checkbox" id="dayMon" value="Mon"/><label class="day-label" for="dayMon">Mon</label>
-            <input class="day-cb" type="checkbox" id="dayTue" value="Tue"/><label class="day-label" for="dayTue">Tue</label>
-            <input class="day-cb" type="checkbox" id="dayWed" value="Wed"/><label class="day-label" for="dayWed">Wed</label>
-            <input class="day-cb" type="checkbox" id="dayThu" value="Thu"/><label class="day-label" for="dayThu">Thu</label>
-            <input class="day-cb" type="checkbox" id="dayFri" value="Fri"/><label class="day-label" for="dayFri">Fri</label>
-            <input class="day-cb" type="checkbox" id="daySat" value="Sat"/><label class="day-label" for="daySat">Sat</label>
-            <input class="day-cb" type="checkbox" id="daySun" value="Sun"/><label class="day-label" for="daySun">Sun</label>
-          </div>
+        <input class="settings-input-sm" id="sTeeInterval" type="number" min="4" max="20" value="8"/>
+      </div>
+    </div>
+
+    <!-- Section 4: Handicap Mode -->
+    <div class="settings-section">
+      <div class="settings-section-title">Handicap Mode</div>
+      <div class="settings-row">
+        <div class="settings-label">Scoring mode</div>
+        <div class="scoring-mode-row">
+          <button class="scoring-mode-btn active" id="modeStableford" onclick="onScoringModeChange('stableford')">Stableford</button>
+          <button class="scoring-mode-btn" id="modeWhs" onclick="onScoringModeChange('whs')">WHS Index</button>
         </div>
       </div>
     </div>
 
-    <!-- Tee Times -->
-    <div class="settings-section">
-      <div class="settings-section-header">Tee Times</div>
-      <div class="settings-section-body">
-        <div class="settings-row">
-          <div>
-            <div class="settings-row-label">Interval between tee times</div>
-            <div class="settings-row-sub">Used to calculate available tee slots</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setTeeInterval" type="number" min="1" max="30" value="8"/>
-            <span style="font-size:12px;color:#888;">min</span>
-          </div>
+    <!-- Section 4b: WHS Position Adjustments (shown when WHS mode) -->
+    <div class="settings-section" id="whsSection" style="display:none;">
+      <div class="settings-section-title">WHS Position Adjustments</div>
+      <div class="settings-row">
+        <div class="settings-label">Index reduction by finishing position</div>
+        <div class="settings-sublabel">% applied to the winner's WHS index for the next round (0 = no change)</div>
+      </div>
+      <div class="settings-row-inline">
+        <div class="settings-label">1st place</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input class="settings-input-sm" id="sWhsPct1" type="number" min="0" max="50" step="0.5" value="0"/>
+          <span style="font-size:12px;color:#888;">%</span>
         </div>
+      </div>
+      <div class="settings-row-inline">
+        <div class="settings-label">2nd place</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input class="settings-input-sm" id="sWhsPct2" type="number" min="0" max="50" step="0.5" value="0"/>
+          <span style="font-size:12px;color:#888;">%</span>
+        </div>
+      </div>
+      <div class="settings-row-inline">
+        <div class="settings-label">3rd place</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input class="settings-input-sm" id="sWhsPct3" type="number" min="0" max="50" step="0.5" value="0"/>
+          <span style="font-size:12px;color:#888;">%</span>
+        </div>
+      </div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Winner prohibition</div>
+          <div class="settings-sublabel">Block last round's winner from winning again</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sWhsProhibition"/>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </div>
 
-    <!-- Handicap Adjustment Table -->
-    <div class="settings-section">
-      <div class="settings-section-header">Handicap Adjustment Table</div>
-      <div class="settings-section-body">
-        <table class="adj-table">
-          <thead>
-            <tr>
-              <th class="left">Range</th>
-              <th>Upper limit</th>
-              <th>Adjustment</th>
-            </tr>
-          </thead>
+    <!-- Section 4c: Course & Tee (shown when WHS mode) -->
+    <div class="settings-section" id="courseTeeSection" style="display:none;">
+      <div class="settings-section-title">Course &amp; Tee</div>
+      <div class="settings-row">
+        <div class="settings-label">Course</div>
+        <select class="settings-input" id="sCourseSelect" onchange="loadTeeOptions()">
+          <option value="">Select course…</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">Tee</div>
+        <select class="settings-input" id="sTeeSelect">
+          <option value="">Select tee…</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Section 5: Handicap Adjustment Table (Stableford only) -->
+    <div class="settings-section" id="adjTableSection">
+      <div class="settings-section-title">Handicap Adjustment Table</div>
+      <div class="settings-row">
+        <table class="adj-table" id="adjTable">
+          <thead><tr>
+            <th>Score ≤</th>
+            <th>Adjustment</th>
+          </tr></thead>
           <tbody id="adjTableBody"></tbody>
         </table>
-        <div style="font-size:10px;color:#888;margin-top:4px;">Upper limit is the max score for that band. Last row has no upper limit.</div>
       </div>
     </div>
 
-    <!-- Winner Penalty -->
+    <!-- Section 6: Winner Penalty (Stableford only) -->
+    <div class="settings-section" id="winnerPenaltySection">
+      <div class="settings-section-title">Winner Penalty</div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Apply winner penalty</div>
+          <div class="settings-sublabel">Extra −1 applied to the round winner</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sWinnerBonus" checked/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Gap penalty −1</div>
+          <div class="settings-sublabel">Extra −1 if winner beats 2nd by ≥ N pts (0 = off)</div>
+        </div>
+        <input class="settings-input-sm" id="sGapPenalty1" type="number" min="0" max="20" value="0"/>
+      </div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Gap penalty −2</div>
+          <div class="settings-sublabel">Extra −2 if winner beats 2nd by ≥ N pts (0 = off)</div>
+        </div>
+        <input class="settings-input-sm" id="sGapPenalty2" type="number" min="0" max="20" value="0"/>
+      </div>
+    </div>
+
+    <!-- Section 7: Entry & Prizes -->
     <div class="settings-section">
-      <div class="settings-section-header">Winner Penalty</div>
-      <div class="settings-section-body">
-        <div class="toggle-switch-row">
-          <div>
-            <div class="settings-row-label">Apply -1 to round winner</div>
-            <div class="settings-row-sub">Always applied on top of adjustment table</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="setWinnerBonus" checked/>
-            <span class="toggle-slider"></span>
-          </label>
+      <div class="settings-section-title">Entry &amp; Prizes</div>
+      <div class="settings-row-inline">
+        <div class="settings-label">Entry fee (£)</div>
+        <input class="settings-input-sm" id="sEntryFee" type="number" min="0" step="0.50" value="0"/>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">Prize places</div>
+        <div class="place-radio-row" id="prizePlacesRow">
+          <button class="place-radio-btn" data-places="1" onclick="setPrizePlaces(1)">1</button>
+          <button class="place-radio-btn" data-places="2" onclick="setPrizePlaces(2)">2</button>
+          <button class="place-radio-btn active" data-places="3" onclick="setPrizePlaces(3)">3</button>
+          <button class="place-radio-btn" data-places="4" onclick="setPrizePlaces(4)">4</button>
         </div>
-        <div class="settings-row">
-          <div class="settings-row-label">Extra -1 if winner beats 2nd by ≥</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setGapPenalty1" type="number" min="0" max="20" value="0"/>
-            <span style="font-size:11px;color:#888;">pts (0=off)</span>
-          </div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">Extra -2 if winner beats 2nd by ≥</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input class="settings-input-sm" id="setGapPenalty2" type="number" min="0" max="20" value="0"/>
-            <span style="font-size:11px;color:#888;">pts (0=off)</span>
-          </div>
+      </div>
+      <div class="settings-row" id="prizePercentsRow">
+        <div class="settings-label">Prize split (%)</div>
+        <div id="prizePctInputs" style="display:flex;flex-direction:column;gap:6px;margin-top:4px;"></div>
+        <div id="prizePctError" style="font-size:11px;color:#A32D2D;margin-top:4px;display:none;">Percentages must add up to 100%</div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">Tie handling</div>
+        <div class="place-radio-row">
+          <button class="place-radio-btn active" id="tieTournament" onclick="setTieHandling('tournament')">Share prize</button>
+          <button class="place-radio-btn" id="tieCountback" onclick="setTieHandling('countback')">Countback</button>
         </div>
       </div>
     </div>
 
-    <!-- Entry & Prizes -->
+    <!-- Section 8: Team Play -->
     <div class="settings-section">
-      <div class="settings-section-header">Entry &amp; Prizes</div>
-      <div class="settings-section-body">
-        <div class="settings-row">
-          <div class="settings-row-label">Entry fee</div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:14px;color:#555;">£</span>
-            <input class="settings-input-sm" id="setEntryFee" type="number" min="0" step="0.50" value="0" style="width:80px;"/>
-          </div>
+      <div class="settings-section-title">Team Play</div>
+      <div class="settings-row">
+        <div class="settings-label">Default team size</div>
+        <div class="place-radio-row">
+          <button class="place-radio-btn" id="teamSz2" data-size="2" onclick="setDefaultTeamSize(2)">Pairs</button>
+          <button class="place-radio-btn" id="teamSz3" data-size="3" onclick="setDefaultTeamSize(3)">Threes</button>
+          <button class="place-radio-btn active" id="teamSz4" data-size="4" onclick="setDefaultTeamSize(4)">Fours</button>
         </div>
-        <div class="field-group">
-          <div class="field-label">Prize places</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp1" value="1" onchange="applyPrizeDefaults()"/><label class="radio-label" for="pp1">1st only</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp2" value="2" onchange="applyPrizeDefaults()"/><label class="radio-label" for="pp2">Top 2</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp3" value="3" checked onchange="applyPrizeDefaults()"/><label class="radio-label" for="pp3">Top 3</label>
-            <input class="radio-opt" type="radio" name="prizePlaces" id="pp4" value="4" onchange="applyPrizeDefaults()"/><label class="radio-label" for="pp4">Top 4</label>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Prize split %</div>
-          <div class="prize-grid">
-            <span class="prize-grid-label">🥇 1st</span>
-            <input class="prize-pct-input" id="setPct1" type="number" min="0" max="100" value="60" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">🥈 2nd</span>
-            <input class="prize-pct-input" id="setPct2" type="number" min="0" max="100" value="30" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">🥉 3rd</span>
-            <input class="prize-pct-input" id="setPct3" type="number" min="0" max="100" value="10" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-            <span class="prize-grid-label">4th</span>
-            <input class="prize-pct-input" id="setPct4" type="number" min="0" max="100" value="0" oninput="updatePrizeTotal()"/>
-            <span class="prize-pct-symbol">%</span>
-          </div>
-          <div class="prize-total-row">
-            Total: <span class="prize-total-val ok" id="prizeTotalVal">100%</span>
-            <span style="font-size:10px;color:#888;margin-left:4px;">£ amounts shown on scoring screen</span>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Tie handling</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="tieHandling" id="tieTournament" value="tournament" checked/><label class="radio-label" for="tieTournament">Share prizes</label>
-            <input class="radio-opt" type="radio" name="tieHandling" id="tieCountback" value="countback"/><label class="radio-label" for="tieCountback">Countback (manual)</label>
-          </div>
-        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">Default scoring method</div>
+        <select class="settings-input" id="sTeamMethod">
+          <option value="best1">Best 1 score</option>
+          <option value="best2" selected>Best 2 scores</option>
+          <option value="best3">Best 3 scores</option>
+          <option value="all">All scores</option>
+          <option value="worst2">Best of worst 2</option>
+        </select>
       </div>
     </div>
 
-    <!-- Team Play -->
-    <div class="settings-section">
-      <div class="settings-section-header">Team Play</div>
-      <div class="settings-section-body">
-        <div class="field-group">
-          <div class="field-label">Preferred team size</div>
-          <div class="radio-group">
-            <input class="radio-opt" type="radio" name="prefTeamSize" id="pts4" value="4" checked/><label class="radio-label" for="pts4">Fours preferred</label>
-            <input class="radio-opt" type="radio" name="prefTeamSize" id="pts3" value="3"/><label class="radio-label" for="pts3">Threes preferred</label>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Default scoring method</div>
-          <select class="settings-input" id="setTeamScoring">
-            <option value="best1">Best 1 score</option>
-            <option value="best2" selected>Best 2 scores</option>
-            <option value="best3">Best 3 scores</option>
-            <option value="all">All scores</option>
-            <option value="worst2">Best of worst 2</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div style="height:8px;"></div>
   </div>
-
   <div class="settings-save-bar">
-    <div class="settings-status status-neutral" id="settingsStatus">Load settings to begin</div>
-    <button onclick="saveSettings()" style="padding:10px 20px;background:#2D2B5B;color:#FFD700;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Save</button>
+    <div id="s5Status" class="status-bar status-neutral" style="display:none;"></div>
+    <button class="settings-save-btn" onclick="saveSettings()">Save Settings</button>
   </div>
 </div>
 
@@ -714,51 +786,46 @@
 <!-- SCREEN 6 - Player Manager -->
 <div id="screen6" class="screen">
   <div class="header">
-    <button class="header-back" onclick="goBack()">‹</button>
-    <div class="header-title" style="text-align:center">
+    <button class="header-back" onclick="goBack()">↩</button>
+    <div class="header-title">
       <div class="club">Player Manager</div>
-      <div class="society">Add · Edit · Remove</div>
+      <div class="society" id="s6RollupLabel"></div>
     </div>
     <div class="header-spacer"></div>
   </div>
-
   <div class="s6-body">
     <div class="s6-toolbar">
       <select class="s6-rollup-select" id="s6RollupSelect" onchange="loadPlayerManager()">
         <option value="">Select rollup…</option>
       </select>
       <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
+      <button class="s6-sync-btn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
     </div>
-
-    <div class="s6-status status-neutral" id="s6Status"></div>
-
-    <div class="player-table-wrap" id="s6TableWrap" style="display:none;">
-      <table class="pt">
+    <div class="s6-status status-bar status-neutral" id="s6Status"></div>
+    <div class="s6-table-wrap">
+      <table class="s6t">
         <thead>
           <tr>
-            <th>Player</th>
-            <th class="c">Handicap</th>
-            <th class="c">Rounds</th>
-            <th class="c">Actions</th>
+            <th class="left">Player</th>
+            <th>HC</th>
+            <th>WHS</th>
+            <th>Next Rd</th>
+            <th>Rds</th>
+            <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="s6PlayerTableBody"></tbody>
+        <tbody id="s6TableBody"></tbody>
       </table>
     </div>
-
-    <div class="s6-empty" id="s6Empty" style="display:none;">No players found for this rollup.</div>
+  </div>
+  <div class="nav-bar">
+    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
+    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
+    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
+    <button class="nav-item active" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
   </div>
 </div>
 
-
-<!-- ROLLUP SWITCHER -->
-<div class="rollup-switcher-overlay" id="rollupSwitcherOverlay">
-  <div class="rollup-switcher-sheet">
-    <div class="rollup-switcher-title">Select Rollup</div>
-    <div id="rollupSwitcherList"></div>
-    <button class="rollup-switch-cancel" onclick="closeRollupSwitcher()">Cancel</button>
-  </div>
-</div>
 
 <!-- DIALOGS -->
 <div class="overlay" id="newPlayerOverlay">
@@ -820,40 +887,6 @@
   </div>
 </div>
 
-<div class="overlay" id="addPlayerDialogOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add Player</div>
-    <div class="field-group">
-      <div class="field-label">Player name</div>
-      <input class="name-input" id="addPlayerName" type="text" placeholder="First Last" autocomplete="off"
-        onkeydown="if(event.key==='Enter') document.getElementById('addPlayerHC').focus()"/>
-    </div>
-    <div class="field-group">
-      <div class="field-label">Starting handicap</div>
-      <input class="hc-number" id="addPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"
-        onkeydown="if(event.key==='Enter') confirmAddPlayerDialog()"/>
-    </div>
-    <div id="addPlayerError" style="display:none;font-size:11px;color:#A32D2D;text-align:center;"></div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addPlayerDialogOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmAddPlayerDialog()">Add player</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="deletePlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Remove player?</div>
-    <div class="dialog-name" id="deletePlayerName"></div>
-    <div class="dialog-body">This will remove the player from the rollup. Their round history will be preserved.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('deletePlayerOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmDeletePlayer()">Remove</button>
-    </div>
-  </div>
-</div>
-
-
 <div class="overlay" id="addRollupOverlay">
   <div class="dialog">
     <div class="dialog-title">Add Rollup</div>
@@ -873,21 +906,52 @@
   </div>
 </div>
 
+<!-- Add player dialog (screen6) -->
+<div class="overlay" id="addPlayerOverlay">
+  <div class="dialog">
+    <div class="dialog-title">Add Player</div>
+    <div class="field-group">
+      <div class="field-label">Name</div>
+      <input class="name-input" id="addPlayerName" type="text" placeholder="First Last" autocomplete="off"/>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Starting handicap</div>
+      <input class="hc-number" id="addPlayerHC" type="number" min="0" max="54" placeholder="e.g. 18" inputmode="numeric"/>
+    </div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addPlayerOverlay')">Cancel</button>
+      <button class="dialog-btn btn-confirm" onclick="confirmAddPlayer()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete player confirmation dialog (screen6) -->
+<div class="overlay" id="deletePlayerOverlay">
+  <div class="dialog">
+    <div class="dialog-title">Delete Player?</div>
+    <div class="dialog-name" id="deletePlayerName"></div>
+    <div class="dialog-body">This will permanently remove this player and all their round history. This cannot be undone.</div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('deletePlayerOverlay')">Cancel</button>
+      <button class="dialog-btn btn-danger" onclick="confirmDeletePlayer()">Delete</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 // State
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 let state = {
   currentScreen: 'screen1',
-  prevScreen: 'screen1',
   players: [],
   roundDate: '',
   newPlayerQueue: [],
   currentNewPlayer: null,
   playerToRemove: null,
   gameMode: 'individual',
-  teamSize: 4,
+  teamSize: 2,
   selectedStructure: null,
   teamScores: [],
   walkupFoundHC: null,
@@ -899,114 +963,151 @@ let state = {
   historyData: [],
   historyChart: null,
   rollupSettings: null,
+  prohibitedWinner: null,
 };
 
-const TEAM_NAMES = ['', 'Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5', 'Team 6'];
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+let session = {
+  rollupId: null,
+  rollupName: '',
+  rollupTerm: '',
+  igUsername: '',
+  igPin: '',
+};
 
-// ═══════════════════════════════════════
-// Session
-// ═══════════════════════════════════════
-const LS_ROLLUP_ID   = 'rollup_id';
-const LS_ROLLUP_NAME = 'rollup_name';
-const LS_ROLLUP_TERM = 'rollup_term';
-
-let session = { rollupId: 1, rollupName: 'Rollup', rollupTerm: '' };
-let availableRollups = [];
-
-function loadSession() {
-  session.rollupId   = parseInt(localStorage.getItem(LS_ROLLUP_ID) || '1');
-  session.rollupName = localStorage.getItem(LS_ROLLUP_NAME) || '';
-  session.rollupTerm = localStorage.getItem(LS_ROLLUP_TERM) || '';
+// ═══════════════════════════════════════════
+// Screen management
+// ═══════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  state.currentScreen = id;
 }
 
-function saveSession() {
-  localStorage.setItem(LS_ROLLUP_ID,   session.rollupId);
-  localStorage.setItem(LS_ROLLUP_NAME, session.rollupName);
-  localStorage.setItem(LS_ROLLUP_TERM, session.rollupTerm);
+function goBack() {
+  const s = state.currentScreen;
+  if (s === 'screen2') { showScreen('screen1'); return; }
+  if (s === 'screen3') { showScreen('screen1'); return; }
+  if (s === 'screen4') { showScreen('screen1'); return; }
+  if (s === 'screen5') { showScreen('screen1'); return; }
+  if (s === 'screen6') { showScreen('screen1'); return; }
+  showScreen('screen1');
 }
 
 function hasValidSession() {
-  return !!(session.rollupId && session.rollupName &&
-    localStorage.getItem('ig_username') && localStorage.getItem('ig_pin'));
+  return !!(session.rollupId && session.rollupName);
 }
 
-async function loadRollups() {
+// ═══════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════
+async function init() {
+  session.igUsername = localStorage.getItem('ig_username') || '';
+  session.igPin = localStorage.getItem('ig_pin') || '';
+  session.rollupId = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
+  session.rollupName = localStorage.getItem('rollup_name') || '';
+  session.rollupTerm = localStorage.getItem('rollup_term') || '';
+
+  await loadRollupOptions();
+
+  if (hasValidSession()) {
+    updateHeaderNames();
+    setTodayDate();
+    await loadAuthStatus();
+    showScreen('screen1');
+  } else {
+    showScreen('screen0');
+  }
+}
+
+async function loadRollupOptions() {
   try {
     const resp = await fetch('/api/rollups');
     const data = await resp.json();
-    availableRollups = data.rollups || [];
-  } catch(e) { availableRollups = []; }
-  renderRollupList();
-}
-
-function renderRollupList() {
-  const sel = document.getElementById('rollupSelect');
-  sel.innerHTML = '<option value="">Choose a rollup…</option>';
-  availableRollups.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.id;
-    opt.textContent = r.name;
-    if (r.id === session.rollupId) opt.selected = true;
-    sel.appendChild(opt);
-  });
+    const sel = document.getElementById('rollupSelect');
+    sel.innerHTML = '<option value="">Choose a rollup…</option>';
+    data.rollups.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.name;
+      opt.dataset.term = r.ig_search_term;
+      if (r.id === session.rollupId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
 }
 
 function onRollupSelectChange() {
   const sel = document.getElementById('rollupSelect');
-  const rollup = availableRollups.find(r => r.id === parseInt(sel.value));
-  if (rollup) selectRollup(rollup);
-}
-
-function selectRollup(rollup) {
-  const changed = rollup.id !== session.rollupId;
-  session.rollupId   = rollup.id;
-  session.rollupName = rollup.name;
-  session.rollupTerm = rollup.ig_search_term;
-  renderRollupList();
-  if (changed) {
-    state.players = [];
-    state.allRoundDates = [];
-    state.historyData = [];
-    state.rollupSettings = null;
-    if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-    const sel = document.getElementById('historyPlayerSelect');
-    if (sel) sel.innerHTML = '<option value="">Choose a player…</option>';
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    session.rollupId = parseInt(opt.value);
+    session.rollupName = opt.textContent;
+    session.rollupTerm = opt.dataset.term || '';
   }
 }
 
-function showRollupSwitcher() {
-  const list = document.getElementById('rollupSwitcherList');
-  list.innerHTML = '';
-  availableRollups.forEach(r => {
-    const btn = document.createElement('button');
-    btn.className = 'rollup-option-btn' + (r.id === session.rollupId ? ' current' : '');
-    btn.innerHTML = `<span>${r.name}</span>${r.id === session.rollupId ? '<span style="font-size:11px;">✓ active</span>' : ''}`;
-    btn.onclick = () => switchRollup(r);
-    list.appendChild(btn);
+function updateHeaderNames() {
+  ['s1RollupName','s2RollupName','s3RollupName','s4RollupName'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = session.rollupName || 'Bramley Golf Club';
   });
-  document.getElementById('rollupSwitcherOverlay').classList.add('open');
 }
 
-function closeRollupSwitcher() {
-  document.getElementById('rollupSwitcherOverlay').classList.remove('open');
+function setTodayDate() {
+  const d = new Date();
+  const s = d.toISOString().split('T')[0];
+  document.getElementById('roundDate').value = s;
+  state.roundDate = s;
 }
 
-async function switchRollup(rollup) {
-  closeRollupSwitcher();
-  if (rollup.id === session.rollupId) return;
-  selectRollup(rollup);
-  saveSession();
-  ['s1RollupName','s2RollupLabel','s3RollupName','s4RollupLabel','s5RollupName']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = session.rollupName; });
-  const sar = document.getElementById('settingsActiveRollup');
-  if (sar) sar.textContent = session.rollupName;
-  if (state.currentScreen === 'screen1') initHomeScreen();
-  else if (state.currentScreen === 'screen3') showResultsScreen();
-  else if (state.currentScreen === 'screen4') showPlayerHistory();
-  else if (state.currentScreen === 'screen5') showSettingsScreen();
-  else if (state.currentScreen === 'screen6') showPlayerManager();
-  else showScreen('screen1');
+async function loadAuthStatus() {
+  try {
+    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
+    const data = await resp.json();
+    const el = document.getElementById('lastRoundInfo');
+    if (data.last_round_date && data.last_round_date !== 'No previous round') {
+      el.textContent = `Last round: ${data.last_round_date}`;
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════
+// Login / Screen 0
+// ═══════════════════════════════════════════
+function saveLogin() {
+  const username = document.getElementById('igUsername').value.trim();
+  const pin = document.getElementById('igPin').value.trim();
+  const sel = document.getElementById('rollupSelect');
+  const opt = sel.options[sel.selectedIndex];
+
+  if (!username || !pin) {
+    document.getElementById('loginError').textContent = 'Please enter your Member ID and PIN.';
+    document.getElementById('loginError').style.display = 'block';
+    return;
+  }
+  if (!opt || !opt.value) {
+    document.getElementById('loginError').textContent = 'Please select a rollup.';
+    document.getElementById('loginError').style.display = 'block';
+    return;
+  }
+
+  session.igUsername = username;
+  session.igPin = pin;
+  session.rollupId = parseInt(opt.value);
+  session.rollupName = opt.textContent;
+  session.rollupTerm = opt.dataset.term || '';
+
+  localStorage.setItem('ig_username', username);
+  localStorage.setItem('ig_pin', pin);
+  localStorage.setItem('rollup_id', session.rollupId);
+  localStorage.setItem('rollup_name', session.rollupName);
+  localStorage.setItem('rollup_term', session.rollupTerm);
+
+  document.getElementById('loginError').style.display = 'none';
+  updateHeaderNames();
+  setTodayDate();
+  loadAuthStatus();
+  showScreen('screen1');
 }
 
 function showAddRollup() {
@@ -1018,897 +1119,983 @@ function showAddRollup() {
 async function confirmAddRollup() {
   const name = document.getElementById('newRollupName').value.trim();
   const term = document.getElementById('newRollupTerm').value.trim().toUpperCase();
-  if (!name || !term) { alert('Please enter both a rollup name and search term.'); return; }
+  if (!name || !term) { alert('Please enter both name and search term.'); return; }
   try {
-    await fetch('/api/rollups/add', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+    const resp = await fetch('/api/rollups/add', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({name, ig_search_term: term}),
     });
-    closeOverlay('addRollupOverlay');
-    await loadRollups();
-    const newRollup = availableRollups.find(r => r.name === name);
-    if (newRollup) selectRollup(newRollup);
-  } catch(e) { alert('Could not add rollup. Please try again.'); }
-}
-
-function signOut() {
-  localStorage.removeItem('ig_username');
-  localStorage.removeItem('ig_pin');
-  localStorage.removeItem(LS_ROLLUP_ID);
-  localStorage.removeItem(LS_ROLLUP_NAME);
-  localStorage.removeItem(LS_ROLLUP_TERM);
-  session = { rollupId: 1, rollupName: '', rollupTerm: '' };
-  // Pre-fill username on screen0 if they want to switch rollup only
-  showScreen('screen0');
-}
-
-function saveLogin() {
-  const errEl = document.getElementById('loginError');
-  const username = document.getElementById('igUsername').value.trim();
-  const pin = document.getElementById('igPin').value.trim();
-  const sel = document.getElementById('rollupSelect');
-  const selectedRollup = availableRollups.find(r => r.id === parseInt(sel.value));
-
-  if (!username) { errEl.textContent = 'Please enter your IG Member ID.'; errEl.style.display = 'block'; return; }
-  if (!pin) { errEl.textContent = 'Please enter your IG PIN.'; errEl.style.display = 'block'; return; }
-  if (!selectedRollup) { errEl.textContent = 'Please select a rollup.'; errEl.style.display = 'block'; return; }
-
-  localStorage.setItem('ig_username', username);
-  localStorage.setItem('ig_pin', pin);
-  selectRollup(selectedRollup);
-  saveSession();
-  errEl.style.display = 'none';
-  enterApp();
-}
-
-// ═══════════════════════════════════════
-// Navigation
-// ═══════════════════════════════════════
-function showScreen(id) {
-  state.prevScreen = state.currentScreen;
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  state.currentScreen = id;
-}
-
-function goBack() {
-  if (state.currentScreen === 'screen5' || state.currentScreen === 'screen6') {
-    const dest = (state.prevScreen && state.prevScreen !== 'screen5' && state.prevScreen !== 'screen6') ? state.prevScreen : 'screen1';
-    showScreen(dest);
-  } else {
-    showScreen('screen1');
-  }
-}
-
-// ═══════════════════════════════════════
-// Init
-// ═══════════════════════════════════════
-async function init() {
-  loadSession();
-  await loadRollups();
-  // Pre-fill username on screen0 if previously used
-  const savedUsername = localStorage.getItem('ig_username');
-  if (savedUsername) document.getElementById('igUsername').value = savedUsername;
-  if (hasValidSession()) {
-    enterApp();
-  } else {
-    showScreen('screen0');
-  }
-}
-
-function enterApp() {
-  document.getElementById('s1RollupName').textContent = session.rollupName;
-  document.getElementById('s2RollupLabel').textContent = session.rollupName;
-  document.getElementById('s3RollupName').textContent = session.rollupName;
-  document.getElementById('s4RollupLabel').textContent = session.rollupName;
-  document.getElementById('s5RollupName').textContent = session.rollupName;
-  showScreen('screen1');
-  initHomeScreen();
-}
-
-async function initHomeScreen() {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('roundDate').value = today;
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-  document.getElementById('filterFrom').value = threeMonthsAgo.toISOString().split('T')[0];
-  document.getElementById('filterTo').value = today;
-  try {
-    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
     const data = await resp.json();
-    updateStatus(data.last_round_date ? `Last round: ${data.last_round_date}` : 'Ready');
-  } catch(e) { updateStatus('Ready'); }
+    closeOverlay('addRollupOverlay');
+    await loadRollupOptions();
+    const sel = document.getElementById('rollupSelect');
+    for (let i = 0; i < sel.options.length; i++) {
+      if (parseInt(sel.options[i].value) === data.id) { sel.selectedIndex = i; break; }
+    }
+    onRollupSelectChange();
+  } catch(e) { alert('Failed to add rollup.'); }
 }
 
-function updateStatus(msg, type = 'neutral') {
-  const el = document.getElementById('s1Status');
-  el.textContent = msg;
-  el.className = `status-bar status-${type}`;
-}
+// ═══════════════════════════════════════════
+// Screen 1 — Load Players
+// ═══════════════════════════════════════════
+async function loadPlayers() {
+  if (!hasValidSession()) { showScreen('screen0'); return; }
+  const date = document.getElementById('roundDate').value;
+  if (!date) { alert('Please select a date.'); return; }
+  state.roundDate = date;
 
-function showS1Error(msg) {
-  document.getElementById('s1ErrorMsg').textContent = msg;
-  document.getElementById('s1Error').style.display = 'block';
-  updateStatus('Load failed', 'danger');
-}
-
-function clearS1Error() { document.getElementById('s1Error').style.display = 'none'; }
-
-// ═══════════════════════════════════════
-// Settings screen
-// ═══════════════════════════════════════
-async function showSettingsScreen() {
-  showScreen('screen5');
-  document.getElementById('s5RollupName').textContent = session.rollupName;
-  document.getElementById('settingsActiveRollup').textContent = session.rollupName;
-  setSettingsStatus('Loading…', 'neutral');
-  try {
-    const settResp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
-    const sett = await settResp.json();
-    state.rollupSettings = sett;
-    populateSettingsForm(sett);
-    setSettingsStatus('Settings loaded', 'success');
-  } catch(e) {
-    setSettingsStatus('Could not load settings', 'danger');
-  }
-}
-
-function populateSettingsForm(s) {
-  document.getElementById('setDisplayName').value = s.display_name || '';
-  document.getElementById('setIgTerm').value = s.ig_search_term || '';
-
-  DAYS.forEach(d => {
-    document.getElementById('day' + d).checked = (s.run_days || []).includes(d);
-  });
-
-  document.getElementById('setTeeInterval').value = s.tee_interval_minutes || 8;
-  renderAdjTable(s.adjustment_table || []);
-
-  document.getElementById('setWinnerBonus').checked = s.winner_bonus_enabled !== false;
-  document.getElementById('setGapPenalty1').value = s.winner_gap_penalty1 || 0;
-  document.getElementById('setGapPenalty2').value = s.winner_gap_penalty2 || 0;
-  document.getElementById('setEntryFee').value = s.entry_fee || 0;
-
-  const pp = document.querySelector(`input[name="prizePlaces"][value="${s.prize_places || 3}"]`);
-  if (pp) pp.checked = true;
-
-  document.getElementById('setPct1').value = s.prize_pct_1st ?? 60;
-  document.getElementById('setPct2').value = s.prize_pct_2nd ?? 30;
-  document.getElementById('setPct3').value = s.prize_pct_3rd ?? 10;
-  document.getElementById('setPct4').value = s.prize_pct_4th ?? 0;
-  updatePrizeTotal();
-
-  const th = document.querySelector(`input[name="tieHandling"][value="${s.tie_handling || 'tournament'}"]`);
-  if (th) th.checked = true;
-
-  const pts = document.querySelector(`input[name="prefTeamSize"][value="${s.preferred_team_size || 4}"]`);
-  if (pts) pts.checked = true;
-
-  document.getElementById('setTeamScoring').value = s.team_scoring_method || 'best2';
-}
-
-function renderAdjTable(table) {
-  const tbody = document.getElementById('adjTableBody');
-  tbody.innerHTML = '';
-  table.forEach((row, i) => {
-    const isLast = i === table.length - 1;
-    const fromScore = i === 0 ? '0' : (parseInt(table[i-1].max_score) + 1).toString();
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="left">${fromScore}${isLast ? '+' : '–'}</td>
-      <td><input class="settings-input-sm" type="number" min="1" max="99"
-        value="${isLast ? '' : (row.max_score ?? '')}"
-        ${isLast ? 'placeholder="—" disabled style="opacity:0.4;width:60px;"' : 'style="width:60px;"'}
-        data-adj-max="${i}"/></td>
-      <td>
-        <select class="settings-input-sm" data-adj-val="${i}" style="width:72px;">
-          ${[3,2,1,0,-1,-2,-3].map(v =>
-            `<option value="${v}" ${row.adjustment===v?'selected':''}>${v>0?'+'+v:v}</option>`
-          ).join('')}
-        </select>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function updatePrizeTotal() {
-  const total = ['setPct1','setPct2','setPct3','setPct4']
-    .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
-  const el = document.getElementById('prizeTotalVal');
-  el.textContent = total + '%';
-  el.className = 'prize-total-val ' + (total === 100 ? 'ok' : 'err');
-}
-
-function applyPrizeDefaults() {
-  const places = parseInt(document.querySelector('input[name="prizePlaces"]:checked')?.value || 3);
-  const defaults = {
-    1: [100, 0,  0,  0],
-    2: [65,  35, 0,  0],
-    3: [50,  30, 20, 0],
-    4: [40,  30, 20, 10],
-  };
-  const d = defaults[places] || defaults[3];
-  document.getElementById('setPct1').value = d[0];
-  document.getElementById('setPct2').value = d[1];
-  document.getElementById('setPct3').value = d[2];
-  document.getElementById('setPct4').value = d[3];
-  updatePrizeTotal();
-}
-
-function readAdjTable() {
-  const rows = document.querySelectorAll('#adjTableBody tr');
-  const table = [];
-  rows.forEach((tr, i) => {
-    const maxInput = tr.querySelector(`[data-adj-max="${i}"]`);
-    const valSelect = tr.querySelector(`[data-adj-val="${i}"]`);
-    const maxScore = (maxInput && !maxInput.disabled && maxInput.value !== '')
-      ? parseInt(maxInput.value) : null;
-    const adjustment = valSelect ? parseInt(valSelect.value) : 0;
-    table.push({ max_score: maxScore, adjustment });
-  });
-  return table;
-}
-
-async function saveSettings() {
-  const total = ['setPct1','setPct2','setPct3','setPct4']
-    .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
-  if (total !== 100) {
-    setSettingsStatus('Prize percentages must sum to 100%', 'danger');
-    return;
-  }
-
-  const settings = {
-    rollup_id:            session.rollupId,
-    display_name:         document.getElementById('setDisplayName').value.trim(),
-    ig_search_term:       document.getElementById('setIgTerm').value.trim().toUpperCase(),
-    run_days:             DAYS.filter(d => document.getElementById('day' + d).checked),
-    tee_interval_minutes: parseInt(document.getElementById('setTeeInterval').value) || 8,
-    adjustment_table:     readAdjTable(),
-    winner_bonus_enabled: document.getElementById('setWinnerBonus').checked,
-    winner_gap_penalty1:  parseInt(document.getElementById('setGapPenalty1').value) || 0,
-    winner_gap_penalty2:  parseInt(document.getElementById('setGapPenalty2').value) || 0,
-    entry_fee:            parseFloat(document.getElementById('setEntryFee').value) || 0,
-    prize_places:         parseInt(document.querySelector('input[name="prizePlaces"]:checked')?.value || 3),
-    prize_pct_1st:        parseInt(document.getElementById('setPct1').value) || 0,
-    prize_pct_2nd:        parseInt(document.getElementById('setPct2').value) || 0,
-    prize_pct_3rd:        parseInt(document.getElementById('setPct3').value) || 0,
-    prize_pct_4th:        parseInt(document.getElementById('setPct4').value) || 0,
-    tie_handling:         document.querySelector('input[name="tieHandling"]:checked')?.value || 'tournament',
-    preferred_team_size:  parseInt(document.querySelector('input[name="prefTeamSize"]:checked')?.value || 4),
-    team_scoring_method:  document.getElementById('setTeamScoring').value,
-  };
-
-  setSettingsStatus('Saving…', 'neutral');
+  const errEl = document.getElementById('s1Error');
+  const statusEl = document.getElementById('s1Status');
+  errEl.style.display = 'none';
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Loading players from Intelligent Golf…';
+  statusEl.className = 'status-bar status-neutral';
 
   try {
-    const resp = await fetch('/api/settings', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(settings),
+    const resp = await fetch('/api/load-players', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        date, ig_username: session.igUsername, ig_pin: session.igPin,
+        rollup_id: session.rollupId, ig_search_term: session.rollupTerm,
+      }),
     });
     if (!resp.ok) {
       const err = await resp.json();
-      setSettingsStatus(err.detail || 'Save failed', 'danger');
+      errEl.innerHTML = `<span id="s1ErrorMsg">${err.detail || 'Could not load players.'}</span><a class="error-retry" onclick="loadPlayers()">Retry</a>`;
+      errEl.style.display = 'block';
+      statusEl.style.display = 'none';
       return;
     }
-
-    if (settings.display_name && settings.display_name !== session.rollupName) {
-      session.rollupName = settings.display_name;
-      session.rollupTerm = settings.ig_search_term;
-      saveSession();
-      ['s1RollupName','s2RollupLabel','s3RollupName','s4RollupLabel','s5RollupName']
-        .forEach(id => document.getElementById(id).textContent = session.rollupName);
-    }
-
-    await loadRollups();
-    setSettingsStatus('Settings saved ✓', 'success');
-    setTimeout(() => showScreen('screen1'), 800);
-
-  } catch(e) {
-    setSettingsStatus('Network error — could not save', 'danger');
-  }
-}
-
-function setSettingsStatus(msg, type) {
-  const el = document.getElementById('settingsStatus');
-  el.textContent = msg;
-  el.className = `settings-status status-${type}`;
-}
-
-// ═══════════════════════════════════════
-// Results screen
-// ═══════════════════════════════════════
-async function showResultsScreen() {
-  showScreen('screen3');
-  try {
-    const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    state.allRoundDates = data.dates || [];
-    const sel = document.getElementById('roundDateSelect');
-    sel.innerHTML = '<option value="">Select a round…</option>';
-    state.allRoundDates.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = formatDateLabel(d);
-      sel.appendChild(opt);
-    });
-    if (state.allRoundDates.length > 0) {
-      state.currentRoundIdx = 0;
-      sel.value = state.allRoundDates[0];
-      await loadRoundByDate(state.allRoundDates[0]);
-    }
-    updateRoundNavButtons();
-  } catch(e) {
-    document.getElementById('s3Status').textContent = 'Could not load round dates.';
-  }
-}
-
-function formatDateLabel(d) {
-  const dt = new Date(d + 'T12:00:00');
-  return dt.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-}
-
-async function loadRoundByDate(dateStr) {
-  if (!dateStr) return;
-  state.currentRoundIdx = state.allRoundDates.indexOf(dateStr);
-  document.getElementById('roundDateSelect').value = dateStr;
-  document.getElementById('resultsLoading').style.display = 'block';
-  document.getElementById('resultsTable').style.display = 'none';
-  try {
-    const resp = await fetch(`/api/round?date=${dateStr}&rollup_id=${session.rollupId}`);
-    if (!resp.ok) throw new Error('Not found');
-    const data = await resp.json();
-    renderResults(data.players, data.date);
-  } catch(e) {
-    document.getElementById('s3Status').textContent = 'Could not load results for this date.';
-  } finally {
-    document.getElementById('resultsLoading').style.display = 'none';
-    document.getElementById('resultsTable').style.display = 'table';
-  }
-  updateRoundNavButtons();
-}
-
-function stepRound(dir) {
-  const newIdx = state.currentRoundIdx + dir;
-  if (newIdx < 0 || newIdx >= state.allRoundDates.length) return;
-  loadRoundByDate(state.allRoundDates[newIdx]);
-}
-
-function updateRoundNavButtons() {
-  document.getElementById('prevRoundBtn').disabled = state.currentRoundIdx >= state.allRoundDates.length - 1;
-  document.getElementById('nextRoundBtn').disabled = state.currentRoundIdx <= 0;
-}
-
-function renderResults(players, dateStr) {
-  document.getElementById('s3Status').textContent = formatDateLabel(dateStr);
-  document.getElementById('s3Status').className = 'status-bar status-neutral';
-  const tbody = document.getElementById('resultsGrid');
-  tbody.innerHTML = '';
-  const medals = ['g','s','b'];
-  const rowClass = ['gold','silver','bronze'];
-  const sorted = [...players].filter(p => p.score !== null && p.score !== undefined)
-    .sort((a, b) => Number(b.score) - Number(a.score));
-  sorted.forEach((p, i) => {
-    const tr = document.createElement('tr');
-    if (i < 3) tr.className = rowClass[i];
-    const medalCell = i < 3
-      ? `<span class="medal ${medals[i]}">${i+1}</span>`
-      : `<span style="font-size:10px;color:#aaa">${i+1}</span>`;
-    tr.innerHTML = `
-      <td class="c">${medalCell}</td>
-      <td style="cursor:pointer;font-weight:${i===0?'700':'400'}" onclick="openPlayerFromResults('${p.name}')">${p.name}</td>
-      <td class="c" style="font-weight:600">${p.score}</td>
-      <td class="c" style="font-size:11px">${p.new_handicap ?? ''}</td>
-      <td class="c"><span style="font-size:10px;color:#2D2B5B;text-decoration:underline" onclick="openPlayerFromResults('${p.name}')">📈</span></td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function openPlayerFromResults(name) { showPlayerHistory(name); }
-
-// ═══════════════════════════════════════
-// Player History
-// ═══════════════════════════════════════
-async function showPlayerHistory(preselect) {
-  showScreen('screen4');
-  if (!preselect) {
-    document.getElementById('historyPlayerSelect').value = '';
-    document.getElementById('s4PlayerLabel').textContent = 'Player History';
-    document.getElementById('phContent').style.display = 'none';
-    document.getElementById('phNoData').style.display = 'none';
-    document.getElementById('phEmpty').style.display = 'block';
-    if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-  }
-  const sel = document.getElementById('historyPlayerSelect');
-  if (sel.options.length <= 1) {
-    try {
-      const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
-      const data = await resp.json();
-      const players = data.players || [];
-      sel.innerHTML = '<option value="">Choose a player…</option>';
-      players.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.name;
-        opt.textContent = `${p.name} (${p.handicap})`;
-        sel.appendChild(opt);
-      });
-    } catch(e) { console.error('Failed to load players:', e); }
-  }
-  if (preselect) {
-    sel.value = preselect;
-    document.getElementById('s4PlayerLabel').textContent = preselect;
-    await loadPlayerHistory(preselect);
-  }
-}
-
-function onPlayerSelectChange() {
-  const name = document.getElementById('historyPlayerSelect').value;
-  if (!name) return;
-  document.getElementById('s4PlayerLabel').textContent = name;
-  loadPlayerHistory(name);
-}
-
-async function applyFilter() {
-  const name = document.getElementById('historyPlayerSelect').value;
-  if (!name) return;
-  loadPlayerHistory(name);
-}
-
-async function loadPlayerHistory(name) {
-  document.getElementById('phContent').style.display = 'none';
-  document.getElementById('phNoData').style.display = 'none';
-  document.getElementById('phEmpty').style.display = 'none';
-  try {
-    const resp = await fetch(`/api/player-history?name=${encodeURIComponent(name)}&rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    let rounds = data.rounds || [];
-    const from = document.getElementById('filterFrom').value;
-    const to = document.getElementById('filterTo').value;
-    if (from) rounds = rounds.filter(r => r.date >= from);
-    if (to) rounds = rounds.filter(r => r.date <= to);
-    if (!from && !to && rounds.length > 3) rounds = rounds.slice(0, 3);
-    state.historyData = rounds;
-    if (rounds.length === 0) { document.getElementById('phNoData').style.display = 'block'; return; }
-    renderPlayerHistory(name, rounds);
-    document.getElementById('phContent').style.display = 'block';
-  } catch(e) { document.getElementById('phNoData').style.display = 'block'; }
-}
-
-function renderPlayerHistory(name, rounds) {
-  const chronological = [...rounds].reverse();
-  const scores = rounds.map(r => r.score);
-  const avg = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1);
-  const best = Math.max(...scores);
-  const currentHC = rounds[0].new_handicap;
-  document.getElementById('phStats').innerHTML = `
-    <div class="stat-card"><div class="stat-val">${avg}</div><div class="stat-lbl">Avg score</div></div>
-    <div class="stat-card"><div class="stat-val">${best}</div><div class="stat-lbl">Best score</div></div>
-    <div class="stat-card"><div class="stat-val">${currentHC}</div><div class="stat-lbl">Current HC</div></div>`;
-  const labels = chronological.map(r => {
-    const d = new Date(r.date + 'T12:00:00');
-    return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-  });
-  if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-  const ctx = document.getElementById('historyChart').getContext('2d');
-  state.historyChart = new Chart(ctx, {
-    data: {
-      labels,
-      datasets: [
-        { type:'bar', label:'Score', data:chronological.map(r=>r.score), backgroundColor:'#2D2B5B33', borderColor:'#2D2B5B', borderWidth:1.5, yAxisID:'yScore', order:2 },
-        { type:'line', label:'Handicap', data:chronological.map(r=>r.new_handicap), borderColor:'#FFD700', backgroundColor:'#FFD70033', borderWidth:2.5, pointBackgroundColor:'#FFD700', pointRadius:4, tension:0.3, yAxisID:'yHC', order:1 }
-      ]
-    },
-    options: {
-      responsive: true,
-      interaction: { mode:'index', intersect:false },
-      plugins: { legend: { labels: { font: { size:11 } } } },
-      scales: {
-        yScore: { type:'linear', position:'left', title:{ display:true, text:'Score', font:{size:10} }, ticks:{font:{size:10}} },
-        yHC: { type:'linear', position:'right', title:{ display:true, text:'Handicap', font:{size:10} }, ticks:{font:{size:10}}, grid:{drawOnChartArea:false} },
-        x: { ticks: { font:{size:10} } }
-      }
-    }
-  });
-  const tbody = document.getElementById('phTableBody');
-  tbody.innerHTML = '';
-  rounds.forEach((r, i) => {
-    const prev = rounds[i+1];
-    const hcChange = prev ? r.new_handicap - prev.new_handicap : null;
-    let changeEl = '—';
-    if (hcChange !== null) {
-      const cls = hcChange < 0 ? 'down' : hcChange > 0 ? 'up' : '';
-      const sign = hcChange > 0 ? '+' : '';
-      changeEl = `<span class="hc-change ${cls}">${sign}${hcChange}</span>`;
-    }
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="left">${formatDateLabel(r.date)}</td><td style="font-weight:600">${r.score}</td><td>${r.new_handicap}</td><td>${changeEl}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// ═══════════════════════════════════════
-// Load Players
-// ═══════════════════════════════════════
-async function loadPlayers() {
-  clearS1Error();
-  const date = document.getElementById('roundDate').value;
-  if (!date) { showS1Error('Please select a round date.'); return; }
-
-  const igUsername = localStorage.getItem('ig_username') || '';
-  const igPin = localStorage.getItem('ig_pin') || '';
-
-  if (!igUsername || !igPin) {
-    showS1Error('IG credentials not set. Please sign out and sign in again.');
-    return;
-  }
-
-  updateStatus('Loading players from Intelligent Golf…', 'neutral');
-  try {
-    const resp = await fetch('/api/load-players', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        date,
-        ig_username: igUsername,
-        ig_pin: igPin,
-        rollup_id: session.rollupId,
-        ig_search_term: session.rollupTerm,
-      }),
-    });
-    if (!resp.ok) { const err = await resp.json(); showS1Error(err.detail || 'Failed to load players.'); return; }
     const data = await resp.json();
     state.players = data.players;
-    state.roundDate = data.date;
-    state.teeTimes = data.tee_times || null;
+    state.newPlayerQueue = data.new_players.slice();
+    state.teeTimes = data.tee_times;
     state.teeStart = data.tee_start || '';
-    state.newPlayerQueue = data.new_players || [];
-    try {
-      const sResp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
-      const sett = await sResp.json();
-      state.rollupSettings = sett;
-      state.teamSize = sett.preferred_team_size || 4;
-    } catch(e) {}
-    if (state.newPlayerQueue.length > 0) processNewPlayerQueue();
-    else openScoreEntry();
-  } catch(e) { showS1Error('Network error. Please check your connection and try again.'); }
-}
+    statusEl.style.display = 'none';
 
-// ═══════════════════════════════════════
-// Team structure calculator
-// ═══════════════════════════════════════
-function getAllValidStructures(n, preferredSize) {
-  if (n < 4) return [];
-  const seen = new Set();
-  const results = [];
-  const maxTeams = state.teeTimes || n;
-  for (let numTeams = 2; numTeams <= n; numTeams++) {
-    if (numTeams > maxTeams) continue;
-    const base = Math.floor(n / numTeams);
-    const remainder = n % numTeams;
-    const largeSize = remainder > 0 ? base + 1 : base;
-    if (base < 2 || largeSize > 4) continue;
-    const key = `${numTeams}_${base}_${remainder}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push({ numTeams, smallSize:base, largeSize, numLarge:remainder, numSmall:numTeams-remainder,
-      diff: Math.abs(base - preferredSize), description: buildDescription(numTeams, base, remainder), valid:true });
-  }
-  results.sort((a, b) => a.diff - b.diff || a.numTeams - b.numTeams);
-  return results;
-}
-
-function buildDescription(numTeams, base, numLarge) {
-  const numSmall = numTeams - numLarge;
-  if (numLarge === 0) return `${numTeams} team${numTeams>1?'s':''} of ${base}`;
-  if (numSmall === 0) return `${numLarge} team${numLarge>1?'s':''} of ${base+1}`;
-  return `${numSmall} team${numSmall>1?'s':''} of ${base}, ${numLarge} of ${base+1}`;
-}
-
-function updateTeamStructureUI() {
-  const n = state.players.length;
-  const structures = getAllValidStructures(n, state.teamSize);
-  const infoEl = document.getElementById('teamStructureInfo');
-  const optionsEl = document.getElementById('structureOptions');
-  const listEl = document.getElementById('structureOptionsList');
-  if (structures.length === 0) {
-    infoEl.textContent = n < 4 ? 'Not enough players for teams' : `No valid team structure for ${n} players with teams of 2-4`;
-    infoEl.className = 'team-structure-info error';
-    optionsEl.style.display = 'none';
-    state.selectedStructure = null;
-    return;
-  }
-  if (!state.selectedStructure || !structures.find(s => s.description === state.selectedStructure.description))
-    state.selectedStructure = structures[0];
-  if (structures.length === 1) {
-    infoEl.textContent = `${n} players → ${structures[0].description}`;
-    infoEl.className = 'team-structure-info';
-    optionsEl.style.display = 'none';
-  } else {
-    infoEl.textContent = '';
-    optionsEl.style.display = 'block';
-    listEl.innerHTML = '';
-    structures.forEach(s => {
-      const btn = document.createElement('button');
-      btn.className = 'structure-option-btn' + (s.description === state.selectedStructure.description ? ' selected' : '');
-      btn.textContent = `${n} players → ${s.description}`;
-      btn.onclick = () => selectStructure(s);
-      listEl.appendChild(btn);
-    });
+    await loadRollupSettings();
+    processNewPlayerQueue();
+  } catch(e) {
+    errEl.innerHTML = `<span>Network error — could not reach server.</span><a class="error-retry" onclick="loadPlayers()">Retry</a>`;
+    errEl.style.display = 'block';
+    statusEl.style.display = 'none';
   }
 }
 
-function selectStructure(structure) {
-  state.selectedStructure = structure;
-  state.players.forEach(p => p.team = null);
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
+async function loadRollupSettings() {
+  try {
+    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
+    if (resp.ok) state.rollupSettings = await resp.json();
+  } catch(e) {}
 }
 
-function getActiveStructure() {
-  if (state.selectedStructure) return state.selectedStructure;
-  const structures = getAllValidStructures(state.players.length, state.teamSize);
-  return structures.length > 0 ? structures[0] : null;
+// ═══════════════════════════════════════════
+// Screen 2 — Score Entry
+// ═══════════════════════════════════════════
+function openScoreEntry() {
+  document.getElementById('s2DateLabel').textContent = state.roundDate;
+  state.gameMode = 'individual';
+  document.getElementById('indBtn').classList.add('active');
+  document.getElementById('teamBtn').classList.remove('active');
+  document.getElementById('teamConfigBar').style.display = 'none';
+  document.getElementById('teamScoreboardWrap').style.display = 'none';
+  document.getElementById('prohibitedWarning').style.display = 'none';
+  state.prohibitedWinner = null;
+  renderGrid();
+  showScreen('screen2');
 }
 
 function setGameMode(mode) {
   state.gameMode = mode;
-  document.getElementById('modeIndividual').classList.toggle('active', mode === 'individual');
-  document.getElementById('modeTeam').classList.toggle('active', mode === 'team');
-  document.getElementById('teamConfig').style.display = mode === 'team' ? 'block' : 'none';
-  const ttInfo = document.getElementById('teeTimesInfo');
-  if (mode === 'team' && state.teeTimes) {
-    ttInfo.textContent = `${state.teeTimes} tee time${state.teeTimes!==1?'s':''} · max ${state.teeTimes*4} players`;
-    ttInfo.style.display = 'inline';
-  } else { ttInfo.style.display = 'none'; }
-  document.getElementById('teamScoreboard').style.display = mode === 'team' ? 'block' : 'none';
-  document.getElementById('addPlayerBar').style.display = mode === 'individual' ? 'block' : 'none';
-  if (mode === 'individual') state.players.forEach(p => p.team = null);
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
+  document.getElementById('indBtn').classList.toggle('active', mode === 'individual');
+  document.getElementById('teamBtn').classList.toggle('active', mode === 'team');
+  document.getElementById('teamConfigBar').style.display = mode === 'team' ? 'block' : 'none';
+  if (mode === 'team') updateTeamStructureUI();
+  renderGrid();
+  recalculate();
 }
 
-function setTeamSize(size) {
-  state.teamSize = size;
-  [2,3,4].forEach(s => document.getElementById(`size${s}`).classList.toggle('active', s === size));
-  state.players.forEach(p => p.team = null);
+function setTeamSize(n) {
+  state.teamSize = n;
+  [2,3,4].forEach(x => {
+    document.getElementById(`ts${x}`).classList.toggle('active', x === n);
+  });
   state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
+  updateTeamStructureUI();
 }
 
-function getTeamCounts() {
-  const counts = {};
-  state.players.forEach(p => { if (p.team) counts[p.team] = (counts[p.team]||0)+1; });
-  return counts;
+function updateTeamStructureUI() {
+  const n = state.players.filter(p => p.score !== null || true).length;
+  const size = state.teamSize;
+  const structures = calculateTeamStructures(n, size);
+  const infoEl = document.getElementById('teamStructureInfo');
+  const optEl = document.getElementById('structureOptions');
+  optEl.innerHTML = '';
+  if (structures.length === 0) {
+    infoEl.textContent = 'Not enough players for teams.';
+    infoEl.className = 'team-structure-info error';
+    return;
+  }
+  if (structures.length === 1) {
+    state.selectedStructure = structures[0];
+    infoEl.textContent = describeStructure(structures[0]);
+    infoEl.className = 'team-structure-info';
+    return;
+  }
+  infoEl.textContent = 'Multiple structures possible:';
+  infoEl.className = 'team-structure-info';
+  structures.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'structure-option-btn' + (state.selectedStructure && JSON.stringify(state.selectedStructure) === JSON.stringify(s) ? ' selected' : '');
+    btn.textContent = describeStructure(s);
+    btn.onclick = () => {
+      state.selectedStructure = s;
+      document.querySelectorAll('.structure-option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    optEl.appendChild(btn);
+  });
+  if (!state.selectedStructure) state.selectedStructure = structures[0];
 }
 
-function getMaxTeamSize() { const s = getActiveStructure(); return s ? s.largeSize : 4; }
+function calculateTeamStructures(n, size) {
+  if (n < 2) return [];
+  const structures = [];
+  for (let big = 0; big <= Math.floor(n / size); big++) {
+    const rem = n - big * size;
+    if (rem === 0) { structures.push({big, bigSize: size, small: 0, smallSize: 0}); break; }
+    if (size > 2 && rem % (size - 1) === 0) {
+      structures.push({big, bigSize: size, small: rem / (size - 1), smallSize: size - 1});
+    }
+  }
+  return structures.slice(0, 3);
+}
 
-function validateTeamAssignment(name, newTeam) {
-  if (!newTeam) return true;
-  const counts = getTeamCounts();
-  const currentTeam = state.players.find(p => p.name === name)?.team;
-  const newCount = (counts[newTeam]||0) + (currentTeam === newTeam ? 0 : 1);
-  const maxSize = getMaxTeamSize();
-  if (newCount > maxSize) { alert(`Team ${newTeam} is full (max ${maxSize} players for this structure).`); return false; }
-  return true;
+function describeStructure(s) {
+  if (s.small === 0) return `${s.big} teams of ${s.bigSize}`;
+  return `${s.big} teams of ${s.bigSize} + ${s.small} team${s.small > 1 ? 's' : ''} of ${s.smallSize}`;
+}
+
+function randomAssignTeams() {
+  if (!state.selectedStructure) { updateTeamStructureUI(); }
+  const s = state.selectedStructure;
+  if (!s) { alert('Select a team structure first.'); return; }
+  const shuffled = [...state.players].sort(() => Math.random() - 0.5);
+  let team = 1, count = 0, sizes = [];
+  for (let i = 0; i < s.big; i++) sizes.push(s.bigSize);
+  for (let i = 0; i < s.small; i++) sizes.push(s.smallSize);
+  let idx = 0;
+  sizes.forEach((sz, ti) => {
+    for (let j = 0; j < sz; j++) { shuffled[idx++].team = ti + 1; }
+  });
+  state.players = state.players.map(p => {
+    const sp = shuffled.find(x => x.name === p.name);
+    return sp ? {...p, team: sp.team} : p;
+  });
+  updateUnassignedWarning();
+  renderGrid();
+  recalculate();
 }
 
 function updateUnassignedWarning() {
-  const el = document.getElementById('unassignedWarning');
-  if (state.gameMode !== 'team') { el.style.display = 'none'; return; }
+  if (state.gameMode !== 'team') { document.getElementById('unassignedWarning').style.display = 'none'; return; }
   const unassigned = state.players.filter(p => !p.team).length;
-  if (unassigned > 0) { el.textContent = `${unassigned} player${unassigned>1?'s':''} unassigned`; el.style.display = 'inline'; }
-  else { el.style.display = 'none'; }
-}
-
-function checkAutoAssignLast() {
-  if (state.gameMode !== 'team') return;
-  const unassigned = state.players.filter(p => !p.team);
-  if (unassigned.length !== 1) return;
-  const structure = getActiveStructure();
-  if (!structure) return;
-  const counts = getTeamCounts();
-  const teamsWithRoom = [];
-  for (let t = 1; t <= structure.numTeams; t++) {
-    if ((counts[t]||0) < structure.largeSize) teamsWithRoom.push(t);
+  const el = document.getElementById('unassignedWarning');
+  if (unassigned > 0) {
+    el.textContent = `${unassigned} player${unassigned > 1 ? 's' : ''} not assigned to a team`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
   }
-  if (teamsWithRoom.length === 1) {
-    unassigned[0].team = teamsWithRoom[0];
-    state.players.sort((a,b) => (a.team||99)-(b.team||99));
-    updateUnassignedWarning(); renderGrid();
-  }
-}
-
-function randomAssign() {
-  const structure = getActiveStructure();
-  if (!structure) { alert('Cannot form valid teams with the current number of players.'); return; }
-  const n = state.players.length;
-  const indices = [...Array(n).keys()];
-  for (let i = n-1; i > 0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  const slots = [];
-  for (let t = 1; t <= structure.numTeams; t++) {
-    const size = t <= structure.numLarge ? structure.largeSize : structure.smallSize;
-    for (let s = 0; s < size; s++) slots.push(t);
-  }
-  indices.forEach((playerIdx, i) => { state.players[playerIdx].team = slots[i]; });
-  state.players.sort((a,b) => (a.team||99)-(b.team||99));
-  updateUnassignedWarning(); renderGrid();
-}
-
-function onTeamChange(name, teamNum) {
-  if (teamNum !== 0 && !validateTeamAssignment(name, teamNum)) { renderGrid(); return; }
-  const p = state.players.find(p => p.name === name);
-  if (p) p.team = teamNum === 0 ? null : teamNum;
-  state.players.sort((a,b) => (a.team||99)-(b.team||99));
-  updateUnassignedWarning(); checkAutoAssignLast(); renderGrid();
-}
-
-function getNumTeams() {
-  const assigned = state.players.filter(p => p.team).map(p => p.team);
-  return assigned.length ? Math.max(...assigned) : 0;
-}
-
-// ═══════════════════════════════════════
-// Score entry
-// ═══════════════════════════════════════
-function openScoreEntry() {
-  const dateLabel = new Date(state.roundDate+'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-  const teeStr = state.teeStart ? ` · Tee off ${state.teeStart}` : '';
-  document.getElementById('s2DateLabel').textContent = `${dateLabel}${teeStr}`;
-  document.getElementById('addPlayerBar').style.display = 'block';
-  updateTeamStructureUI(); renderGrid(); showScreen('screen2');
 }
 
 function renderGrid() {
-  const tbody = document.getElementById('scoreGrid');
-  tbody.innerHTML = '';
   const isTeam = state.gameMode === 'team';
-  const numTeams = getNumTeams();
-  const counts = getTeamCounts();
-  const maxSize = getMaxTeamSize();
-  document.getElementById('lastColHeader').textContent = isTeam ? 'Team' : '✕';
-  document.getElementById('addPlayerBar').style.display = isTeam ? 'none' : 'block';
-  let currentTeam = null;
-  state.players.forEach((p, i) => {
-    if (isTeam && p.team && p.team !== currentTeam) {
-      currentTeam = p.team;
-      const headerRow = document.createElement('tr');
-      headerRow.className = `team-header team-${p.team}`;
-      const teamCount = counts[p.team]||0;
-      headerRow.innerHTML = `<td colspan="5">${TEAM_NAMES[p.team]} · ${teamCount} player${teamCount!==1?'s':''}${teamCount>maxSize?' ⚠ too many':''}</td>`;
-      tbody.appendChild(headerRow);
+  document.getElementById('col5Head').textContent = isTeam ? 'Team' : 'Remove';
+  const body = document.getElementById('scoreBody');
+  let rows = '';
+  const sorted = isTeam
+    ? [...state.players].sort((a,b) => (a.team||99) - (b.team||99) || a.name.localeCompare(b.name))
+    : state.players;
+
+  let lastTeam = null;
+  sorted.forEach((p, i) => {
+    const origIdx = state.players.indexOf(p);
+    if (isTeam && p.team !== lastTeam) {
+      lastTeam = p.team;
+      const tc = p.team ? `team-${p.team}` : '';
+      rows += `<tr class="team-header ${tc}"><td colspan="5">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
     }
-    const tr = document.createElement('tr');
-    tr.setAttribute('data-name', p.name);
-    if (isTeam && p.team) tr.classList.add(`team-${p.team}`);
-    let lastCol;
-    if (isTeam) {
-      const teamCount = p.team ? (counts[p.team]||0) : 0;
-      const oversized = p.team && teamCount > maxSize;
-      const options = ['<option value="0">—</option>'];
-      for (let t = 1; t <= Math.max(6, numTeams+1); t++)
-        options.push(`<option value="${t}" ${p.team===t?'selected':''}>${TEAM_NAMES[t]}</option>`);
-      lastCol = `<td class="team-col${oversized?' oversize':''}"><select onchange="onTeamChange('${p.name}', parseInt(this.value))">${options.join('')}</select></td>`;
-    } else {
-      lastCol = `<td class="remove-col" onclick="promptRemovePlayer('${p.name}')">✕</td>`;
-    }
-    tr.innerHTML = `
+    const rankClass = !isTeam && p.score !== null
+      ? (i === 0 && sorted.filter(x=>x.score!==null).length > 0
+          ? (p.score === Math.max(...sorted.filter(x=>x.score!==null).map(x=>x.score)) ? 'rank-gold' : '')
+          : '')
+      : '';
+    const hc = p.handicap !== null ? p.handicap : '?';
+    const newHC = p.new_handicap !== undefined && p.new_handicap !== null
+      ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
+    const col5 = isTeam
+      ? `<td class="team-col${p.team ? ' team-col' : ''}" ><select onchange="setPlayerTeam(${origIdx}, this.value)">
+          <option value="">—</option>
+          ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
+         </select></td>`
+      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\\'")}')">✕</td>`;
+    rows += `<tr class="${rankClass}">
       <td>${p.name}</td>
-      <td class="c">${p.handicap??''}</td>
-      <td class="sc"><input type="tel" inputmode="numeric" value="${p.score??''}"
-        onchange="onScoreChange(${i}, this.value)" onkeydown="onScoreKey(event, ${i})"
-        style="width:100%;border:none;background:transparent;font-size:11px;text-align:center;font-family:Arial,sans-serif;padding:0;outline:none;"/></td>
-      <td class="nhc" data-nhc="${p.name}"></td>
-      ${lastCol}`;
-    tbody.appendChild(tr);
+      <td class="c">${hc}</td>
+      <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
+      <td class="nhc">${newHC}</td>
+      ${col5}
+    </tr>`;
   });
-  updateGridDisplay();
+  body.innerHTML = rows;
 }
 
-function updateGridDisplay() {
-  state.players.forEach(p => {
-    const cell = document.querySelector(`td[data-nhc="${p.name}"]`);
-    if (!cell) return;
-    if (p.new_handicap !== null && p.new_handicap !== undefined) {
-      const adj = p.adjustment;
-      const adjStr = adj > 0 ? `(+${adj})` : adj < 0 ? `(${adj})` : '(0)';
-      cell.innerHTML = `${p.new_handicap} <span style="font-size:9px">${adjStr}</span>`;
-    } else { cell.innerHTML = ''; }
-  });
-  if (state.gameMode === 'team') updateTeamScoreboard();
-  else updateIndividualRankings();
+function setPlayerTeam(idx, val) {
+  state.players[idx].team = val ? parseInt(val) : null;
+  updateUnassignedWarning();
 }
 
-function updateIndividualRankings() {
-  const rows = document.querySelectorAll('#scoreGrid tr:not(.team-header)');
-  rows.forEach(r => r.classList.remove('rank-gold','rank-silver','rank-bronze'));
-  const scored = state.players.filter(p => p.score!==null && p.score!==undefined && p.score!=='')
-    .sort((a,b) => Number(b.score)-Number(a.score));
-  ['rank-gold','rank-silver','rank-bronze'].forEach((cls, rank) => {
-    if (!scored[rank]) return;
-    const row = document.querySelector(`#scoreGrid tr[data-name="${scored[rank].name}"]`);
-    if (row) row.classList.add(cls);
-  });
-}
-
-function updateTeamScoreboard() {
-  const pills = document.getElementById('teamScoresPills');
-  pills.innerHTML = '';
-  if (!state.teamScores || state.teamScores.length === 0) return;
-  state.teamScores.forEach(t => {
-    const pill = document.createElement('div');
-    pill.className = `team-score-pill team-pill-${t.team}`;
-    const rank = t.rank===1?'🥇':t.rank===2?'🥈':t.rank===3?'🥉':`${t.rank}.`;
-    pill.textContent = `${rank} ${TEAM_NAMES[t.team]}: ${t.total}`;
-    pills.appendChild(pill);
-  });
-}
-
-async function onScoreChange(idx, val) {
-  const score = val === '' ? null : parseInt(val);
-  if (score !== null && isNaN(score)) return;
-  state.players[idx].score = score;
-  await recalculate();
-}
-
-function onScoreKey(event, idx) {
-  if (event.key === 'Enter' || event.key === 'Tab') {
-    event.preventDefault();
-    const inputs = document.querySelectorAll('#scoreGrid input');
-    if (idx+1 < inputs.length) inputs[idx+1].focus(); else inputs[idx].blur();
-  }
+function updateScore(idx, val) {
+  state.players[idx].score = val === '' ? null : parseInt(val);
+  recalculate();
 }
 
 async function recalculate() {
   setSaveState('saving');
   try {
     const resp = await fetch('/api/autosave', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ date:state.roundDate, players:state.players, team_mode:state.gameMode==='team', rollup_id:session.rollupId }),
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        date: state.roundDate, players: state.players,
+        team_mode: state.gameMode === 'team',
+        rollup_id: session.rollupId,
+      }),
     });
     const data = await resp.json();
-    data.players.forEach(sp => {
-      const p = state.players.find(p => p.name === sp.name);
-      if (p) { p.new_handicap = sp.new_handicap; p.adjustment = sp.adjustment; p.score = sp.score; }
+    state.players = state.players.map(p => {
+      const r = data.players.find(x => x.name === p.name);
+      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, winner: r.winner} : p;
     });
     state.teamScores = data.team_scores || [];
-    updateGridDisplay();
+    state.prohibitedWinner = data.prohibited_winner || null;
+
+    const pwEl = document.getElementById('prohibitedWarning');
+    if (state.prohibitedWinner) {
+      pwEl.textContent = `⚠️ ${state.prohibitedWinner} won last round — cannot win again`;
+      pwEl.style.display = 'block';
+    } else {
+      pwEl.style.display = 'none';
+    }
+
+    renderGrid();
+    renderTeamScoreboard();
     setSaveState('saved');
-  } catch(e) { setSaveState('error'); }
+  } catch(e) {
+    setSaveState('error');
+  }
+}
+
+function renderTeamScoreboard() {
+  if (!state.teamScores || state.teamScores.length === 0) {
+    document.getElementById('teamScoreboardWrap').style.display = 'none';
+    return;
+  }
+  document.getElementById('teamScoreboardWrap').style.display = 'block';
+  const colors = ['team-pill-1','team-pill-2','team-pill-3','team-pill-4','team-pill-5','team-pill-6'];
+  document.getElementById('teamScoresRow').innerHTML = state.teamScores.map(t =>
+    `<div class="team-score-pill ${colors[(t.team-1)%6]}">
+      ${t.rank === 1 ? '🏆' : t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : `#${t.rank}`}
+      Team ${t.team}: ${t.total}
+     </div>`
+  ).join('');
 }
 
 async function saveRound() {
-  if (state.gameMode === 'team') {
-    const unassigned = state.players.filter(p => !p.team).length;
-    if (unassigned > 0) { alert(`${unassigned} player${unassigned>1?' are':' is'} not assigned to a team.`); return; }
-    const counts = getTeamCounts();
-    const maxSize = getMaxTeamSize();
-    if (Object.entries(counts).some(([,count]) => count > maxSize)) {
-      alert('Some teams have too many players. Please fix team assignments before saving.'); return;
-    }
+  if (state.prohibitedWinner) {
+    alert(`Cannot save: ${state.prohibitedWinner} won last round and cannot win again. Please review scores.`);
+    return;
   }
-  const btn = document.getElementById('saveRoundBtn');
-  btn.textContent = 'Saving…'; btn.disabled = true;
+  const scored = state.players.filter(p => p.score !== null);
+  if (scored.length === 0) { alert('No scores entered.'); return; }
+  if (!confirm(`Save round for ${scored.length} players on ${state.roundDate}?`)) return;
   try {
     const resp = await fetch('/api/save-round', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ date:state.roundDate, players:state.players, team_mode:state.gameMode==='team', rollup_id:session.rollupId }),
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        date: state.roundDate, players: state.players,
+        team_mode: state.gameMode === 'team',
+        rollup_id: session.rollupId,
+      }),
     });
-    if (!resp.ok) { const err = await resp.json(); alert('Save failed: '+(err.detail||'Unknown error')); btn.textContent='Save Round'; btn.disabled=false; return; }
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.detail || 'Failed to save round.');
+      return;
+    }
+    const data = await resp.json();
+    state.players = data.players;
+    state.allRoundDates = [];
     await showResultsScreen();
-  } catch(e) { alert('Network error saving round.'); btn.textContent='Save Round'; btn.disabled=false; }
+  } catch(e) {
+    alert('Network error — could not save round.');
+  }
 }
 
 function setSaveState(s) {
   const dot = document.getElementById('saveDot');
   const label = document.getElementById('saveLabel');
-  if (s==='saving') { dot.style.background='#888'; label.style.color='#888'; label.textContent='Calculating…'; }
-  else if (s==='saved') { dot.style.background='#3B6D11'; label.style.color='#3B6D11'; label.textContent='Ready'; }
-  else { dot.style.background='#A32D2D'; label.style.color='#A32D2D'; label.textContent='Error'; }
+  if (s === 'saving') { dot.style.background = '#888'; label.style.color = '#888'; label.textContent = 'Calculating…'; }
+  else if (s === 'saved') { dot.style.background = '#3B6D11'; label.style.color = '#3B6D11'; label.textContent = 'Ready'; }
+  else { dot.style.background = '#A32D2D'; label.style.color = '#A32D2D'; label.textContent = 'Error'; }
 }
 
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
+// Screen 3 — Results
+// ═══════════════════════════════════════════
+async function showResultsScreen() {
+  showScreen('screen3');
+  if (state.allRoundDates.length === 0) await loadRoundDates();
+  else renderResultsForCurrentIdx();
+}
+
+async function loadRoundDates() {
+  try {
+    const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
+    const data = await resp.json();
+    state.allRoundDates = data.dates || [];
+    state.currentRoundIdx = 0;
+    const sel = document.getElementById('roundDateSelect');
+    sel.innerHTML = state.allRoundDates.map((d,i) => `<option value="${i}">${d}</option>`).join('');
+    if (state.allRoundDates.length > 0) loadRoundByIdx(0);
+  } catch(e) {}
+}
+
+function navigateRound(dir) {
+  const newIdx = state.currentRoundIdx + dir;
+  if (newIdx < 0 || newIdx >= state.allRoundDates.length) return;
+  state.currentRoundIdx = newIdx;
+  document.getElementById('roundDateSelect').value = newIdx;
+  loadRoundByIdx(newIdx);
+}
+
+function onRoundDateChange() {
+  state.currentRoundIdx = parseInt(document.getElementById('roundDateSelect').value);
+  loadRoundByIdx(state.currentRoundIdx);
+}
+
+async function loadRoundByIdx(idx) {
+  const date = state.allRoundDates[idx];
+  if (!date) return;
+  document.getElementById('prevRoundBtn').disabled = idx >= state.allRoundDates.length - 1;
+  document.getElementById('nextRoundBtn').disabled = idx <= 0;
+  try {
+    const resp = await fetch(`/api/round?date=${date}&rollup_id=${session.rollupId}`);
+    const data = await resp.json();
+    renderResults(data.players, date);
+  } catch(e) {}
+}
+
+function renderResults(players, date) {
+  const sorted = [...players].sort((a,b) => b.score - a.score);
+  const body = document.getElementById('resultsBody');
+  body.innerHTML = sorted.map((p, i) => {
+    const rowClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const medal = i === 0 ? '<span class="medal g">1</span>' : i === 1 ? '<span class="medal s">2</span>' : i === 2 ? '<span class="medal b">3</span>' : '';
+    const hcChange = p.new_handicap !== undefined && p.new_handicap !== null
+      ? (() => {
+          const diff = p.new_handicap - (p.handicap_before || p.new_handicap);
+          return '';
+        })() : '';
+    return `<tr class="${rowClass}" onclick="showPlayerHistoryFor('${p.name.replace(/'/g,"\\'")}')">
+      <td>${medal} ${p.name}</td>
+      <td class="c">${p.score}</td>
+      <td class="c">${p.new_handicap !== null ? p.new_handicap : '—'}</td>
+      <td class="c hc-change">—</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderResultsForCurrentIdx() {
+  loadRoundByIdx(state.currentRoundIdx);
+}
+
+// ═══════════════════════════════════════════
+// Screen 4 — Player History
+// ═══════════════════════════════════════════
+async function showPlayerHistory() {
+  showScreen('screen4');
+  if (state.allPlayers.length === 0) await loadPlayerList();
+}
+
+async function loadPlayerList() {
+  try {
+    const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
+    const data = await resp.json();
+    state.allPlayers = data.players;
+    const sel = document.getElementById('playerSelect');
+    sel.innerHTML = '<option value="">Choose a player…</option>';
+    data.players.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+function showPlayerHistoryFor(name) {
+  showPlayerHistory().then(() => {
+    const sel = document.getElementById('playerSelect');
+    sel.value = name;
+    loadHistory(name);
+  });
+}
+
+function onPlayerSelectChange() {
+  const name = document.getElementById('playerSelect').value;
+  if (name) loadHistory(name);
+}
+
+async function loadHistory(name) {
+  const from = document.getElementById('filterFrom').value;
+  const to = document.getElementById('filterTo').value;
+  let url = `/api/player-history?name=${encodeURIComponent(name)}&rollup_id=${session.rollupId}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { showHistoryEmpty(); return; }
+    const data = await resp.json();
+    let rounds = data.rounds;
+    if (from) rounds = rounds.filter(r => r.date >= from);
+    if (to) rounds = rounds.filter(r => r.date <= to);
+    state.historyData = rounds;
+    if (rounds.length === 0) { showHistoryEmpty(); return; }
+    renderHistory(name, rounds);
+  } catch(e) { showHistoryEmpty(); }
+}
+
+function applyFilter() {
+  const name = document.getElementById('playerSelect').value;
+  if (name) loadHistory(name);
+}
+
+function showHistoryEmpty() {
+  document.getElementById('phContent').style.display = 'none';
+  document.getElementById('phEmpty').style.display = 'none';
+  document.getElementById('phNoData').style.display = 'block';
+}
+
+function renderHistory(name, rounds) {
+  document.getElementById('phNoData').style.display = 'none';
+  document.getElementById('phEmpty').style.display = 'none';
+  document.getElementById('phContent').style.display = 'block';
+
+  const scores = rounds.map(r => r.score);
+  const hcs = rounds.map(r => r.new_handicap);
+  const avgScore = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+  const bestScore = scores.length ? Math.max(...scores) : '—';
+  const currentHC = hcs.length ? hcs[0] : '—';
+
+  document.getElementById('phStats').innerHTML = `
+    <div class="stat-card"><div class="stat-val">${rounds.length}</div><div class="stat-lbl">Rounds</div></div>
+    <div class="stat-card"><div class="stat-val">${avgScore}</div><div class="stat-lbl">Avg Score</div></div>
+    <div class="stat-card"><div class="stat-val">${bestScore}</div><div class="stat-lbl">Best Score</div></div>
+  `;
+
+  const labels = [...rounds].reverse().map(r => r.date.substring(5));
+  const scoreData = [...rounds].reverse().map(r => r.score);
+  const hcData = [...rounds].reverse().map(r => r.new_handicap);
+
+  if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  state.historyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Score', data: scoreData, borderColor: '#2D2B5B', backgroundColor: '#2D2B5B20', tension: 0.3, yAxisID: 'y' },
+        { label: 'Handicap', data: hcData, borderColor: '#FFD700', backgroundColor: '#FFD70020', tension: 0.3, borderDash: [4,2], yAxisID: 'y1' },
+      ]
+    },
+    options: {
+      responsive: true, interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { position: 'left', title: { display: true, text: 'Score' } },
+        y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'HC' } },
+      }
+    }
+  });
+
+  const tbody = document.getElementById('phTableBody');
+  tbody.innerHTML = rounds.map((r, i) => {
+    const prev = rounds[i+1];
+    const hcDiff = prev ? r.new_handicap - prev.new_handicap : 0;
+    const diffClass = hcDiff < 0 ? 'down' : hcDiff > 0 ? 'up' : '';
+    const diffStr = hcDiff !== 0 ? (hcDiff > 0 ? `+${hcDiff}` : hcDiff) : '—';
+    return `<tr>
+      <td class="left">${r.date}</td>
+      <td>${r.score}</td>
+      <td>${r.new_handicap}</td>
+      <td class="hc-change ${diffClass}">${diffStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// Screen 5 — Settings
+// ═══════════════════════════════════════════
+async function showSettings() {
+  document.getElementById('s5RollupName').textContent = session.rollupName;
+  showScreen('screen5');
+  await loadSettingsForm();
+}
+
+async function loadSettingsForm() {
+  try {
+    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
+    if (!resp.ok) return;
+    const s = await resp.json();
+    state.rollupSettings = s;
+    populateSettingsForm(s);
+    await loadCourseOptions(s.course_id, s.tee_id);
+  } catch(e) {}
+}
+
+function populateSettingsForm(s) {
+  document.getElementById('sDisplayName').value = s.display_name || '';
+  document.getElementById('sIgTerm').value = s.ig_search_term || '';
+  document.getElementById('sTeeInterval').value = s.tee_interval_minutes || 8;
+  document.getElementById('sIgUsername').value = session.igUsername || '';
+  // Don't pre-fill PIN
+
+  // Run days
+  document.querySelectorAll('.day-chip').forEach(chip => {
+    chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
+  });
+
+  // Scoring mode
+  const mode = s.scoring_mode || 'stableford';
+  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
+  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
+  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
+  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
+  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
+  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
+
+  // WHS fields
+  document.getElementById('sWhsPct1').value = s.whs_pct_1st || 0;
+  document.getElementById('sWhsPct2').value = s.whs_pct_2nd || 0;
+  document.getElementById('sWhsPct3').value = s.whs_pct_3rd || 0;
+  document.getElementById('sWhsProhibition').checked = s.whs_winner_prohibition || false;
+
+  // Stableford fields
+  document.getElementById('sWinnerBonus').checked = s.winner_bonus_enabled !== false;
+  document.getElementById('sGapPenalty1').value = s.winner_gap_penalty1 || 0;
+  document.getElementById('sGapPenalty2').value = s.winner_gap_penalty2 || 0;
+
+  // Adjustment table
+  populateAdjTable(s.adjustment_table || []);
+
+  // Prizes
+  document.getElementById('sEntryFee').value = s.entry_fee || 0;
+  setPrizePlaces(s.prize_places || 3, {
+    pct_1st: s.prize_pct_1st, pct_2nd: s.prize_pct_2nd,
+    pct_3rd: s.prize_pct_3rd, pct_4th: s.prize_pct_4th,
+  });
+  setTieHandling(s.tie_handling || 'tournament');
+
+  // Team
+  setDefaultTeamSize(s.preferred_team_size || 4);
+  document.getElementById('sTeamMethod').value = s.team_scoring_method || 'best2';
+}
+
+function onScoringModeChange(mode) {
+  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
+  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
+  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
+  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
+  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
+  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
+  if (mode === 'whs') loadCourseOptions();
+}
+
+async function loadCourseOptions(selectedCourseId, selectedTeeId) {
+  try {
+    const resp = await fetch('/api/courses');
+    const data = await resp.json();
+    const sel = document.getElementById('sCourseSelect');
+    sel.innerHTML = '<option value="">Select course…</option>';
+    data.courses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${c.name} — ${c.club}`;
+      if (c.id === selectedCourseId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (selectedCourseId) await loadTeeOptions(selectedCourseId, selectedTeeId);
+  } catch(e) {}
+}
+
+async function loadTeeOptions(courseId, selectedTeeId) {
+  const cid = courseId || parseInt(document.getElementById('sCourseSelect').value);
+  if (!cid) return;
+  try {
+    const resp = await fetch(`/api/tees?course_id=${cid}`);
+    const data = await resp.json();
+    const sel = document.getElementById('sTeeSelect');
+    sel.innerHTML = '<option value="">Select tee…</option>';
+    data.tees.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = `${t.name} (${t.gender}) — CR ${t.course_rating} / Slope ${t.slope}`;
+      if (t.id === selectedTeeId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+function populateAdjTable(table) {
+  const tbody = document.getElementById('adjTableBody');
+  tbody.innerHTML = table.map((row, i) => {
+    const isLast = row.max_score === null || i === table.length - 1;
+    const scoreCell = isLast
+      ? '<td style="color:#888;font-size:11px;">Otherwise</td>'
+      : `<td><input class="adj-input" type="number" value="${row.max_score}" onchange="updateAdjRow(${i},'max_score',this.value)"/></td>`;
+    return `<tr>${scoreCell}
+      <td><input class="adj-input" type="number" min="-5" max="5" value="${row.adjustment}" onchange="updateAdjRow(${i},'adjustment',this.value)"/></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateAdjRow(idx, field, val) {
+  if (!state.rollupSettings) return;
+  state.rollupSettings.adjustment_table[idx][field] = field === 'max_score'
+    ? (val === '' ? null : parseInt(val)) : parseInt(val);
+}
+
+function toggleDay(el) { el.classList.toggle('active'); }
+
+let currentPrizePlaces = 3;
+let currentPrizePcts = { pct_1st: 60, pct_2nd: 30, pct_3rd: 10, pct_4th: 0 };
+
+function setPrizePlaces(n, pcts) {
+  currentPrizePlaces = n;
+  if (pcts) currentPrizePcts = pcts;
+  document.querySelectorAll('.place-radio-btn[data-places]').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.places) === n);
+  });
+  renderPrizePctInputs(n);
+}
+
+function renderPrizePctInputs(n) {
+  const container = document.getElementById('prizePctInputs');
+  const labels = ['1st','2nd','3rd','4th'];
+  const keys = ['pct_1st','pct_2nd','pct_3rd','pct_4th'];
+  container.innerHTML = labels.slice(0, n).map((lbl, i) =>
+    `<div class="prize-pct-row">
+      <span class="prize-pct-label">${lbl}</span>
+      <input class="settings-input-sm" type="number" min="0" max="100" id="prizePct${i+1}" value="${currentPrizePcts[keys[i]] || 0}" onchange="validatePrizePcts()"/>
+      <span style="font-size:12px;color:#888;">%</span>
+     </div>`
+  ).join('');
+}
+
+function validatePrizePcts() {
+  const n = currentPrizePlaces;
+  let total = 0;
+  for (let i = 1; i <= n; i++) {
+    const el = document.getElementById(`prizePct${i}`);
+    if (el) total += parseInt(el.value) || 0;
+  }
+  document.getElementById('prizePctError').style.display = total !== 100 ? 'block' : 'none';
+}
+
+let currentTieHandling = 'tournament';
+function setTieHandling(val) {
+  currentTieHandling = val;
+  document.getElementById('tieTournament').classList.toggle('active', val === 'tournament');
+  document.getElementById('tieCountback').classList.toggle('active', val === 'countback');
+}
+
+let currentDefaultTeamSize = 4;
+function setDefaultTeamSize(n) {
+  currentDefaultTeamSize = n;
+  [2,3,4].forEach(x => {
+    const el = document.getElementById(`teamSz${x}`);
+    if (el) el.classList.toggle('active', x === n);
+  });
+}
+
+async function saveSettings() {
+  const mode = document.getElementById('modeWhs').classList.contains('active') ? 'whs' : 'stableford';
+  const runDays = [...document.querySelectorAll('.day-chip.active')].map(c => c.dataset.day);
+  const adjTable = state.rollupSettings ? state.rollupSettings.adjustment_table : [];
+  const igUsername = document.getElementById('sIgUsername').value.trim();
+  const igPin = document.getElementById('sIgPin').value.trim();
+
+  const n = currentPrizePlaces;
+  let pcts = [0, 0, 0, 0];
+  for (let i = 1; i <= n; i++) {
+    const el = document.getElementById(`prizePct${i}`);
+    pcts[i-1] = el ? (parseInt(el.value) || 0) : 0;
+  }
+  const total = pcts.reduce((a,b)=>a+b,0);
+  if (total !== 100) { alert('Prize percentages must add up to 100%.'); return; }
+
+  const courseId = document.getElementById('sCourseSelect').value;
+  const teeId = document.getElementById('sTeeSelect').value;
+
+  const payload = {
+    rollup_id: session.rollupId,
+    display_name: document.getElementById('sDisplayName').value.trim(),
+    ig_search_term: document.getElementById('sIgTerm').value.trim().toUpperCase(),
+    run_days: runDays,
+    tee_interval_minutes: parseInt(document.getElementById('sTeeInterval').value) || 8,
+    scoring_mode: mode,
+    adjustment_table: adjTable,
+    winner_bonus_enabled: document.getElementById('sWinnerBonus').checked,
+    winner_gap_penalty1: parseInt(document.getElementById('sGapPenalty1').value) || 0,
+    winner_gap_penalty2: parseInt(document.getElementById('sGapPenalty2').value) || 0,
+    whs_pct_1st: parseFloat(document.getElementById('sWhsPct1').value) || 0,
+    whs_pct_2nd: parseFloat(document.getElementById('sWhsPct2').value) || 0,
+    whs_pct_3rd: parseFloat(document.getElementById('sWhsPct3').value) || 0,
+    whs_winner_prohibition: document.getElementById('sWhsProhibition').checked,
+    course_id: courseId ? parseInt(courseId) : null,
+    tee_id: teeId ? parseInt(teeId) : null,
+    entry_fee: parseFloat(document.getElementById('sEntryFee').value) || 0,
+    prize_places: n,
+    prize_pct_1st: pcts[0], prize_pct_2nd: pcts[1], prize_pct_3rd: pcts[2], prize_pct_4th: pcts[3],
+    tie_handling: currentTieHandling,
+    preferred_team_size: currentDefaultTeamSize,
+    team_scoring_method: document.getElementById('sTeamMethod').value,
+  };
+
+  const statusEl = document.getElementById('s5Status');
+  statusEl.style.display = 'block';
+  statusEl.className = 'status-bar status-neutral';
+  statusEl.textContent = 'Saving…';
+
+  try {
+    const resp = await fetch('/api/settings', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      statusEl.className = 'status-bar status-danger';
+      statusEl.textContent = err.detail || 'Save failed.';
+      return;
+    }
+    // Save credentials to localStorage and DB
+    if (igUsername) {
+      localStorage.setItem('ig_username', igUsername);
+      session.igUsername = igUsername;
+    }
+    if (igPin) {
+      localStorage.setItem('ig_pin', igPin);
+      session.igPin = igPin;
+    }
+    // Update rollup name in session if changed
+    session.rollupName = payload.display_name || session.rollupName;
+    session.rollupTerm = payload.ig_search_term || session.rollupTerm;
+    localStorage.setItem('rollup_name', session.rollupName);
+    localStorage.setItem('rollup_term', session.rollupTerm);
+    updateHeaderNames();
+
+    statusEl.className = 'status-bar status-success';
+    statusEl.textContent = 'Settings saved ✓';
+    setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+  } catch(e) {
+    statusEl.className = 'status-bar status-danger';
+    statusEl.textContent = 'Network error.';
+  }
+}
+
+// ═══════════════════════════════════════════
+// Screen 6 — Player Manager
+// ═══════════════════════════════════════════
+let s6State = { rollupId: null, players: [], playerToDelete: null };
+
+async function showPlayerManager() {
+  showScreen('screen6');
+  // Populate rollup dropdown
+  try {
+    const resp = await fetch('/api/rollups');
+    const data = await resp.json();
+    const sel = document.getElementById('s6RollupSelect');
+    sel.innerHTML = '<option value="">Select rollup…</option>';
+    data.rollups.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.name;
+      if (r.id === session.rollupId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    s6State.rollupId = session.rollupId;
+    document.getElementById('s6RollupLabel').textContent = session.rollupName;
+    if (s6State.rollupId) await loadPlayerManager();
+  } catch(e) {}
+}
+
+async function loadPlayerManager() {
+  const sel = document.getElementById('s6RollupSelect');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  s6State.rollupId = parseInt(opt.value);
+  document.getElementById('s6RollupLabel').textContent = opt.textContent;
+  setS6Status('Loading…', 'neutral');
+  try {
+    const resp = await fetch(`/api/players/detail?rollup_id=${s6State.rollupId}`);
+    const data = await resp.json();
+    s6State.players = data.players;
+    renderPlayerTable();
+    setS6Status(`${s6State.players.length} players`, 'neutral');
+  } catch(e) {
+    setS6Status('Failed to load players', 'danger');
+  }
+}
+
+function renderPlayerTable() {
+  const tbody = document.getElementById('s6TableBody');
+  if (s6State.players.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = s6State.players.map(p => {
+    const prohibBadge = p.winner_prohibited ? ' <span class="prohibited-badge" title="Winner prohibited">🚫</span>' : '';
+    const whsVal = p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : '—';
+    const nextVal = p.whs_index_next_round !== null && p.whs_index_next_round !== undefined ? p.whs_index_next_round.toFixed(1) : '—';
+    return `<tr>
+      <td class="left">${p.name}${prohibBadge}</td>
+      <td><input class="s6-hc-input" id="hc_${p.id}" type="number" min="0" max="54" value="${p.handicap}" inputmode="numeric"/></td>
+      <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
+      <td style="font-size:11px;color:#888;">${nextVal}</td>
+      <td style="font-size:11px;color:#888;">${p.round_count}</td>
+      <td style="display:flex;gap:3px;padding:3px 4px;">
+        <button class="s6-save-btn" onclick="savePlayerHC(${p.id})">HC</button>
+        <button class="s6-save-whs-btn" onclick="savePlayerWHS(${p.id})">WHS</button>
+        <button class="s6-del-btn" onclick="promptDeletePlayer(${p.id}, '${p.name.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function setS6Status(msg, type) {
+  const el = document.getElementById('s6Status');
+  el.textContent = msg;
+  el.className = `s6-status status-bar status-${type}`;
+}
+
+async function savePlayerHC(playerId) {
+  const input = document.getElementById(`hc_${playerId}`);
+  const hc = parseInt(input.value);
+  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Handicap must be 0–54.'); return; }
+  try {
+    const resp = await fetch('/api/players/update-handicap', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ player_id: playerId, handicap: hc, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    const p = s6State.players.find(p => p.id === playerId);
+    if (p) p.handicap = hc;
+    setS6Status('HC saved ✓', 'success');
+    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
+  } catch(e) { setS6Status('Save failed', 'danger'); }
+}
+
+async function savePlayerWHS(playerId) {
+  const input = document.getElementById(`whs_${playerId}`);
+  const val = input.value.trim();
+  if (val === '') { alert('Enter a WHS index (e.g. 14.2)'); return; }
+  const whs = parseFloat(val);
+  if (isNaN(whs) || whs < 0 || whs > 54) { alert('WHS index must be between 0 and 54.'); return; }
+  const whsRounded = Math.round(whs * 10) / 10;
+  try {
+    const resp = await fetch('/api/players/update-whs-index', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ player_id: playerId, whs_index: whsRounded, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    const p = s6State.players.find(p => p.id === playerId);
+    if (p) p.whs_index = whsRounded;
+    input.value = whsRounded.toFixed(1);
+    setS6Status('WHS index saved ✓', 'success');
+    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
+  } catch(e) { setS6Status('Save failed', 'danger'); }
+}
+
+function promptDeletePlayer(playerId, name) {
+  s6State.playerToDelete = playerId;
+  document.getElementById('deletePlayerName').textContent = name;
+  document.getElementById('deletePlayerOverlay').classList.add('open');
+}
+
+async function confirmDeletePlayer() {
+  closeOverlay('deletePlayerOverlay');
+  try {
+    const resp = await fetch('/api/players/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ player_id: s6State.playerToDelete, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    await loadPlayerManager();
+  } catch(e) { setS6Status('Delete failed', 'danger'); }
+}
+
+function showAddPlayerDialog() {
+  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
+  document.getElementById('addPlayerName').value = '';
+  document.getElementById('addPlayerHC').value = '';
+  document.getElementById('addPlayerOverlay').classList.add('open');
+}
+
+async function confirmAddPlayer() {
+  const name = document.getElementById('addPlayerName').value.trim();
+  const hc = parseInt(document.getElementById('addPlayerHC').value);
+  if (!name) { alert('Please enter a name.'); return; }
+  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
+  try {
+    const resp = await fetch('/api/new-player', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, handicap: hc, rollup_id: s6State.rollupId }),
+    });
+    if (!resp.ok) throw new Error();
+    closeOverlay('addPlayerOverlay');
+    await loadPlayerManager();
+  } catch(e) { setS6Status('Add failed', 'danger'); }
+}
+
+async function syncWhsIndices() {
+  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
+  const igUsername = localStorage.getItem('ig_username') || session.igUsername || '';
+  const igPin = localStorage.getItem('ig_pin') || session.igPin || '';
+  if (!igUsername || !igPin) {
+    alert('IG credentials not set. Please sign in first.');
+    return;
+  }
+  setS6Status('Syncing WHS indices from IG…', 'neutral');
+  try {
+    const resp = await fetch('/api/scrape-whs-indices', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        ig_username: igUsername,
+        ig_pin: igPin,
+        rollup_id: s6State.rollupId,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { setS6Status(data.detail || 'Sync failed', 'danger'); return; }
+    const msg = `Updated ${data.updated} player${data.updated !== 1 ? 's' : ''}` +
+      (data.not_found.length ? ` · ${data.not_found.length} not matched` : '');
+    setS6Status(msg, 'success');
+    await loadPlayerManager();
+  } catch(e) { setS6Status('Sync failed — network error', 'danger'); }
+}
+
+// ═══════════════════════════════════════════
 // New player queue
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 function processNewPlayerQueue() {
   if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
   state.currentNewPlayer = state.newPlayerQueue.shift();
@@ -1921,7 +2108,7 @@ function processNewPlayerQueue() {
 async function confirmNewPlayer() {
   const hc = parseInt(document.getElementById('newPlayerHC').value);
   if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await fetch('/api/new-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:state.currentNewPlayer, handicap:hc, rollup_id:session.rollupId}) });
+  await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}) });
   const p = state.players.find(p => p.name === state.currentNewPlayer);
   if (p) { p.handicap = hc; p.new_player = false; }
   closeOverlay('newPlayerOverlay');
@@ -1945,7 +2132,9 @@ function confirmRemovePlayer() {
   state.playerToRemove = null;
   closeOverlay('removePlayerOverlay');
   state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
+  updateTeamStructureUI();
+  updateUnassignedWarning();
+  renderGrid();
 }
 
 function addWalkupPlayer() {
@@ -1969,7 +2158,7 @@ async function lookupWalkupPlayer() {
   document.getElementById('walkupStatus').textContent = 'Looking up…';
   document.getElementById('walkupStatus').style.color = '#888';
   try {
-    const resp = await fetch('/api/lookup-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, rollup_id:session.rollupId}) });
+    const resp = await fetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, rollup_id: session.rollupId}) });
     const data = await resp.json();
     if (data.found) {
       state.walkupFoundHC = data.handicap;
@@ -2003,158 +2192,14 @@ async function confirmWalkupPlayer() {
   if (hc === null) {
     hc = parseInt(document.getElementById('walkupHC').value);
     if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-    await fetch('/api/new-player', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, handicap:hc, rollup_id:session.rollupId}) });
+    await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc, rollup_id: session.rollupId}) });
   }
-  state.players.push({ name, handicap:hc, score:null, team:null, new_player:false });
+  state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
   closeOverlay('walkupOverlay');
   state.selectedStructure = null;
-  updateTeamStructureUI(); updateUnassignedWarning(); renderGrid();
-}
-
-// ═══════════════════════════════════════
-// Screen 6 - Player Manager
-// ═══════════════════════════════════════
-let s6State = { players: [], rollupId: null, playerToDelete: null };
-
-async function showPlayerManager() {
-  showScreen('screen6');
-  // Populate rollup dropdown
-  const sel = document.getElementById('s6RollupSelect');
-  sel.innerHTML = '<option value="">Select rollup…</option>';
-  availableRollups.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.id;
-    opt.textContent = r.name;
-    if (r.id === session.rollupId) opt.selected = true;
-    sel.appendChild(opt);
-  });
-  if (session.rollupId) {
-    sel.value = session.rollupId;
-    await loadPlayerManager();
-  }
-}
-
-async function loadPlayerManager() {
-  const sel = document.getElementById('s6RollupSelect');
-  const rollupId = parseInt(sel.value);
-  if (!rollupId) {
-    document.getElementById('s6TableWrap').style.display = 'none';
-    document.getElementById('s6Empty').style.display = 'none';
-    setS6Status('', 'neutral');
-    return;
-  }
-  s6State.rollupId = rollupId;
-  setS6Status('Loading…', 'neutral');
-  try {
-    const resp = await fetch(`/api/players/detail?rollup_id=${rollupId}`);
-    const data = await resp.json();
-    s6State.players = data.players || [];
-    renderPlayerTable();
-    setS6Status(`${s6State.players.length} player${s6State.players.length !== 1 ? 's' : ''}`, 'neutral');
-  } catch(e) {
-    setS6Status('Could not load players', 'danger');
-  }
-}
-
-function renderPlayerTable() {
-  const tbody = document.getElementById('s6PlayerTableBody');
-  tbody.innerHTML = '';
-  if (s6State.players.length === 0) {
-    document.getElementById('s6TableWrap').style.display = 'none';
-    document.getElementById('s6Empty').style.display = 'block';
-    return;
-  }
-  document.getElementById('s6TableWrap').style.display = 'block';
-  document.getElementById('s6Empty').style.display = 'none';
-  s6State.players.forEach(p => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${p.name}</td>
-      <td class="c">
-        <input class="pt-hc-input" type="number" min="0" max="54"
-          value="${p.handicap}" id="hc_${p.id}"
-          onkeydown="if(event.key==='Enter') savePlayerHC(${p.id})"/>
-      </td>
-      <td class="c" style="font-size:12px;color:#888;">${p.round_count ?? '—'}</td>
-      <td class="c" style="display:flex;gap:4px;justify-content:center;">
-        <button class="pt-save-btn" onclick="savePlayerHC(${p.id})">Save</button>
-        <button class="pt-delete-btn" onclick="promptDeletePlayer(${p.id}, '${p.name.replace(/'/g, "\\'")}')">✕</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-async function savePlayerHC(playerId) {
-  const input = document.getElementById(`hc_${playerId}`);
-  const hc = parseInt(input.value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Handicap must be 0–54.'); return; }
-  try {
-    const resp = await fetch('/api/players/update-handicap', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ player_id: playerId, handicap: hc, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    const p = s6State.players.find(p => p.id === playerId);
-    if (p) p.handicap = hc;
-    setS6Status('Saved ✓', 'success');
-    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
-  } catch(e) { setS6Status('Save failed', 'danger'); }
-}
-
-function promptDeletePlayer(playerId, name) {
-  s6State.playerToDelete = playerId;
-  document.getElementById('deletePlayerName').textContent = name;
-  document.getElementById('deletePlayerOverlay').classList.add('open');
-}
-
-async function confirmDeletePlayer() {
-  closeOverlay('deletePlayerOverlay');
-  try {
-    const resp = await fetch('/api/players/delete', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ player_id: s6State.playerToDelete, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    s6State.players = s6State.players.filter(p => p.id !== s6State.playerToDelete);
-    s6State.playerToDelete = null;
-    renderPlayerTable();
-    setS6Status(`${s6State.players.length} players`, 'neutral');
-  } catch(e) { setS6Status('Delete failed', 'danger'); }
-}
-
-function showAddPlayerDialog() {
-  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
-  document.getElementById('addPlayerName').value = '';
-  document.getElementById('addPlayerHC').value = '';
-  document.getElementById('addPlayerError').style.display = 'none';
-  document.getElementById('addPlayerDialogOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('addPlayerName').focus(), 100);
-}
-
-async function confirmAddPlayerDialog() {
-  const name = document.getElementById('addPlayerName').value.trim();
-  const hc = parseInt(document.getElementById('addPlayerHC').value);
-  const errEl = document.getElementById('addPlayerError');
-  if (!name) { errEl.textContent = 'Please enter a player name.'; errEl.style.display = 'block'; return; }
-  if (isNaN(hc) || hc < 0 || hc > 54) { errEl.textContent = 'Handicap must be 0–54.'; errEl.style.display = 'block'; return; }
-  if (s6State.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
-    errEl.textContent = 'A player with this name already exists.'; errEl.style.display = 'block'; return;
-  }
-  try {
-    const resp = await fetch('/api/new-player', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ name, handicap: hc, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    closeOverlay('addPlayerDialogOverlay');
-    await loadPlayerManager();
-  } catch(e) { errEl.textContent = 'Could not add player. Try again.'; errEl.style.display = 'block'; }
-}
-
-function setS6Status(msg, type) {
-  const el = document.getElementById('s6Status');
-  el.textContent = msg;
-  el.className = `s6-status status-${type}`;
+  updateTeamStructureUI();
+  updateUnassignedWarning();
+  renderGrid();
 }
 
 function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
