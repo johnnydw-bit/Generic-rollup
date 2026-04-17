@@ -1,5 +1,22 @@
 import re
-from playwright.async_api import async_playwright
+import httpx
+from bs4 import BeautifulSoup
+
+BRAMLEY_BASE = "https://www.bramleygolfclub.co.uk"
+
+
+async def _bramley_login(client: httpx.AsyncClient, username: str, pin: str):
+    login_page = await client.get(f"{BRAMLEY_BASE}/member/index.php")
+    soup = BeautifulSoup(login_page.text, "html.parser")
+    form = soup.find("form")
+    action = form.get("action", "/member/index.php")
+    login_url = f"{BRAMLEY_BASE}{action}" if action.startswith("/") else action
+
+    payload = {i.get("name"): i.get("value", "") for i in form.find_all("input") if i.get("name")}
+    payload["username"] = username
+    payload["password"] = pin
+
+    await client.post(login_url, data=payload)
 
 
 async def scrape_players(
@@ -8,78 +25,59 @@ async def scrape_players(
     date_str: str,
     ig_search_term: str,
 ) -> dict:
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        try:
-            # ── Log in ───────────────────────────────────────────────────────
-            await page.goto("https://www.bramleygolfclub.co.uk/member/index.php")
-            await page.wait_for_selector('input[name="username"]', timeout=15000)
-            await page.fill('input[name="username"]', ig_username)
-            await page.fill('input[name="password"]', ig_pin)
-            await page.click('input[type="submit"]')
-            await page.wait_for_load_state("networkidle")
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        await _bramley_login(client, ig_username, ig_pin)
 
-            # ── Scrape booking sheet ─────────────────────────────────────────
-            await page.goto(
-                f"https://www.bramleygolfclub.co.uk/memberbooking/"
-                f"?date={date_str}&searchterm={ig_search_term}"
-            )
-            await page.wait_for_load_state("networkidle")
+        # ── Scrape booking sheet ─────────────────────────────────────────
+        booking = await client.get(
+            f"{BRAMLEY_BASE}/memberbooking/",
+            params={"date": date_str, "searchterm": ig_search_term}
+        )
+        soup = BeautifulSoup(booking.text, "html.parser")
 
-            name_elements = await page.query_selector_all(
-                "td.booking-player a, .booking-name a, .player-name"
-            )
-            names = []
-            for el in name_elements:
-                text = (await el.inner_text()).strip()
-                if text and text not in names:
-                    names.append(text)
+        names = []
+        for el in soup.select("td.booking-player a, .booking-name a, .player-name"):
+            text = el.get_text(strip=True)
+            if text and text not in names:
+                names.append(text)
 
-            tee_time_elements = await page.query_selector_all(
-                "td.tee-time, .booking-time, td.time"
-            )
-            tee_times_raw = []
-            for el in tee_time_elements:
-                text = (await el.inner_text()).strip()
-                if text and re.match(r'\d{1,2}:\d{2}', text):
-                    tee_times_raw.append(text)
+        tee_times_raw = []
+        for el in soup.select("td.tee-time, .booking-time, td.time"):
+            text = el.get_text(strip=True)
+            if text and re.match(r'\d{1,2}:\d{2}', text):
+                tee_times_raw.append(text)
 
-            unique_tee_times = sorted(set(tee_times_raw))
-            tee_start = unique_tee_times[0] if unique_tee_times else ""
+        unique_tee_times = sorted(set(tee_times_raw))
+        tee_start = unique_tee_times[0] if unique_tee_times else ""
 
-            # ── Scrape WHS indices ───────────────────────────────────────────
-            await page.goto(
-                "https://www.bramleygolfclub.co.uk/hcaplist.php"
-                "?action=masterhcap&filter=&sort=0"
-            )
-            await page.wait_for_load_state("networkidle")
+        # ── Scrape WHS indices ───────────────────────────────────────────
+        hcap = await client.get(
+            f"{BRAMLEY_BASE}/hcaplist.php",
+            params={"action": "masterhcap", "filter": "", "sort": "0"}
+        )
+        soup = BeautifulSoup(hcap.text, "html.parser")
 
-            rows = await page.query_selector_all("table.table tbody tr")
-            indices = {}
-            for row in rows:
-                name_el = await row.query_selector("td:first-child a")
-                idx_el  = await row.query_selector("td:last-child")
-                if not name_el or not idx_el:
-                    continue
-                name     = (await name_el.inner_text()).strip()
-                idx_text = (await idx_el.inner_text()).strip()
-                try:
-                    indices[name] = float(idx_text)
-                except ValueError:
-                    pass
+        indices = {}
+        for row in soup.select("table.table tbody tr"):
+            name_el = row.select_one("td:first-child a")
+            idx_el  = row.select_one("td:last-child")
+            if not name_el or not idx_el:
+                continue
+            name     = name_el.get_text(strip=True)
+            idx_text = idx_el.get_text(strip=True)
+            try:
+                indices[name] = float(idx_text)
+            except ValueError:
+                pass
 
-            return {
-                "names":     names,
-                "tee_times": len(unique_tee_times),
-                "tee_start": tee_start,
-                "indices":   indices,
-            }
-        finally:
-            await browser.close()
+        return {
+            "names":     names,
+            "tee_times": len(unique_tee_times),
+            "tee_start": tee_start,
+            "indices":   indices,
+        }
 
 
 async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
-    # Indices are now scraped as part of scrape_players in one session.
-    # This stub is kept so main.py imports don't break.
+    # Indices now scraped as part of scrape_players in one session.
     return {"indices": {}}
