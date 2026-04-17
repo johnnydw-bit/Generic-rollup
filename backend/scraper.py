@@ -1,13 +1,6 @@
-# Bramley Rollup - backend/scraper.py
-# Playwright-based scrapers for Intelligent Golf
-
 import re
 from playwright.async_api import async_playwright
 
-
-# ---------------------------------------------------------------------------
-# scrape_players — scrape the booking list for a specific date
-# ---------------------------------------------------------------------------
 
 async def scrape_players(
     ig_username: str,
@@ -15,37 +8,22 @@ async def scrape_players(
     date_str: str,
     ig_search_term: str,
 ) -> dict:
-    """
-    Log in to Intelligent Golf and scrape the booking list for a given date.
-
-    Returns:
-        {
-            "names":     [str, ...],   # player names in booking order
-            "tee_times": int,          # number of distinct tee time slots
-            "tee_start": str,          # first tee time e.g. "08:00"
-        }
-    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
-            # ── Log in ──────────────────────────────────────────────────────
             await page.goto("https://www.intelligentgolf.co.uk/login.php")
             await page.fill('input[name="username"]', ig_username)
             await page.fill('input[name="password"]', ig_pin)
             await page.click('input[type="submit"]')
             await page.wait_for_load_state("networkidle")
 
-            # ── Navigate to booking sheet ────────────────────────────────────
-            # Search for the rollup contact by the ig_search_term
             await page.goto(
                 f"https://www.intelligentgolf.co.uk/booking.php"
                 f"?date={date_str}&searchterm={ig_search_term}"
             )
             await page.wait_for_load_state("networkidle")
 
-            # ── Extract player names ─────────────────────────────────────────
-            # Players appear as links within booking slots
             name_elements = await page.query_selector_all(
                 "td.booking-player a, .booking-name a, .player-name"
             )
@@ -55,7 +33,6 @@ async def scrape_players(
                 if text and text not in names:
                     names.append(text)
 
-            # ── Extract tee time info ────────────────────────────────────────
             tee_time_elements = await page.query_selector_all(
                 "td.tee-time, .booking-time, td.time"
             )
@@ -77,46 +54,30 @@ async def scrape_players(
             await browser.close()
 
 
-# ---------------------------------------------------------------------------
-# scrape_whs_indices — scrape the club handicap index list
-# ---------------------------------------------------------------------------
-
 async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
-    """
-    Log in to Intelligent Golf and scrape the full member WHS handicap index
-    list from bramleygolfclub.co.uk/hcaplist.php.
-
-    Returns:
-        {
-            "indices": {"John Smith": 14.2, ...}
-        }
-    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
-            # ── Log in ──────────────────────────────────────────────────────
+            # ── Log in ───────────────────────────────────────────────────────
             await page.goto("https://www.bramleygolfclub.co.uk/member/index.php")
+            await page.screenshot(path="/tmp/bramley_debug_1_login.png")
+            await page.wait_for_selector('input[name="username"]', timeout=30000)
             await page.fill('input[name="username"]', ig_username)
             await page.fill('input[name="password"]', ig_pin)
             await page.click('input[type="submit"]')
             await page.wait_for_load_state("networkidle")
+            await page.screenshot(path="/tmp/bramley_debug_2_after_login.png")
 
-            # ── Navigate to handicap list ────────────────────────────────────
-            # sort=0 = sort by name (alphabetical), filter= = no filter
+            # ── Navigate to handicap list ─────────────────────────────────────
             await page.goto(
                 "https://www.bramleygolfclub.co.uk/hcaplist.php"
                 "?action=masterhcap&filter=&sort=0"
             )
             await page.wait_for_load_state("networkidle")
+            await page.screenshot(path="/tmp/bramley_debug_3_hcaplist.png")
 
-            # ── Parse all rows ───────────────────────────────────────────────
-            # Structure: <table class="table table-striped">
-            #   <tbody>
-            #     <tr>
-            #       <td><a href="...">Player Name</a></td>
-            #       <td style="text-align:center;">14.2</td>   ← may be <span> for away HC
-            #     </tr>
+            # ── Parse all rows ────────────────────────────────────────────────
             rows = await page.query_selector_all("table.table tbody tr")
             indices = {}
             for row in rows:
@@ -124,12 +85,12 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
                 idx_el  = await row.query_selector("td:last-child")
                 if not name_el or not idx_el:
                     continue
-                name      = (await name_el.inner_text()).strip()
-                idx_text  = (await idx_el.inner_text()).strip()
+                name     = (await name_el.inner_text()).strip()
+                idx_text = (await idx_el.inner_text()).strip()
                 try:
                     indices[name] = float(idx_text)
                 except ValueError:
-                    pass  # skip malformed rows (e.g. headers, empty cells)
+                    pass
 
             return {"indices": indices}
         finally:
