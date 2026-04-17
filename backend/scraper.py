@@ -9,9 +9,10 @@ async def _bramley_login(client: httpx.AsyncClient, username: str, pin: str):
     login_page = await client.get(f"{BRAMLEY_BASE}/login.php")
     soup = BeautifulSoup(login_page.text, "html.parser")
     form = soup.find("form")
+    if not form:
+        raise Exception(f"Login form not found. Page: {soup.title.string if soup.title else 'unknown'}")
     action = form.get("action", "/login.php")
-    
-    if action == "/" or not action:
+    if not action or action == "/":
         login_url = f"{BRAMLEY_BASE}/login.php"
     elif action.startswith("/"):
         login_url = f"{BRAMLEY_BASE}{action}"
@@ -54,36 +55,4 @@ async def scrape_players(
                 tee_times_raw.append(text)
 
         unique_tee_times = sorted(set(tee_times_raw))
-        tee_start = unique_tee_times[0] if unique_tee_times else ""
-
-        # ── Scrape WHS indices ───────────────────────────────────────────
-        hcap = await client.get(
-            f"{BRAMLEY_BASE}/hcaplist.php",
-            params={"action": "masterhcap", "filter": "", "sort": "0"}
-        )
-        soup = BeautifulSoup(hcap.text, "html.parser")
-
-        indices = {}
-        for row in soup.select("table.table tbody tr"):
-            name_el = row.select_one("td:first-child a")
-            idx_el  = row.select_one("td:last-child")
-            if not name_el or not idx_el:
-                continue
-            name     = name_el.get_text(strip=True)
-            idx_text = idx_el.get_text(strip=True)
-            try:
-                indices[name] = float(idx_text)
-            except ValueError:
-                pass
-
-        return {
-            "names":     names,
-            "tee_times": len(unique_tee_times),
-            "tee_start": tee_start,
-            "indices":   indices,
-        }
-
-
-async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
-    # Indices now scraped as part of scrape_players in one session.
-    return {"indices": {}}
+        tee_start = unique_tee_times[0] if unique_tee_times else
