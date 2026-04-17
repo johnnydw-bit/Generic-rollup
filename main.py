@@ -1,10 +1,7 @@
 # Bramley Rollup - backend/main.py
-# v3 04/04: rollup settings and credentials endpoints added
-# v4 04/07: settings wired into handicap/team calculations; per-request DB connections
+# v4 04/17: WHS mode, courses/tees, player manager endpoints, WHS index scraper
 
 import os
-from typing import Optional
-
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,11 +11,17 @@ from fastapi import Request
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from backend.handicap import calculate_new_handicaps, calculate_team_scores, format_adjustment
+from backend.handicap import (
+    calculate_new_handicaps,
+    calculate_whs_handicaps,
+    calculate_team_scores,
+    format_adjustment,
+)
 from backend.db import (
     get_all_players,
     get_all_players_detail,
     update_player_handicap,
+    update_player_whs_index,
     remove_player,
     get_all_rollups,
     get_or_create_rollup,
@@ -33,6 +36,9 @@ from backend.db import (
     save_rollup_settings,
     get_credentials,
     save_credentials,
+    get_all_courses,
+    get_tees_for_course,
+    get_prohibited_winners,
     init_db,
     close_db,
 )
@@ -100,7 +106,8 @@ async def add_rollup(body: AddRollupRequest):
         rollup_id = await get_or_create_rollup(body.name, body.ig_search_term.upper())
     except Exception as e:
         raise HTTPException(500, f"Could not add rollup: {str(e)}")
-    return {"ok": True, "id": rollup_id, "name": body.name, "ig_search_term": body.ig_search_term.upper()}
+    return {"ok": True, "id": rollup_id, "name": body.name,
+            "ig_search_term": body.ig_search_term.upper()}
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +147,7 @@ async def load_players(body: LoadRequest):
     except Exception as e:
         raise HTTPException(502, str(e))
 
-    names = scrape_result["names"]
+    names     = scrape_result["names"]
     tee_times = scrape_result["tee_times"]
     tee_start = scrape_result.get("tee_start", "")
 
@@ -154,15 +161,32 @@ async def load_players(body: LoadRequest):
 
     name_to_hc = {p["name"].strip().lower(): p["handicap"] for p in all_players}
 
-    players = []
+    players     = []
     new_players = []
     for name in names:
-        hc = name_to_hc.get(name.strip().lower())
+        hc     = name_to_hc.get(name.strip().lower())
+        p_data = next(
+            (p for p in all_players if p["name"].strip().lower() == name.strip().lower()),
+            None
+        )
         if hc is None:
             new_players.append(name)
-            players.append({"name": name, "handicap": None, "score": None, "team": None, "new_player": True})
+            players.append({
+                "name": name, "handicap": None, "score": None, "team": None,
+                "new_player": True, "whs_index": None,
+                "whs_index_next_round": None, "winner_prohibited": False,
+            })
         else:
-            players.append({"name": name, "handicap": hc, "score": None, "team": None, "new_player": False})
+            players.append({
+                "name":                 name,
+                "handicap":             hc,
+                "score":                None,
+                "team":                 None,
+                "new_player":           False,
+                "whs_index":            float(p_data["whs_index"]) if p_data and p_data.get("whs_index") else None,
+                "whs_index_next_round": float(p_data["whs_index_next_round"]) if p_data and p_data.get("whs_index_next_round") else None,
+                "winner_prohibited":    p_data.get("winner_prohibited", False) if p_data else False,
+            })
 
     return {
         "date":        body.date,
@@ -220,7 +244,7 @@ async def get_players(rollup_id: int = Query(1)):
 
 @app.get("/api/players/detail")
 async def get_players_detail(rollup_id: int = Query(1)):
-    """Returns players with id and round count for the player manager."""
+    """Returns players with id, WHS fields and round count for the player manager."""
     try:
         players = await get_all_players_detail(rollup_id)
     except Exception as e:
@@ -237,11 +261,29 @@ class UpdateHandicapRequest(BaseModel):
 @app.post("/api/players/update-handicap")
 async def update_handicap(body: UpdateHandicapRequest):
     if body.handicap < 0 or body.handicap > 54:
-        raise HTTPException(400, "Handicap must be 0–54")
+        raise HTTPException(400, "Handicap must be 0-54")
     try:
         await update_player_handicap(body.player_id, body.handicap)
     except Exception as e:
         raise HTTPException(500, f"Could not update handicap: {str(e)}")
+    return {"ok": True}
+
+
+class UpdateWhsIndexRequest(BaseModel):
+    player_id: int
+    whs_index: float
+    rollup_id: int
+
+
+@app.post("/api/players/update-whs-index")
+async def update_whs_index(body: UpdateWhsIndexRequest):
+    if body.whs_index < 0 or body.whs_index > 54:
+        raise HTTPException(400, "WHS index must be 0-54")
+    rounded = round(body.whs_index * 10) / 10
+    try:
+        await update_player_whs_index(body.player_id, rounded)
+    except Exception as e:
+        raise HTTPException(500, f"Could not update WHS index: {str(e)}")
     return {"ok": True}
 
 
@@ -259,8 +301,75 @@ async def delete_player(body: DeletePlayerRequest):
     return {"ok": True}
 
 
+class SyncWhsRequest(BaseModel):
+    ig_username: str
+    ig_pin: str
+    rollup_id: int
+
+
+@app.post("/api/scrape-whs-indices")
+async def scrape_whs_indices_endpoint(body: SyncWhsRequest):
+    """
+    Scrape WHS indices from bramleygolfclub.co.uk/hcaplist.php and
+    update matching players in the specified rollup.
+    """
+    from backend.scraper import scrape_whs_indices
+
+    try:
+        result = await scrape_whs_indices(body.ig_username, body.ig_pin)
+    except Exception as e:
+        raise HTTPException(502, f"Could not scrape handicap list: {str(e)}")
+
+    indices     = result["indices"]
+    all_players = await get_all_players(body.rollup_id)
+
+    updated   = []
+    not_found = []
+    for p in all_players:
+        name  = p["name"].strip()
+        lower = name.lower()
+        # Try exact then case-insensitive
+        idx = indices.get(name) or next(
+            (v for k, v in indices.items() if k.lower() == lower), None
+        )
+        if idx is not None:
+            await update_player_whs_index(p["id"], idx)
+            updated.append({"name": name, "whs_index": idx})
+        else:
+            not_found.append(name)
+
+    return {
+        "ok":       True,
+        "updated":  len(updated),
+        "not_found": not_found,
+        "details":  updated,
+    }
+
+
 # ---------------------------------------------------------------------------
-# Scoring — autosave and save-round both load settings from DB
+# Courses and tees
+# ---------------------------------------------------------------------------
+
+@app.get("/api/courses")
+async def courses():
+    try:
+        data = await get_all_courses()
+    except Exception as e:
+        raise HTTPException(500, f"Could not load courses: {str(e)}")
+    return {"courses": data}
+
+
+@app.get("/api/tees")
+async def tees(course_id: int = Query(...)):
+    try:
+        data = await get_tees_for_course(course_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not load tees: {str(e)}")
+    return {"tees": data}
+
+
+# ---------------------------------------------------------------------------
+# Scoring
 # ---------------------------------------------------------------------------
 
 class ScoreUpdate(BaseModel):
@@ -275,17 +384,38 @@ async def autosave(body: ScoreUpdate):
     try:
         settings = await get_rollup_settings(body.rollup_id)
     except Exception:
-        settings = None  # fall back to defaults in handicap.py
+        settings = None
 
-    results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
-    for r in results:
-        r["adj_display"] = format_adjustment(r.get("adjustment"))
+    whs_mode = (settings or {}).get("scoring_mode") == "whs"
 
-    team_scores = []
-    if body.team_mode:
-        team_scores = calculate_team_scores(results, settings=settings)
-
-    return {"players": results, "team_scores": team_scores}
+    if whs_mode:
+        prohibited = await get_prohibited_winners(body.rollup_id)
+        whs_result = calculate_whs_handicaps(
+            body.players, settings=settings, prohibited_names=prohibited
+        )
+        results = whs_result["players"]
+        for r in results:
+            r["adj_display"] = format_adjustment(r.get("adjustment"))
+        team_scores = []
+        if body.team_mode:
+            team_scores = calculate_team_scores(results, settings=settings)
+        return {
+            "players":           results,
+            "team_scores":       team_scores,
+            "whs_mode":          True,
+            "prohibited_winner": whs_result.get("prohibited_winner"),
+            "error":             whs_result.get("error"),
+        }
+    else:
+        results = calculate_new_handicaps(
+            body.players, team_mode=body.team_mode, settings=settings
+        )
+        for r in results:
+            r["adj_display"] = format_adjustment(r.get("adjustment"))
+        team_scores = []
+        if body.team_mode:
+            team_scores = calculate_team_scores(results, settings=settings)
+        return {"players": results, "team_scores": team_scores, "whs_mode": False}
 
 
 @app.post("/api/save-round")
@@ -295,21 +425,45 @@ async def save_round(body: ScoreUpdate):
     except Exception:
         settings = None
 
-    results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
+    whs_mode = (settings or {}).get("scoring_mode") == "whs"
 
-    try:
-        await save_round_results(results, body.date, body.rollup_id)
-    except Exception as e:
-        raise HTTPException(500, f"Failed to save to database: {str(e)}")
+    if whs_mode:
+        prohibited = await get_prohibited_winners(body.rollup_id)
+        whs_result = calculate_whs_handicaps(
+            body.players, settings=settings, prohibited_names=prohibited
+        )
+        if whs_result.get("error"):
+            raise HTTPException(400, whs_result["error"])
 
-    for r in results:
-        r["adj_display"] = format_adjustment(r.get("adjustment"))
+        results = whs_result["players"]
+        try:
+            await save_round_results(results, body.date, body.rollup_id, whs_mode=True)
+        except Exception as e:
+            raise HTTPException(500, f"Failed to save to database: {str(e)}")
 
-    team_scores = []
-    if body.team_mode:
-        team_scores = calculate_team_scores(results, settings=settings)
+        for r in results:
+            r["adj_display"] = format_adjustment(r.get("adjustment"))
+        team_scores = []
+        if body.team_mode:
+            team_scores = calculate_team_scores(results, settings=settings)
+        return {"ok": True, "players": results, "date": body.date,
+                "team_scores": team_scores, "whs_mode": True}
+    else:
+        results = calculate_new_handicaps(
+            body.players, team_mode=body.team_mode, settings=settings
+        )
+        try:
+            await save_round_results(results, body.date, body.rollup_id, whs_mode=False)
+        except Exception as e:
+            raise HTTPException(500, f"Failed to save to database: {str(e)}")
 
-    return {"ok": True, "players": results, "date": body.date, "team_scores": team_scores}
+        for r in results:
+            r["adj_display"] = format_adjustment(r.get("adjustment"))
+        team_scores = []
+        if body.team_mode:
+            team_scores = calculate_team_scores(results, settings=settings)
+        return {"ok": True, "players": results, "date": body.date,
+                "team_scores": team_scores, "whs_mode": False}
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +474,7 @@ async def save_round(body: ScoreUpdate):
 async def last_round(rollup_id: int = Query(1)):
     try:
         results = await get_last_round_results(rollup_id)
-        date = await get_last_round_date(rollup_id)
+        date    = await get_last_round_date(rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load last round: {str(e)}")
     return {"players": results, "date": date}
@@ -382,10 +536,17 @@ class RollupSettingsRequest(BaseModel):
     ig_search_term: str
     run_days: list[str]
     tee_interval_minutes: int = 8
+    scoring_mode: str = "stableford"
     adjustment_table: list[dict]
     winner_bonus_enabled: bool = True
     winner_gap_penalty1: int = 0
     winner_gap_penalty2: int = 0
+    whs_pct_1st: float = 0.0
+    whs_pct_2nd: float = 0.0
+    whs_pct_3rd: float = 0.0
+    whs_winner_prohibition: bool = False
+    course_id: int | None = None
+    tee_id: int | None = None
     entry_fee: float = 0.00
     prize_places: int = 3
     prize_pct_1st: int = 60
@@ -399,7 +560,8 @@ class RollupSettingsRequest(BaseModel):
 
 @app.post("/api/settings")
 async def post_settings(body: RollupSettingsRequest):
-    total_pct = body.prize_pct_1st + body.prize_pct_2nd + body.prize_pct_3rd + body.prize_pct_4th
+    total_pct = (body.prize_pct_1st + body.prize_pct_2nd +
+                 body.prize_pct_3rd + body.prize_pct_4th)
     if total_pct != 100:
         raise HTTPException(400, f"Prize percentages must sum to 100 (currently {total_pct})")
     try:
@@ -410,7 +572,7 @@ async def post_settings(body: RollupSettingsRequest):
 
 
 # ---------------------------------------------------------------------------
-# Credentials
+# Credentials (legacy — credentials now session-only in localStorage)
 # ---------------------------------------------------------------------------
 
 @app.get("/api/credentials")
@@ -435,11 +597,9 @@ async def post_credentials(body: CredentialsRequest):
     if not body.ig_username:
         raise HTTPException(400, "Member ID is required")
     try:
-        # Only update PIN if a new one was supplied
         if body.ig_pin:
             await save_credentials(body.ig_username, body.ig_pin)
         else:
-            # Update username only — fetch existing PIN and keep it
             existing = await get_credentials()
             await save_credentials(body.ig_username, existing["ig_pin"])
     except Exception as e:
