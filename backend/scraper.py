@@ -9,8 +9,14 @@ async def _bramley_login(client: httpx.AsyncClient, username: str, pin: str):
     login_page = await client.get(f"{BRAMLEY_BASE}/login.php")
     soup = BeautifulSoup(login_page.text, "html.parser")
     form = soup.find("form")
-    action = form.get("action", "/member/index.php")
-    login_url = f"{BRAMLEY_BASE}{action}" if action.startswith("/") else action
+    action = form.get("action", "/login.php")
+    
+    if action == "/" or not action:
+        login_url = f"{BRAMLEY_BASE}/login.php"
+    elif action.startswith("/"):
+        login_url = f"{BRAMLEY_BASE}{action}"
+    else:
+        login_url = action
 
     payload = {i.get("name"): i.get("value", "") for i in form.find_all("input") if i.get("name")}
     payload["username"] = username
