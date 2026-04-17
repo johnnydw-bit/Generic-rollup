@@ -2,11 +2,11 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-BRAMLEY_BASE = "https://www.bramleygolfclub.co.uk/login.php"
+BRAMLEY_BASE = "https://www.bramleygolfclub.co.uk"
 
 
 async def _bramley_login(client: httpx.AsyncClient, username: str, pin: str):
-    login_page = await client.get(f"{BRAMLEY_BASE}/member/index.php")
+    login_page = await client.get(f"{BRAMLEY_BASE}/login.php")
     soup = BeautifulSoup(login_page.text, "html.parser")
     form = soup.find("form")
     action = form.get("action", "/member/index.php")
