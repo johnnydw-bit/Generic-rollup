@@ -1,167 +1,136 @@
-"""
-Intelligent Golf scraper for Bramley Golf Club rollups.
-Uses httpx only - no browser required.
-Matches any rollup by search term rather than hardcoded MOTH.
-"""
+# Bramley Rollup - backend/scraper.py
+# Playwright-based scrapers for Intelligent Golf
 
-from datetime import datetime
-import httpx
-from bs4 import BeautifulSoup
+import re
+from playwright.async_api import async_playwright
 
 
-BASE_URL = "https://www.bramleygolfclub.co.uk"
-LOGIN_URL = f"{BASE_URL}/login.php"
-CONSENT_URL = f"{BASE_URL}/ttbconsent.php"
-BOOKING_URL = f"{BASE_URL}/memberbooking/"
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 "
-        "Mobile/15E148 Safari/604.1"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-GB,en;q=0.9",
-}
-
+# ---------------------------------------------------------------------------
+# scrape_players — scrape the booking list for a specific date
+# ---------------------------------------------------------------------------
 
 async def scrape_players(
-    username: str,
-    pin: str,
+    ig_username: str,
+    ig_pin: str,
     date_str: str,
-    ig_search_term: str = "MOTH",
+    ig_search_term: str,
 ) -> dict:
     """
-    Scrape rollup player names and tee time count for the given date.
-
-    Args:
-        username:         IG member ID
-        pin:              IG PIN
-        date_str:         Date in YYYY-MM-DD format
-        ig_search_term:   String to match against the rollup contact name (e.g. 'MOTH', 'SENIOR')
+    Log in to Intelligent Golf and scrape the booking list for a given date.
 
     Returns:
         {
-            "names": ["Player One", "Player Two", ...],
-            "tee_times": 3
+            "names":     [str, ...],   # player names in booking order
+            "tee_times": int,          # number of distinct tee time slots
+            "tee_start": str,          # first tee time e.g. "08:00"
         }
     """
-    dt = datetime.strptime(date_str, "%Y-%m-%d")
-    date_param = dt.strftime("%d-%m-%Y")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        try:
+            # ── Log in ──────────────────────────────────────────────────────
+            await page.goto("https://www.intelligentgolf.co.uk/login.php")
+            await page.fill('input[name="username"]', ig_username)
+            await page.fill('input[name="password"]', ig_pin)
+            await page.click('input[type="submit"]')
+            await page.wait_for_load_state("networkidle")
 
-    async with httpx.AsyncClient(
-        headers=HEADERS,
-        follow_redirects=True,
-        timeout=30.0,
-    ) as client:
+            # ── Navigate to booking sheet ────────────────────────────────────
+            # Search for the rollup contact by the ig_search_term
+            await page.goto(
+                f"https://www.intelligentgolf.co.uk/booking.php"
+                f"?date={date_str}&searchterm={ig_search_term}"
+            )
+            await page.wait_for_load_state("networkidle")
 
-        # Step 1: GET login page for CSRF token
-        resp = await client.get(LOGIN_URL)
-        resp.raise_for_status()
+            # ── Extract player names ─────────────────────────────────────────
+            # Players appear as links within booking slots
+            name_elements = await page.query_selector_all(
+                "td.booking-player a, .booking-name a, .player-name"
+            )
+            names = []
+            for el in name_elements:
+                text = (await el.inner_text()).strip()
+                if text and text not in names:
+                    names.append(text)
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-        csrf_input = soup.find("input", {"name": "_csrf_token"})
-        if not csrf_input:
-            raise Exception("Could not find CSRF token on login page.")
-        csrf_token = csrf_input.get("value", "")
+            # ── Extract tee time info ────────────────────────────────────────
+            tee_time_elements = await page.query_selector_all(
+                "td.tee-time, .booking-time, td.time"
+            )
+            tee_times_raw = []
+            for el in tee_time_elements:
+                text = (await el.inner_text()).strip()
+                if text and re.match(r'\d{1,2}:\d{2}', text):
+                    tee_times_raw.append(text)
 
-        # Step 2: POST login
-        login_data = {
-            "task": "login",
-            "topmenu": "1",
-            "memberid": username,
-            "pin": pin,
-            "cachemid": "1",
-            "_csrf_token": csrf_token,
-            "Submit": "Login",
+            unique_tee_times = sorted(set(tee_times_raw))
+            tee_start = unique_tee_times[0] if unique_tee_times else ""
+
+            return {
+                "names":     names,
+                "tee_times": len(unique_tee_times),
+                "tee_start": tee_start,
+            }
+        finally:
+            await browser.close()
+
+
+# ---------------------------------------------------------------------------
+# scrape_whs_indices — scrape the club handicap index list
+# ---------------------------------------------------------------------------
+
+async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
+    """
+    Log in to Intelligent Golf and scrape the full member WHS handicap index
+    list from bramleygolfclub.co.uk/hcaplist.php.
+
+    Returns:
+        {
+            "indices": {"John Smith": 14.2, ...}
         }
-        resp = await client.post(LOGIN_URL, data=login_data)
-        resp.raise_for_status()
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        try:
+            # ── Log in ──────────────────────────────────────────────────────
+            await page.goto("https://www.bramleygolfclub.co.uk/member/index.php")
+            await page.fill('input[name="username"]', ig_username)
+            await page.fill('input[name="password"]', ig_pin)
+            await page.click('input[type="submit"]')
+            await page.wait_for_load_state("networkidle")
 
-        if str(resp.url).endswith("login.php"):
-            raise Exception("Login failed. Please check your username and PIN.")
-
-        # Step 3: Accept consent after login if needed
-        if "ttbconsent" in str(resp.url):
-            resp = await client.get(f"{CONSENT_URL}?action=accept")
-            resp.raise_for_status()
-
-        # Step 4: GET booking page
-        resp = await client.get(
-            BOOKING_URL,
-            params={"date": date_param, "course": "1", "group": "1"},
-        )
-        resp.raise_for_status()
-
-        # Accept consent if redirected there from booking page
-        if "ttbconsent" in str(resp.url):
-            resp = await client.get(f"{CONSENT_URL}?action=accept")
-            resp.raise_for_status()
-            resp = await client.get(
-                BOOKING_URL,
-                params={"date": date_param, "course": "1", "group": "1"},
+            # ── Navigate to handicap list ────────────────────────────────────
+            # sort=0 = sort by name (alphabetical), filter= = no filter
+            await page.goto(
+                "https://www.bramleygolfclub.co.uk/hcaplist.php"
+                "?action=masterhcap&filter=&sort=0"
             )
-            resp.raise_for_status()
+            await page.wait_for_load_state("networkidle")
 
-        if "login" in str(resp.url).lower():
-            raise Exception("Session expired or login failed.")
+            # ── Parse all rows ───────────────────────────────────────────────
+            # Structure: <table class="table table-striped">
+            #   <tbody>
+            #     <tr>
+            #       <td><a href="...">Player Name</a></td>
+            #       <td style="text-align:center;">14.2</td>   ← may be <span> for away HC
+            #     </tr>
+            rows = await page.query_selector_all("table.table tbody tr")
+            indices = {}
+            for row in rows:
+                name_el = await row.query_selector("td:first-child a")
+                idx_el  = await row.query_selector("td:last-child")
+                if not name_el or not idx_el:
+                    continue
+                name      = (await name_el.inner_text()).strip()
+                idx_text  = (await idx_el.inner_text()).strip()
+                try:
+                    indices[name] = float(idx_text)
+                except ValueError:
+                    pass  # skip malformed rows (e.g. headers, empty cells)
 
-        # Step 5: Find the rollup matching ig_search_term
-        soup = BeautifulSoup(resp.text, "html.parser")
-        rollup_wrappers = soup.find_all("div", class_="isRollup")
-
-        if not rollup_wrappers:
-            raise Exception(
-                f"No rollups found on the booking page for {date_str}. "
-                "Check the date is correct."
-            )
-
-        for wrapper in rollup_wrappers:
-            entrant_divs = wrapper.find_all("div", class_="rollup-entrants-list")
-            contact_div = None
-            signed_up_div = None
-            for div in entrant_divs:
-                t = div.get_text(strip=True)
-                if "Roll up Contact" in t:
-                    contact_div = div
-                elif "Signed up" in t:
-                    signed_up_div = div
-
-            if contact_div and ig_search_term.upper() in contact_div.get_text().upper():
-                if not signed_up_div:
-                    raise Exception(f"Found '{ig_search_term}' rollup but no players have signed up yet.")
-                italic = signed_up_div.find("i")
-                if not italic:
-                    raise Exception(f"Found '{ig_search_term}' rollup but could not parse player names.")
-                names = [n.strip() for n in italic.get_text(strip=True).split(",") if n.strip()]
-                if not names:
-                    raise Exception(f"Found '{ig_search_term}' rollup but the signed-up list is empty.")
-
-                tee_times, tee_start = _count_tee_times(wrapper, names)
-                return {
-                    "names": names,
-                    "tee_times": tee_times,
-                    "tee_start": tee_start,
-                }
-
-        raise Exception(
-            f"Could not find a rollup matching '{ig_search_term}' on the booking page for {date_str}. "
-            "Check the rollup name and date are correct."
-        )
-
-
-def _count_tee_times(wrapper, names: list[str]) -> tuple[int, str]:
-    import re
-    import math
-
-    time_span = wrapper.find("span", class_="comp-time-info")
-    if time_span:
-        match = re.search(r'(\d{2}):(\d{2})-(\d{2}):(\d{2})', time_span.get_text())
-        if match:
-            start = int(match.group(1)) * 60 + int(match.group(2))
-            end   = int(match.group(3)) * 60 + int(match.group(4))
-            start_time = f"{match.group(1)}:{match.group(2)}"
-            if end > start:
-                return (end - start) // 8 + 1, start_time
-
-    return math.ceil(len(names) / 4), ""
+            return {"indices": indices}
+        finally:
+            await browser.close()
