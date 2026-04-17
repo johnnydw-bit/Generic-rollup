@@ -2,7 +2,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-BRAMLEY_BASE = "https://www.bramleygolfclub.co.uk"
+BRAMLEY_BASE = "https://www.bramleygolfclub.co.uk/login.php"
 
 
 async def _bramley_login(client: httpx.AsyncClient, username: str, pin: str):
