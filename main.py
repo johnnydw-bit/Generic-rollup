@@ -153,6 +153,11 @@ async def load_players(body: LoadRequest):
 
     # Log scraped indices for verification
     indices = scrape_result.get("indices", {})
+    print(f"INDICES SCRAPED: {len(indices)} entries")
+    if indices:
+        # Print first 3 to check format
+        for k, v in list(indices.items())[:3]:
+            print(f"  SAMPLE: '{k}' -> {v}")
     for name in names:
         idx = indices.get(name) or next(
              (v for k, v in indices.items() if k.lower() == name.lower()), None
