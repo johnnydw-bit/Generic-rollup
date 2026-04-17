@@ -56,3 +56,34 @@ async def scrape_players(
 
         unique_tee_times = sorted(set(tee_times_raw))
         tee_start = unique_tee_times[0] if unique_tee_times else ""
+        # ── Scrape WHS indices ───────────────────────────────────────────
+        hcap = await client.get(
+            f"{BRAMLEY_BASE}/hcaplist.php",
+            params={"action": "masterhcap", "filter": "", "sort": "0"}
+        )
+        soup = BeautifulSoup(hcap.text, "html.parser")
+
+        indices = {}
+        for row in soup.select("table.table tbody tr"):
+            name_el = row.select_one("td:first-child a")
+            idx_el  = row.select_one("td:last-child")
+            if not name_el or not idx_el:
+                continue
+            name     = name_el.get_text(strip=True)
+            idx_text = idx_el.get_text(strip=True)
+            try:
+                indices[name] = float(idx_text)
+            except ValueError:
+                pass
+
+        return {
+            "names":     names,
+            "tee_times": len(unique_tee_times),
+            "tee_start": tee_start,
+            "indices":   indices,
+        }
+
+
+async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
+    # Indices now scraped as part of scrape_players in one session.
+    return {"indices": {}}
