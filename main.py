@@ -146,10 +146,18 @@ async def load_players(body: LoadRequest):
         )
     except Exception as e:
         raise HTTPException(502, str(e))
-
+        
     names     = scrape_result["names"]
     tee_times = scrape_result["tee_times"]
     tee_start = scrape_result.get("tee_start", "")
+
+    # Log scraped indices for verification
+    indices = scrape_result.get("indices", {})
+    for name in names:
+        idx = indices.get(name) or next(
+             (v for k, v in indices.items() if k.lower() == name.lower()), None
+        )
+        print(f"INDEX CHECK: {name} -> {idx}")
 
     if not names:
         raise HTTPException(404, "No players found for this date.")
