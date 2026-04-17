@@ -59,7 +59,6 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
-            # ── Log in ───────────────────────────────────────────────────────
             await page.goto("https://www.bramleygolfclub.co.uk/member/index.php")
             await page.screenshot(path="/tmp/bramley_debug_1_login.png")
             await page.wait_for_selector('input[name="username"]', timeout=30000)
@@ -69,7 +68,6 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
             await page.wait_for_load_state("networkidle")
             await page.screenshot(path="/tmp/bramley_debug_2_after_login.png")
 
-            # ── Navigate to handicap list ─────────────────────────────────────
             await page.goto(
                 "https://www.bramleygolfclub.co.uk/hcaplist.php"
                 "?action=masterhcap&filter=&sort=0"
@@ -77,7 +75,6 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
             await page.wait_for_load_state("networkidle")
             await page.screenshot(path="/tmp/bramley_debug_3_hcaplist.png")
 
-            # ── Parse all rows ────────────────────────────────────────────────
             rows = await page.query_selector_all("table.table tbody tr")
             indices = {}
             for row in rows:
