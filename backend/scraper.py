@@ -59,7 +59,7 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
-            await page.goto("https://www.bramleygolfclub.co.uk/member/index.php")
+            await page.goto("https://www.bramleygolfclub.co.uk/member/index.php", timeout=15000)
             await page.screenshot(path="/tmp/bramley_debug_1_login.png")
             await page.wait_for_selector('input[name="username"]', timeout=30000)
             await page.fill('input[name="username"]', ig_username)
