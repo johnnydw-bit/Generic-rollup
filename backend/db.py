@@ -582,9 +582,13 @@ def _get_rollup_settings(rollup_id: int) -> dict:
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT rs.*, r.name AS rollup_name, r.ig_search_term AS rollup_term
+                SELECT rs.*, r.name AS rollup_name, r.ig_search_term AS rollup_term,
+                       t.course_rating AS tee_course_rating,
+                       t.slope         AS tee_slope,
+                       t.par           AS tee_par
                 FROM rollup_settings rs
                 JOIN rollups r ON r.id = rs.rollup_id
+                LEFT JOIN tees t ON t.id = rs.tee_id
                 WHERE rs.rollup_id = %s
             """, (rollup_id,))
             row = cur.fetchone()
@@ -611,6 +615,9 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "whs_winner_prohibition":   False,
                     "course_id":                None,
                     "tee_id":                   None,
+                    "tee_course_rating":        None,
+                    "tee_slope":                None,
+                    "tee_par":                  None,
                     "entry_fee":                0.00,
                     "prize_places":             3,
                     "prize_pct_1st":            60,
@@ -631,6 +638,8 @@ def _get_rollup_settings(rollup_id: int) -> dict:
             d["whs_pct_1st"]      = float(d["whs_pct_1st"])
             d["whs_pct_2nd"]      = float(d["whs_pct_2nd"])
             d["whs_pct_3rd"]      = float(d["whs_pct_3rd"])
+            if d["tee_course_rating"] is not None:
+                d["tee_course_rating"] = float(d["tee_course_rating"])
             return d
 
 
