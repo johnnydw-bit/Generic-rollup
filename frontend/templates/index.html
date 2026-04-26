@@ -433,8 +433,8 @@
           <th id="colWhsHead">WHS</th>
           <th id="colHcHead">Course H/C</th>
           <th>Score</th>
-          <th id="colNewHcHead">New H/C</th>
-          <th id="col5Head">H/C Adj</th>
+          <th id="colAdjHead">H/C Adj</th>
+          <th id="col6Head">Remove</th>
         </tr>
       </thead>
       <tbody id="scoreBody"></tbody>
@@ -1343,10 +1343,10 @@ function renderGrid() {
   const isTeam = state.gameMode === 'team';
   const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
   const s = state.rollupSettings || {};
-  document.getElementById('col5Head').textContent = isTeam ? 'Team' : 'H/C Adj';
+  document.getElementById('col6Head').textContent = isTeam ? 'Team' : 'Remove';
   document.getElementById('colWhsHead').textContent = 'WHS';
   document.getElementById('colHcHead').textContent = isWhs ? 'Course H/C' : 'Roll-Up H/C';
-  document.getElementById('colNewHcHead').textContent = isWhs ? 'New WHS' : 'New H/C';
+  document.getElementById('colAdjHead').textContent = isWhs ? 'WHS Adj' : 'H/C Adj';
   const body = document.getElementById('scoreBody');
   let rows = '';
   const sorted = isTeam
@@ -1397,7 +1397,7 @@ function renderGrid() {
       newHC = p.new_handicap !== undefined && p.new_handicap !== null
         ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
     }
-    const col5 = isTeam
+    const col6 = isTeam
       ? `<td class="team-col${p.team ? ' team-col' : ''}" ><select onchange="setPlayerTeam(${origIdx}, this.value)">
           <option value="">—</option>
           ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
@@ -1409,7 +1409,7 @@ function renderGrid() {
       <td class="c">${hcDisplay}</td>
       <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
       <td class="nhc">${newHC}</td>
-      ${col5}
+      ${col6}
     </tr>`;
   });
   body.innerHTML = rows;
