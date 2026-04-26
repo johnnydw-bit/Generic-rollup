@@ -425,9 +425,10 @@
       <thead>
         <tr>
           <th class="left">Player</th>
-          <th>HC</th>
+          <th id="colWhsHead">WHS</th>
+          <th id="colHcHead">Course H/C</th>
           <th>Score</th>
-          <th>New HC</th>
+          <th id="colNewHcHead">New H/C</th>
           <th id="col5Head">Remove</th>
         </tr>
       </thead>
@@ -1312,12 +1313,21 @@ function updateUnassignedWarning() {
 
 function renderGrid() {
   const isTeam = state.gameMode === 'team';
+  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
+  const s = state.rollupSettings || {};
   document.getElementById('col5Head').textContent = isTeam ? 'Team' : 'Remove';
+  document.getElementById('colWhsHead').textContent = 'WHS';
+  document.getElementById('colHcHead').textContent = isWhs ? 'Course H/C' : 'Roll-Up H/C';
+  document.getElementById('colNewHcHead').textContent = isWhs ? 'New WHS' : 'New H/C';
   const body = document.getElementById('scoreBody');
   let rows = '';
   const sorted = isTeam
     ? [...state.players].sort((a,b) => (a.team||99) - (b.team||99) || a.name.localeCompare(b.name))
     : state.players;
+
+  // Pre-calculate course handicap data for WHS mode
+  const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
+  const hasTee = isWhs && cr !== null && cr !== undefined && slope && par;
 
   let lastTeam = null;
   sorted.forEach((p, i) => {
@@ -1325,14 +1335,30 @@ function renderGrid() {
     if (isTeam && p.team !== lastTeam) {
       lastTeam = p.team;
       const tc = p.team ? `team-${p.team}` : '';
-      rows += `<tr class="team-header ${tc}"><td colspan="5">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
+      rows += `<tr class="team-header ${tc}"><td colspan="6">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
     }
     const rankClass = !isTeam && p.score !== null
       ? (i === 0 && sorted.filter(x=>x.score!==null).length > 0
           ? (p.score === Math.max(...sorted.filter(x=>x.score!==null).map(x=>x.score)) ? 'rank-gold' : '')
           : '')
       : '';
-    const hc = p.handicap !== null ? p.handicap : '?';
+
+    // WHS index column — always shows raw WHS index
+    const whsDisplay = (p.whs_index !== null && p.whs_index !== undefined)
+      ? p.whs_index.toFixed(1) : '—';
+
+    // Course H/C column
+    let hcDisplay;
+    if (isWhs) {
+      if (hasTee && p.whs_index !== null && p.whs_index !== undefined) {
+        hcDisplay = Math.round(p.whs_index * (slope / 113) + (cr - par));
+      } else {
+        hcDisplay = hasTee ? '?' : '—';
+      }
+    } else {
+      hcDisplay = p.handicap !== null ? p.handicap : '?';
+    }
+
     const newHC = p.new_handicap !== undefined && p.new_handicap !== null
       ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
     const col5 = isTeam
@@ -1340,10 +1366,11 @@ function renderGrid() {
           <option value="">—</option>
           ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
          </select></td>`
-      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\\'")}')">✕</td>`;
+      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\'")}')">✕</td>`;
     rows += `<tr class="${rankClass}">
       <td>${p.name}</td>
-      <td class="c">${hc}</td>
+      <td class="c">${whsDisplay}</td>
+      <td class="c">${hcDisplay}</td>
       <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
       <td class="nhc">${newHC}</td>
       ${col5}
