@@ -399,6 +399,10 @@
         <button class="toggle-btn" id="teamBtn" onclick="setGameMode('team')">Team</button>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button class="toggle-btn" id="s2ModeRollup" onclick="setScoringMode('stableford')">Roll-Up</button>
+      <button class="toggle-btn" id="s2ModeWhs" onclick="setScoringMode('whs')">WHS</button>
+    </div>
     <div class="autosave-right">
       <div class="autosave-dot" id="saveDot"></div>
       <span class="autosave-label" id="saveLabel">Ready</span>
@@ -617,7 +621,7 @@
       <div class="settings-row">
         <div class="settings-label">Scoring mode</div>
         <div class="scoring-mode-row">
-          <button class="scoring-mode-btn active" id="modeStableford" onclick="onScoringModeChange('stableford')">Stableford</button>
+          <button class="scoring-mode-btn active" id="modeStableford" onclick="onScoringModeChange('stableford')">Roll-Up</button>
           <button class="scoring-mode-btn" id="modeWhs" onclick="onScoringModeChange('whs')">WHS Index</button>
         </div>
       </div>
@@ -1203,8 +1207,31 @@ function openScoreEntry() {
   document.getElementById('teamScoreboardWrap').style.display = 'none';
   document.getElementById('prohibitedWarning').style.display = 'none';
   state.prohibitedWinner = null;
+  // Sync mode toggle buttons with current settings
+  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
+  document.getElementById('s2ModeRollup').classList.toggle('active', !isWhs);
+  document.getElementById('s2ModeWhs').classList.toggle('active', isWhs);
   renderGrid();
   showScreen('screen2');
+}
+
+// Switch scoring mode directly from Screen 2 without reloading players
+async function setScoringMode(mode) {
+  if (!state.rollupSettings) return;
+  // Optimistically update local state
+  state.rollupSettings.scoring_mode = mode;
+  document.getElementById('s2ModeRollup').classList.toggle('active', mode === 'stableford');
+  document.getElementById('s2ModeWhs').classList.toggle('active', mode === 'whs');
+  // Persist to server
+  try {
+    const s = state.rollupSettings;
+    await fetch('/api/settings', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ...s, rollup_id: session.rollupId, scoring_mode: mode }),
+    });
+  } catch(e) {}
+  // Recalculate with new mode
+  recalculate();
 }
 
 function setGameMode(mode) {
@@ -1359,8 +1386,16 @@ function renderGrid() {
       hcDisplay = p.handicap !== null ? p.handicap : '?';
     }
 
-    const newHC = p.new_handicap !== undefined && p.new_handicap !== null
-      ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
+    // Last column: Roll-Up = new integer HC; WHS = position adjustment only
+    let newHC = '';
+    if (isWhs) {
+      // adj_display for WHS is e.g. "(-15% -> 12.1)" or "(-)" for no adjustment
+      newHC = p.adj_display && p.adj_display !== '(-)' && p.adj_display !== '(-) '
+        ? p.adj_display : (p.score !== null ? '—' : '');
+    } else {
+      newHC = p.new_handicap !== undefined && p.new_handicap !== null
+        ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
+    }
     const col5 = isTeam
       ? `<td class="team-col${p.team ? ' team-col' : ''}" ><select onchange="setPlayerTeam(${origIdx}, this.value)">
           <option value="">—</option>
