@@ -143,7 +143,8 @@ async def scrape_players(
 
         soup = BeautifulSoup(resp.text, "html.parser")
         indices = {}
-        for row in soup.select("table.table tbody tr"):
+        # No tbody — rows are direct children of table; skip header rows (td vs th)
+        for row in soup.select("table.table tr"):
             name_el = row.select_one("td:first-child a")
             idx_el  = row.select_one("td:last-child")
             if not name_el or not idx_el:
@@ -155,6 +156,7 @@ async def scrape_players(
             except ValueError:
                 pass
 
+        print(f"scrape_players: found {len(indices)} WHS indices")
         return {
             "names":     names,
             "tee_times": tee_times,
@@ -213,7 +215,8 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
         soup = BeautifulSoup(resp.text, "html.parser")
         indices = {}
-        for row in soup.select("table.table tbody tr"):
+        # No tbody — rows are direct children of table; skip header rows (td vs th)
+        for row in soup.select("table.table tr"):
             name_el = row.select_one("td:first-child a")
             idx_el  = row.select_one("td:last-child")
             if not name_el or not idx_el:
