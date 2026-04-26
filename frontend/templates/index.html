@@ -1365,10 +1365,12 @@ function renderGrid() {
       const tc = p.team ? `team-${p.team}` : '';
       rows += `<tr class="team-header ${tc}"><td colspan="6">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
     }
-    const rankClass = !isTeam && p.score !== null
-      ? (i === 0 && sorted.filter(x=>x.score!==null).length > 0
-          ? (p.score === Math.max(...sorted.filter(x=>x.score!==null).map(x=>x.score)) ? 'rank-gold' : '')
-          : '')
+    const _scored = sorted.filter(x => x.score !== null);
+    const _scores = [...new Set(_scored.map(x => x.score))].sort((a,b) => b - a);
+    const rankClass = (!isTeam && p.score !== null)
+      ? (p.score === _scores[0] ? 'rank-gold'
+       : p.score === _scores[1] ? 'rank-silver'
+       : p.score === _scores[2] ? 'rank-bronze' : '')
       : '';
 
     // WHS index column — always shows raw WHS index
@@ -1387,12 +1389,16 @@ function renderGrid() {
       hcDisplay = p.handicap !== null ? p.handicap : '?';
     }
 
-    // Last column: Roll-Up = new integer HC; WHS = position adjustment only
+    // Col 5: H/C Adj
+    // Roll-Up: new integer HC + adjustment e.g. "24 (-1)"
+    // WHS: show position % reduction e.g. "-15%" for top finishers, blank otherwise
     let newHC = '';
     if (isWhs) {
-      // adj_display for WHS is e.g. "(-15% -> 12.1)" or "(-)" for no adjustment
-      newHC = p.adj_display && p.adj_display !== '(-)' && p.adj_display !== '(-) '
-        ? p.adj_display : (p.score !== null ? '—' : '');
+      const adj = p.adjustment; // raw string e.g. "-15% -> 12.1" or "-"
+      if (p.score !== null && p.score !== undefined && adj && adj !== '-') {
+        // Extract just the % part e.g. "-15% -> 12.1" → "-15%"
+        newHC = adj.split('->')[0].trim();
+      }
     } else {
       newHC = p.new_handicap !== undefined && p.new_handicap !== null
         ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
@@ -1439,7 +1445,7 @@ async function recalculate() {
     const data = await resp.json();
     state.players = state.players.map(p => {
       const r = data.players.find(x => x.name === p.name);
-      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, winner: r.winner} : p;
+      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, adjustment: r.adjustment, position: r.position, winner: r.winner} : p;
     });
     state.teamScores = data.team_scores || [];
     state.prohibitedWinner = data.prohibited_winner || null;
