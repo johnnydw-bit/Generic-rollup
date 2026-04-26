@@ -151,18 +151,8 @@ async def load_players(body: LoadRequest):
     tee_times = scrape_result["tee_times"]
     tee_start = scrape_result.get("tee_start", "")
 
-    # Log scraped indices for verification
     indices = scrape_result.get("indices", {})
     print(f"INDICES SCRAPED: {len(indices)} entries")
-    if indices:
-        # Print first 3 to check format
-        for k, v in list(indices.items())[:3]:
-            print(f"  SAMPLE: '{k}' -> {v}")
-    for name in names:
-        idx = indices.get(name) or next(
-             (v for k, v in indices.items() if k.lower() == name.lower()), None
-        )
-        print(f"INDEX CHECK: {name} -> {idx}")
 
     if not names:
         raise HTTPException(404, "No players found for this date.")
@@ -171,6 +161,20 @@ async def load_players(body: LoadRequest):
         all_players = await get_all_players(body.rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not read player list from database: {str(e)}")
+
+    # Update whs_index in DB for any known players whose index was scraped
+    for p in all_players:
+        name  = p["name"].strip()
+        lower = name.lower()
+        idx = indices.get(name) or next(
+            (v for k, v in indices.items() if k.lower() == lower), None
+        )
+        if idx is not None:
+            try:
+                await update_player_whs_index(p["id"], idx)
+                p["whs_index"] = idx   # update in-memory too
+            except Exception:
+                pass
 
     name_to_hc = {p["name"].strip().lower(): p["handicap"] for p in all_players}
 
