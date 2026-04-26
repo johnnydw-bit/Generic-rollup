@@ -175,5 +175,55 @@ def _count_tee_times(wrapper, names: list[str]) -> int:
 
 
 async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
-    # Indices now scraped as part of scrape_players in one session.
-    return {"indices": {}}
+    """Scrape WHS indices for all members from the Bramley handicap list page."""
+    async with httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=30.0,
+    ) as client:
+        # Login
+        resp = await client.get(LOGIN_URL)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        csrf_input = soup.find("input", {"name": "_csrf_token"})
+        if not csrf_input:
+            raise Exception("Could not find CSRF token on login page.")
+        csrf_token = csrf_input.get("value", "")
+
+        login_data = {
+            "task": "login", "topmenu": "1",
+            "memberid": ig_username, "pin": ig_pin,
+            "cachemid": "1", "_csrf_token": csrf_token, "Submit": "Login",
+        }
+        resp = await client.post(LOGIN_URL, data=login_data)
+        resp.raise_for_status()
+        if str(resp.url).endswith("login.php"):
+            raise Exception("Login failed. Please check your username and PIN.")
+
+        if "ttbconsent" in str(resp.url):
+            resp = await client.get(f"{CONSENT_URL}?action=accept")
+            resp.raise_for_status()
+
+        # Fetch handicap list
+        resp = await client.get(
+            HCAP_URL,
+            params={"action": "masterhcap", "filter": "", "sort": "0"},
+        )
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        indices = {}
+        for row in soup.select("table.table tbody tr"):
+            name_el = row.select_one("td:first-child a")
+            idx_el  = row.select_one("td:last-child")
+            if not name_el or not idx_el:
+                continue
+            name     = name_el.get_text(strip=True)
+            idx_text = idx_el.get_text(strip=True)
+            try:
+                indices[name] = float(idx_text)
+            except ValueError:
+                pass
+
+        print(f"scrape_whs_indices: found {len(indices)} entries")
+        return {"indices": indices}
