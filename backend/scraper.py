@@ -285,6 +285,12 @@ async def search_course_on_18birdies(course_name: str) -> list[dict]:
 
             soup = BeautifulSoup(resp.text, "html.parser")
 
+            # Debug: show all hrefs to understand current Google structure
+            all_hrefs = [a["href"] for a in soup.find_all("a", href=True)]
+            print(f"Total links: {len(all_hrefs)}")
+            for h in all_hrefs[:10]:
+                print(f"  {h[:100]!r}")
+
             # Extract result URLs — Google wraps them in /url?q= redirects
             results = []
             seen = set()
