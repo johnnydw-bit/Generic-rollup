@@ -749,9 +749,13 @@ async def parse_course_paste(body: ParsePasteRequest):
 async def save_course_endpoint(body: SaveCourseRequest):
     """Save a searched course and its tees to the database."""
     try:
-        course_id = await save_course(body.club, body.name, body.tees)
+        print(f"save_course: club='{body.club}' name='{body.name}' tees={len(body.tees)}")
+        for t in body.tees:
+            print(f"  tee: {t}")
+        course_id = await save_course(body.name, body.club, body.tees)
         return {"course_id": course_id, "message": f"Saved {body.name} with {len(body.tees)} tees"}
     except Exception as e:
+        print(f"save_course ERROR: {e}")
         raise HTTPException(500, f"Save failed: {str(e)}")
 
 
