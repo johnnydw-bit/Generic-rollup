@@ -697,27 +697,41 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
                 "history", "giving", "tickets", "shop", "national course rating",
                 "course rating search", "course handicap", "only 18-hole",
                 "enter your", "tee name", "gender", "par", "front", "back",
-                "new search", "questions", "usga partners", "follow us", "about us"}
+                "new search", "questions", "usga partners", "follow us", "about us",
+                "club/course", "city", "state/province", "about us", "careers",
+                "contact us", "media", "privacy", "terms of use", "accessibility"}
         lines = [l.strip() for l in text.split("\n") if l.strip()]
-        # Find the line just before "Tee Name" header
-        for i, line in enumerate(lines):
-            if "Tee Name" in line and "Gender" in line:
-                # Look back for the club name
-                for prev in reversed(lines[:i]):
-                    prev_lower = prev.lower()
-                    if any(s in prev_lower for s in skip):
-                        continue
-                    if len(prev) < 5:
-                        continue
-                    # Club name line often has "(NNNNNN)" id suffix
-                    candidate = prev.split("(")[0].strip()
-                    candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
-                    if candidate and len(candidate) > 4:
-                        club_name = candidate
-                        break
-                break
+        # Find the line containing club name — it has "(NNNNNN)" course ID pattern
+        for line in lines:
+            if _re.search(r"\(\d{6,7}\)", line):
+                # Extract just the club name before the ID
+                candidate = line.split("(")[0].strip()
+                # Strip leading header junk like "Club/Course NameCityState/Province"
+                candidate = _re.sub(r"^.*?Province", "", candidate).strip()
+                candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
+                if candidate and len(candidate) > 4:
+                    club_name = candidate
+                    break
+        # Fallback: look for line before Tee Name header
+        if not club_name:
+            for i, line in enumerate(lines):
+                if "Tee Name" in line and "Gender" in line:
+                    for prev in reversed(lines[:i]):
+                        prev_lower = prev.lower()
+                        if any(s in prev_lower for s in skip):
+                            continue
+                        if len(prev) < 5:
+                            continue
+                        candidate = prev.split("(")[0].strip()
+                        candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
+                        if candidate and len(candidate) > 4:
+                            club_name = candidate
+                            break
+                    break
 
-    print(f"parse_ncrdb_paste: {len(tees)} tees, club=\'{club_name}\'")
+    print(f"parse_ncrdb_paste: {len(tees)} tees, club='{club_name}'")
+    if not tees:
+        print(f"  Raw text sample: {repr(text[:500])}")
     if tees:
         return [{"club": club_name or "Golf Club", "name": club_name or "Golf Club",
                  "url": "", "tees": tees}]
