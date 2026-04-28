@@ -236,105 +236,104 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Search for a golf course by name using DuckDuckGo HTML search,
-    then scrape tee data from the 18birdies.com course page.
-    Returns a list of candidate courses, each with tee details.
+    Fetch tee data from an 18birdies course URL directly.
+    If course_name looks like a URL, fetch it directly.
+    Otherwise return empty — the frontend should provide a URL.
     """
     import urllib.parse
-    search_query = f"site:18birdies.com/golf-courses {course_name}"
-    search_url   = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(search_query)}"
 
-    ddg_headers = {
+    # If it looks like a URL, fetch it directly
+    if course_name.startswith("http"):
+        return await fetch_course_from_url(course_name)
+
+    # Otherwise try to construct likely 18birdies URL from name
+    slug = course_name.lower().strip()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"\s+", "-", slug)
+    url = f"https://18birdies.com/golf-courses/club/search/{slug}"
+
+    # Try fetching 18birdies search page
+    search_url = f"https://18birdies.com/golf-courses/?q={urllib.parse.quote(course_name)}"
+    headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
     }
-
-    async with httpx.AsyncClient(headers=ddg_headers, follow_redirects=True, timeout=30.0) as client:
-        # Step 1: DuckDuckGo search to find 18birdies URLs
-        resp = await client.get(search_url)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        course_urls = []
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            # DDG result links are in uddg= param or direct
-            if "18birdies.com/golf-courses/club/" in href:
-                # Extract actual URL from DDG redirect
-                if "uddg=" in href:
-                    import urllib.parse as up
-                    parsed = up.parse_qs(up.urlparse(href).query)
-                    url = parsed.get("uddg", [None])[0]
-                    if url:
-                        url = urllib.parse.unquote(url)
-                else:
-                    url = href
-                # Strip query string
-                url = url.split("?")[0].rstrip("/")
-                # Skip review pages
-                if url and "/reviews" not in url and url not in course_urls:
-                    course_urls.append(url)
-
-        print(f"search_course_on_18birdies: found {len(course_urls)} URLs for '{course_name}'")
-        for u in course_urls:
-            print(f"  {u}")
-
-        if not course_urls:
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as client:
+        try:
+            resp = await client.get(search_url)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            # Find course links in search results
+            course_urls = []
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                if "/golf-courses/club/" in href and "/reviews" not in href:
+                    full = href if href.startswith("http") else f"https://18birdies.com{href}"
+                    full = full.split("?")[0].rstrip("/")
+                    if full not in course_urls:
+                        course_urls.append(full)
+            print(f"18birdies search found {len(course_urls)} URLs")
+            results = []
+            for u in course_urls[:3]:
+                r = await fetch_course_from_url(u, client=client)
+                results.extend(r)
+            return results
+        except Exception as e:
+            print(f"18birdies search error: {e}")
             return []
 
-        # Step 2: Fetch and parse each course page (up to 3)
-        results = []
-        for url in course_urls[:3]:
-            try:
-                r = await client.get(url)
-                cs = BeautifulSoup(r.text, "html.parser")
 
-                # Course name from page title
-                title_el = cs.find("h2") or cs.find("h1")
-                page_name = title_el.get_text(strip=True) if title_el else url.split("/")[-1].replace("-", " ").title()
+async def fetch_course_from_url(url: str, client=None) -> list[dict]:
+    """Fetch and parse tee data from a specific 18birdies course page URL."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+    }
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
+        use_client = client or c
+        try:
+            resp = await use_client.get(url)
+            cs = BeautifulSoup(resp.text, "html.parser")
 
-                # Parse tee lines — format: "White 5930 yds (122/69.3) for Men"
-                tees = []
-                seen = set()
-                for el in cs.find_all(string=True):
-                    import re
-                    # 18birdies format: "White 5930 yds (slope/cr) for Men"
-                    m = re.match(
-                        r"^([\w][\w\s]*?)\s+(\d{3,5})\s+yds\s+\((\d+)/([\d.]+)\)\s+for\s+(Men|Women)$",
-                        el.strip()
-                    )
-                    if m:
-                        name, yds, slope, cr, gender = m.groups()
-                        key = (name.strip(), gender)
-                        if key not in seen:
-                            seen.add(key)
-                            tees.append({
-                                "name":          name.strip(),
-                                "gender":        gender,
-                                "yardage":       int(yds),
-                                "course_rating": float(cr),
-                                "slope":         int(slope),
-                                "par":           72,
-                                "colour":        _tee_colour(name.strip()),
-                            })
+            # Course name
+            title_el = cs.find("h2") or cs.find("h1")
+            page_name = title_el.get_text(strip=True) if title_el else url.split("/")[-1].replace("-", " ").title()
 
-                print(f"  Parsed {len(tees)} tees from {url}")
-                if tees:
-                    results.append({
-                        "club":     page_name,
-                        "name":     page_name,
-                        "url":      url,
-                        "tees":     tees,
-                    })
-                else:
-                    # Log a sample of text nodes to help diagnose regex mismatches
-                    samples = [el.strip() for el in cs.find_all(string=True) if 'yds' in el and len(el.strip()) < 80][:5]
-                    print(f"  No tees parsed. Sample yds strings: {samples}")
-            except Exception as e:
-                print(f"Error fetching {url}: {e}")
-                continue
+            # Parse tee lines — 18birdies format: "White 5930 yds (slope/cr) for Men"
+            tees = []
+            seen = set()
+            for el in cs.find_all(string=True):
+                m = re.match(
+                    r"^([\w][\w\s]*?)\s+(\d{3,5})\s+yds\s+\((\d+)/([\d.]+)\)\s+for\s+(Men|Women)$",
+                    el.strip()
+                )
+                if m:
+                    name, yds, slope, cr, gender = m.groups()
+                    key = (name.strip(), gender)
+                    if key not in seen:
+                        seen.add(key)
+                        tees.append({
+                            "name":          name.strip(),
+                            "gender":        gender,
+                            "yardage":       int(yds),
+                            "course_rating": float(cr),
+                            "slope":         int(slope),
+                            "par":           72,
+                            "colour":        _tee_colour(name.strip()),
+                        })
 
-        return results
+            print(f"fetch_course_from_url: {len(tees)} tees from {url}")
+            if not tees:
+                samples = [el.strip() for el in cs.find_all(string=True) if "yds" in el and len(el.strip()) < 80][:5]
+                print(f"  Sample yds strings: {samples}")
+
+            if tees:
+                return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
+            return []
+        except Exception as e:
+            print(f"fetch_course_from_url error for {url}: {e}")
+            return []
 
 
 def _tee_colour(tee_name: str) -> str:
