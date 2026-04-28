@@ -262,9 +262,7 @@ async def search_course_on_18birdies(course_name: str) -> list[dict]:
         ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "DNT": "1",
-        "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
     }
 
@@ -285,15 +283,7 @@ async def search_course_on_18birdies(course_name: str) -> list[dict]:
                 resp = await client.get(search_url, headers=headers2)
                 print(f"Retry status: {resp.status_code}")
 
-            print(f"Google response length: {len(resp.text)}, first 200: {resp.text[:200]!r}")
             soup = BeautifulSoup(resp.text, "html.parser")
-
-            # Count all links for debug
-            all_links = soup.find_all("a", href=True)
-            print(f"Total links on page: {len(all_links)}")
-            # Show first few hrefs to understand structure
-            for a in all_links[:5]:
-                print(f"  href sample: {a['href'][:80]!r}")
 
             # Extract result URLs — Google wraps them in /url?q= redirects
             results = []
