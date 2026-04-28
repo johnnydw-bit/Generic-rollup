@@ -1843,13 +1843,17 @@ async function searchCourse() {
   const resultsEl = document.getElementById('courseSearchResults');
   const btn       = document.getElementById('courseSearchBtn');
   btn.disabled = true;
-  statusEl.textContent = 'Searching…';
+  statusEl.textContent = 'Fetching course data…';
   resultsEl.innerHTML = '';
   try {
     const resp = await fetch(`/api/courses/search?q=${encodeURIComponent(q)}`);
     const data = await resp.json();
     if (!data.courses || data.courses.length === 0) {
-      statusEl.textContent = 'No courses found. Try a different search.';
+      statusEl.textContent = 'No data found. Paste the full Golfshake URL.';
+      return;
+    }
+    if (data.courses[0] && data.courses[0].hint) {
+      statusEl.innerHTML = `Please paste a <a href="https://www.golfshake.com/course/search/?name=${encodeURIComponent(q)}" target="_blank" style="color:#1a73e8;">Golfshake URL ↗</a> for "${q}" rather than just the name.`;
       return;
     }
     statusEl.textContent = `Found ${data.courses.length} result${data.courses.length > 1 ? 's' : ''} — select to add:`;
