@@ -236,112 +236,63 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Search Google for a golf course by name/location and return URL candidates.
-    Returns list of {search_result:true, title, url} for the user to pick from.
-    Once user picks a URL, fetch_course_from_url is called to get tee data.
+    Search for a UK golf course and return URL candidates.
+    Uses Google Custom Search API (free, 100/day) if keys are set,
+    otherwise returns a helpful error.
+    Set GOOGLE_CSE_KEY and GOOGLE_CSE_ID as Render env vars.
     """
-    import urllib.parse
+    import urllib.parse, os
     q = course_name.strip()
 
     # Direct URL — skip search, fetch tee data immediately
     if q.startswith("http"):
         return await fetch_course_from_url(q)
 
-    # Append golf-specific terms to narrow results
-    search_term = f"{q} golf club slope rating course rating"
-    search_url = (
-        f"https://www.google.com/search"
-        f"?q={urllib.parse.quote(search_term)}&num=10&gl=gb&hl=en"
+    cse_key = os.environ.get("GOOGLE_CSE_KEY", "")
+    cse_id  = os.environ.get("GOOGLE_CSE_ID", "")
+
+    if not cse_key or not cse_id:
+        print("GOOGLE_CSE_KEY / GOOGLE_CSE_ID not set")
+        return [{"search_result": True, "title": "⚠ Search not configured — see setup instructions", "url": ""}]
+
+    search_term = f"{q} golf club slope rating"
+    api_url = (
+        f"https://www.googleapis.com/customsearch/v1"
+        f"?key={cse_key}&cx={cse_id}"
+        f"&q={urllib.parse.quote(search_term)}"
+        f"&gl=uk&num=8"
     )
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-GB,en;q=0.9",
-        "DNT": "1",
-        "Upgrade-Insecure-Requests": "1",
-    }
-
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=20.0) as client:
+    headers = {"Accept": "application/json"}
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
         try:
-            resp = await client.get(search_url)
-            print(f"Google search status: {resp.status_code} for '{q}'")
-
+            resp = await client.get(api_url)
+            print(f"Google CSE status: {resp.status_code} for '{q}'")
             if resp.status_code != 200:
-                print(f"Google blocked with {resp.status_code}, trying alternative")
-                # Fallback: try a different User-Agent
-                headers2 = dict(headers)
-                headers2["User-Agent"] = (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                )
-                resp = await client.get(search_url, headers=headers2)
-                print(f"Retry status: {resp.status_code}")
+                print(f"CSE error: {resp.text[:200]}")
+                return []
 
-            soup = BeautifulSoup(resp.text, "html.parser")
+            data = resp.json()
+            items = data.get("items", [])
+            print(f"Google CSE found {len(items)} results for '{q}'")
 
-            # Debug: show all hrefs to understand current Google structure
-            all_hrefs = [a["href"] for a in soup.find_all("a", href=True)]
-            print(f"Total links: {len(all_hrefs)}")
-            for h in all_hrefs[:10]:
-                print(f"  {h[:100]!r}")
-
-            # Extract result URLs — Google wraps them in /url?q= redirects
             results = []
-            seen = set()
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                # Google result links
-                if href.startswith("/url?q="):
-                    actual = href.split("/url?q=")[1].split("&")[0]
-                    actual = urllib.parse.unquote(actual)
-                elif "google.com" not in href and href.startswith("http"):
-                    actual = href
-                else:
+            skip = ["youtube.", "facebook.", "twitter.", "instagram.",
+                    "wikipedia.", "amazon.", "ebay.", "tripadvisor."]
+            for item in items:
+                url   = item.get("link", "")
+                title = item.get("title", url.split("/")[2] if "/" in url else url)[:80]
+                if not url.startswith("http"):
                     continue
-
-                # Filter to golf-relevant URLs only
-                if not actual.startswith("http"):
+                if any(s in url for s in skip):
                     continue
-                if actual in seen:
-                    continue
-                # Skip ad/tracking/irrelevant domains
-                skip = ["google.", "youtube.", "facebook.", "twitter.",
-                        "instagram.", "wikipedia.", "amazon.", "ebay.",
-                        "tripadvisor.", "booking.", "expedia."]
-                if any(s in actual for s in skip):
-                    continue
-
-                seen.add(actual)
-                # Get the visible title text nearest to this link
-                title = a.get_text(strip=True)
-                if not title:
-                    title = actual.split("/")[2]  # domain as fallback
-                # Keep title short
-                title = title[:80]
-
-                results.append({
-                    "search_result": True,
-                    "title": title,
-                    "url": actual,
-                })
-
-                if len(results) >= 8:
-                    break
-
-            print(f"Google search found {len(results)} results for '{q}'")
-            for r in results:
-                print(f"  {r['url']}")
+                print(f"  {url}")
+                results.append({"search_result": True, "title": title, "url": url})
 
             return results
 
         except Exception as e:
-            print(f"Google search error: {e}")
+            print(f"Google CSE error: {e}")
             return []
 
 
