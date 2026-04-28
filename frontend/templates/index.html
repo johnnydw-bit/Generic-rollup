@@ -1906,7 +1906,7 @@ async function saveCourseResult(courseIndex) {
   const statusEl = document.getElementById('courseSearchStatus');
   statusEl.textContent = 'Saving\u2026';
   try {
-    await fetch('/api/courses/save', {
+    const resp = await fetch('/api/courses/save', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ club: course.club, name: course.name, tees }),
     });
