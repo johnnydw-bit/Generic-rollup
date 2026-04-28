@@ -230,3 +230,105 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
         print(f"scrape_whs_indices: found {len(indices)} entries")
         return {"indices": indices}
+
+
+# ── Course search / tee data scraper ────────────────────────────────────────
+
+async def search_course_on_18birdies(course_name: str) -> list[dict]:
+    """
+    Search for a golf course by name using Google, then scrape tee data
+    from the 18birdies.com course page.
+    Returns a list of candidate courses, each with tee details.
+    """
+    search_query = f"site:18birdies.com/golf-courses {course_name}"
+    search_url   = f"https://www.google.com/search?q={search_query.replace(' ', '+')}&num=5"
+
+    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=30.0) as client:
+        # Step 1: Google search to find 18birdies URL(s)
+        resp = await client.get(search_url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Extract 18birdies course URLs from results
+        course_urls = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            # Google wraps URLs — extract real URL
+            if "18birdies.com/golf-courses/club/" in href:
+                # Direct hit
+                url = href.split("&")[0]
+                if url not in course_urls:
+                    course_urls.append(url)
+            elif "/url?q=https://18birdies.com/golf-courses/club/" in href:
+                url = href.replace("/url?q=", "").split("&")[0]
+                if url not in course_urls:
+                    course_urls.append(url)
+
+        if not course_urls:
+            return []
+
+        # Step 2: Fetch and parse each course page (up to 3)
+        results = []
+        for url in course_urls[:3]:
+            try:
+                r = await client.get(url)
+                cs = BeautifulSoup(r.text, "html.parser")
+
+                # Course name from page title
+                title_el = cs.find("h2") or cs.find("h1")
+                page_name = title_el.get_text(strip=True) if title_el else url.split("/")[-1].replace("-", " ").title()
+
+                # Parse tee lines — format: "White 5930 yds (122/69.3) for Men"
+                tees = []
+                seen = set()
+                for el in cs.find_all(string=True):
+                    import re
+                    m = re.match(
+                        r"^(\w[\w\s]*?)\s+(\d+)\s+yds\s+\((\d+)/([\d.]+)\)\s+for\s+(Men|Women)$",
+                        el.strip()
+                    )
+                    if m:
+                        name, yds, slope, cr, gender = m.groups()
+                        # Infer par from CR (rough: round CR to nearest integer)
+                        # We'll set par=72 as default — admin can correct
+                        key = (name.strip(), gender)
+                        if key not in seen:
+                            seen.add(key)
+                            tees.append({
+                                "name":          name.strip(),
+                                "gender":        gender,
+                                "yardage":       int(yds),
+                                "course_rating": float(cr),
+                                "slope":         int(slope),
+                                "par":           72,  # default — most UK courses par 72
+                                "colour":        _tee_colour(name.strip()),
+                            })
+
+                if tees:
+                    results.append({
+                        "club":     page_name,
+                        "name":     page_name,
+                        "url":      url,
+                        "tees":     tees,
+                    })
+            except Exception as e:
+                print(f"Error fetching {url}: {e}")
+                continue
+
+        return results
+
+
+def _tee_colour(tee_name: str) -> str:
+    """Map tee name to a hex colour."""
+    colours = {
+        "white":  "#FFFFFF",
+        "yellow": "#FFD700",
+        "red":    "#CC0000",
+        "blue":   "#1E90FF",
+        "black":  "#222222",
+        "gold":   "#FFD700",
+        "green":  "#228B22",
+        "orange": "#FF8C00",
+        "purple": "#6A0DAD",
+        "silver": "#C0C0C0",
+    }
+    return colours.get(tee_name.lower(), "#888888")
