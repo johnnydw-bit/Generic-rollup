@@ -358,6 +358,77 @@ async def scrape_whs_indices_endpoint(body: SyncWhsRequest):
 
 
 # ---------------------------------------------------------------------------
+# Debug — temporary endpoint to inspect hcaplist.php HTML structure
+# ---------------------------------------------------------------------------
+
+class DebugHcapRequest(BaseModel):
+    ig_username: str
+    ig_pin: str
+
+@app.post("/api/debug-hcap")
+async def debug_hcap(body: DebugHcapRequest):
+    """Temporary debug endpoint — returns raw hcaplist.php HTML snippet for selector diagnosis."""
+    import httpx
+    from bs4 import BeautifulSoup
+    BASE_URL   = "https://www.bramleygolfclub.co.uk"
+    LOGIN_URL  = f"{BASE_URL}/login.php"
+    CONSENT_URL = f"{BASE_URL}/ttbconsent.php"
+    HCAP_URL   = f"{BASE_URL}/hcaplist.php"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+    }
+    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=30.0) as client:
+        resp = await client.get(LOGIN_URL)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        csrf = soup.find("input", {"name": "_csrf_token"})
+        if not csrf:
+            return {"error": "No CSRF token found on login page"}
+        resp = await client.post(LOGIN_URL, data={
+            "task": "login", "topmenu": "1",
+            "memberid": body.ig_username, "pin": body.ig_pin,
+            "cachemid": "1", "_csrf_token": csrf.get("value",""), "Submit": "Login",
+        })
+        if str(resp.url).endswith("login.php"):
+            return {"error": "Login failed"}
+        if "ttbconsent" in str(resp.url):
+            await client.get(f"{CONSENT_URL}?action=accept")
+
+        resp = await client.get(HCAP_URL, params={"action": "masterhcap", "filter": "", "sort": "0"})
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Report what tables exist
+        tables = soup.find_all("table")
+        table_info = [{"classes": t.get("class", []), "id": t.get("id",""), "rows": len(t.find_all("tr"))} for t in tables]
+
+        # Try current selector and report first 3 rows raw
+        rows = soup.select("table.table tbody tr")
+        sample_rows = []
+        for row in rows[:3]:
+            sample_rows.append(str(row)[:300])
+
+        # Also try without tbody
+        rows2 = soup.select("table.table tr")
+        sample_rows2 = []
+        for row in rows2[:3]:
+            sample_rows2.append(str(row)[:300])
+
+        # Raw first 2000 chars of body for context
+        body_snippet = soup.get_text()[:1000]
+
+        return {
+            "final_url": str(resp.url),
+            "tables_found": table_info,
+            "selector_table.table_tbody_tr_count": len(rows),
+            "selector_table.table_tbody_tr_samples": sample_rows,
+            "selector_table.table_tr_count": len(rows2),
+            "selector_table.table_tr_samples": sample_rows2,
+            "page_text_snippet": body_snippet,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Courses and tees
 # ---------------------------------------------------------------------------
 
@@ -448,7 +519,9 @@ async def save_round(body: ScoreUpdate):
 
         results = whs_result["players"]
         try:
-            await save_round_results(results, body.date, body.rollup_id, whs_mode=True)
+            await save_round_results(results, body.date, body.rollup_id, whs_mode=True,
+                                              course_id=(settings or {}).get('course_id'),
+                                              tee_id=(settings or {}).get('tee_id'))
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
 
@@ -464,7 +537,9 @@ async def save_round(body: ScoreUpdate):
             body.players, team_mode=body.team_mode, settings=settings
         )
         try:
-            await save_round_results(results, body.date, body.rollup_id, whs_mode=False)
+            await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
+                                              course_id=(settings or {}).get('course_id'),
+                                              tee_id=(settings or {}).get('tee_id'))
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
 
