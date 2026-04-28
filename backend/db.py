@@ -102,7 +102,12 @@ def _init_schema():
                 ALTER TABLE courses
                     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             """)
-            # Remove duplicate courses (keep lowest id)
+            # Remove duplicate courses (keep lowest id) — delete tees first
+            cur.execute("""
+                DELETE FROM tees WHERE course_id NOT IN (
+                    SELECT MIN(id) FROM courses GROUP BY name, club
+                )
+            """)
             cur.execute("""
                 DELETE FROM courses WHERE id NOT IN (
                     SELECT MIN(id) FROM courses GROUP BY name, club
