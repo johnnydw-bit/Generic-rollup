@@ -689,7 +689,7 @@
       <!-- Add course panel -->
       <div id="addCoursePanel" style="display:none;margin-top:6px;">
         <div class="settings-row">
-          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Type course name…" style="flex:1;" />
+          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Course name (e.g. Woking, Hankley)…" style="flex:1;" />
           <button class="toggle-btn" onclick="searchCourse()" style="margin-left:6px;font-size:11px;" id="courseSearchBtn">Search</button>
         </div>
         <div id="courseSearchStatus" style="font-size:11px;color:#666;padding:4px 0;"></div>
@@ -1851,7 +1851,7 @@ async function searchCourse() {
     // Show URL candidates as a dropdown
     if (data.courses[0].search_result) {
       if (data.courses[0].url === '') {
-        statusEl.innerHTML = data.courses[0].title + '<br><small>Add <b>GOOGLE_CSE_KEY</b> and <b>GOOGLE_CSE_ID</b> to Render env vars. Free setup at <a href="https://programmablesearchengine.google.com/" target="_blank" style="color:#1a73e8;">programmablesearchengine.google.com ↗</a></small>';
+        statusEl.textContent = 'No results found. Try a more specific name.';
         return;
       }
       statusEl.textContent = 'Select the best match:';
