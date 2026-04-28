@@ -236,64 +236,92 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Search for a UK golf course and return URL candidates.
-    Uses Google Custom Search API (free, 100/day) if keys are set,
-    otherwise returns a helpful error.
-    Set GOOGLE_CSE_KEY and GOOGLE_CSE_ID as Render env vars.
+    Find a UK golf course tee/rating data without any search API.
+    Strategy:
+    1. Generate likely Intelligent Golf subdomain slugs from the name
+    2. Probe each one — if it responds, fetch the slope/rating page
+    3. Return URL candidates for the user to confirm
     """
-    import urllib.parse, os
+    import urllib.parse, re as _re
     q = course_name.strip()
 
     # Direct URL — skip search, fetch tee data immediately
     if q.startswith("http"):
         return await fetch_course_from_url(q)
 
-    cse_key = os.environ.get("GOOGLE_CSE_KEY", "")
-    cse_id  = os.environ.get("GOOGLE_CSE_ID", "")
+    # Generate slug candidates from the club name
+    clean = _re.sub(r"(golf|club|gc|g\.c\.)", "", q, flags=_re.IGNORECASE)
+    clean = _re.sub(r"[^a-z0-9\s]", "", clean.lower()).strip()
+    words = clean.split()
 
-    if not cse_key or not cse_id:
-        print("GOOGLE_CSE_KEY / GOOGLE_CSE_ID not set")
-        return [{"search_result": True, "title": "⚠ Search not configured — see setup instructions", "url": ""}]
+    slugs = []
+    slugs.append("".join(words))          # e.g. "hankleycommon"
+    if words:
+        slugs.append(words[0])             # e.g. "hankley"
+    if len(words) >= 2:
+        slugs.append("".join(words[:2]))   # e.g. "hankleycommon" (same)
+        slugs.append("-".join(words[:2]))  # e.g. "hankley-common"
+    if len(words) >= 3:
+        slugs.append("".join(words[:3]))
+    slugs = list(dict.fromkeys(slugs))     # dedupe
 
-    search_term = f"{q} golf club slope rating"
-    api_url = (
-        f"https://www.googleapis.com/customsearch/v1"
-        f"?key={cse_key}&cx={cse_id}"
-        f"&q={urllib.parse.quote(search_term)}"
-        f"&gl=uk&num=8"
-    )
+    print(f"Trying IG slugs for '{q}': {slugs}")
 
-    headers = {"Accept": "application/json"}
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-        try:
-            resp = await client.get(api_url)
-            print(f"Google CSE status: {resp.status_code} for '{q}'")
-            if resp.status_code != 200:
-                print(f"CSE error: {resp.text[:200]}")
-                return []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-GB,en;q=0.9",
+    }
 
-            data = resp.json()
-            items = data.get("items", [])
-            print(f"Google CSE found {len(items)} results for '{q}'")
+    # Pages to try on each IG subdomain (in priority order)
+    ig_pages = [
+        "/slope_rating",
+        "/slope_ratings",
+        "/course_and_slope_ratings",
+        "/whs_-_course_slope_rating_tables",
+        "/scorecard",
+        "/hcaplist.php?action=masterhcap",
+    ]
 
-            results = []
-            skip = ["youtube.", "facebook.", "twitter.", "instagram.",
-                    "wikipedia.", "amazon.", "ebay.", "tripadvisor."]
-            for item in items:
-                url   = item.get("link", "")
-                title = item.get("title", url.split("/")[2] if "/" in url else url)[:80]
-                if not url.startswith("http"):
+    candidates = []
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=10.0) as client:
+        for slug in slugs:
+            base = f"https://{slug}.intelligentgolf.co.uk"
+            # First probe the root to see if the subdomain exists
+            try:
+                probe = await client.get(base + "/", timeout=6.0)
+                if probe.status_code not in (200, 301, 302):
                     continue
-                if any(s in url for s in skip):
+                # Check it's actually a golf club site
+                if "intelligentgolf" not in probe.text.lower() and "golf" not in probe.text.lower():
                     continue
-                print(f"  {url}")
-                results.append({"search_result": True, "title": title, "url": url})
+                print(f"  Found IG site: {base}")
 
-            return results
+                # Try each slope rating page
+                for page in ig_pages:
+                    url = base + page
+                    try:
+                        r = await client.get(url, timeout=6.0)
+                        if r.status_code == 200 and len(r.text) > 500:
+                            # Extract club name from page
+                            from bs4 import BeautifulSoup as _BS
+                            soup = _BS(r.text, "html.parser")
+                            title = soup.find("title")
+                            club_name = title.get_text(strip=True).split("::")[0].split("|")[0].strip() if title else slug.title() + " Golf Club"
+                            candidates.append({
+                                "search_result": True,
+                                "title": f"{club_name} — {page.strip('/')}",
+                                "url": url,
+                            })
+                            print(f"    Found page: {url}")
+                            break  # Found a good page for this slug, move on
+                    except Exception:
+                        continue
+            except Exception:
+                continue
 
-        except Exception as e:
-            print(f"Google CSE error: {e}")
-            return []
+    print(f"Found {len(candidates)} IG candidates for '{q}'")
+    return candidates
 
 
 async def fetch_course_from_url(url: str, client=None) -> list[dict]:
