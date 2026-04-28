@@ -690,20 +690,32 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
                 "colour":        _tee_colour(name),
             })
 
-    # Extract club name from text if not provided
+    # Extract club name — look for "Club/Course Name" header or the line
+    # just before the tee table that contains the club name + city
     if not club_name:
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line or len(line) < 5:
-                continue
-            if "Tee Name" in line or "Gender" in line:
+        skip = {"usga", "logo", "championships", "video", "playing", "advancing",
+                "history", "giving", "tickets", "shop", "national course rating",
+                "course rating search", "course handicap", "only 18-hole",
+                "enter your", "tee name", "gender", "par", "front", "back",
+                "new search", "questions", "usga partners", "follow us", "about us"}
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        # Find the line just before "Tee Name" header
+        for i, line in enumerate(lines):
+            if "Tee Name" in line and "Gender" in line:
+                # Look back for the club name
+                for prev in reversed(lines[:i]):
+                    prev_lower = prev.lower()
+                    if any(s in prev_lower for s in skip):
+                        continue
+                    if len(prev) < 5:
+                        continue
+                    # Club name line often has "(NNNNNN)" id suffix
+                    candidate = prev.split("(")[0].strip()
+                    candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
+                    if candidate and len(candidate) > 4:
+                        club_name = candidate
+                        break
                 break
-            if not line.startswith("National") and not line.startswith("Course Rating"):
-                candidate = line.split("(")[0].strip()
-                candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
-                if candidate:
-                    club_name = candidate
-                    break
 
     print(f"parse_ncrdb_paste: {len(tees)} tees, club=\'{club_name}\'")
     if tees:
