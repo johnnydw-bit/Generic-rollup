@@ -113,12 +113,15 @@ def _init_schema():
                     SELECT MIN(id) FROM courses GROUP BY name, club
                 )
             """)
+            # Add unique constraint using savepoint so failure doesn't abort transaction
+            cur.execute("SAVEPOINT before_unique_constraint")
             try:
                 cur.execute("""
                     ALTER TABLE courses ADD CONSTRAINT courses_name_club_unique UNIQUE (name, club)
                 """)
+                cur.execute("RELEASE SAVEPOINT before_unique_constraint")
             except Exception:
-                pass  # Constraint already exists
+                cur.execute("ROLLBACK TO SAVEPOINT before_unique_constraint")
 
             cur.execute("""
                 ALTER TABLE rounds
