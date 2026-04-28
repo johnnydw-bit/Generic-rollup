@@ -1844,24 +1844,31 @@ async function searchCourse() {
     const resp = await fetch(`/api/courses/search?q=${encodeURIComponent(q)}`);
     const data = await resp.json();
     if (!data.courses || data.courses.length === 0) {
-      statusEl.textContent = 'No courses found. Try a more specific name.';
+      statusEl.textContent = 'No results found. Try a different name.';
       return;
     }
 
-    // Step 1: URL candidates — let user pick the right one
-    if (data.courses[0] && data.courses[0].search_result) {
-      statusEl.textContent = `Found ${data.courses.length} match${data.courses.length > 1 ? 'es' : ''} — select the right club:`;
-      resultsEl.innerHTML = data.courses.map((c, ci) => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 6px;border:1px solid #ddd;border-radius:4px;margin-bottom:4px;background:#fafafa;">
-          <span style="font-size:12px;font-weight:600;">${c.name}</span>
-          <button class="toggle-btn" style="font-size:11px;" onclick="fetchCourseData('${c.url.replace(/'/g,"\'")}', '${c.name.replace(/'/g,"\'")}')">Select ↗</button>
+    // Show URL candidates as a dropdown
+    if (data.courses[0].search_result) {
+      statusEl.textContent = 'Select the best match:';
+      const opts = data.courses.map((c, i) =>
+        `<option value="${i}">${c.title || c.url}</option>`
+      ).join('');
+      resultsEl.innerHTML = `
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+          <select id="courseUrlPicker" class="settings-input" style="flex:1;font-size:11px;">
+            <option value="">-- Choose a result --</option>
+            ${opts}
+          </select>
+          <button class="toggle-btn" style="font-size:11px;" onclick="fetchSelectedCourse()">Fetch →</button>
         </div>
-      `).join('');
+      `;
+      window._courseSearchResults = data.courses;
       return;
     }
 
-    // Step 2: Full tee data — show tees with checkboxes
-    statusEl.textContent = `Found ${data.courses.length} result${data.courses.length > 1 ? 's' : ''} — select to add:`;
+    // Full tee data returned directly (URL was passed in)
+    statusEl.textContent = 'Found tee data — confirm tees to add:';
     _showCourseTeeResults(data.courses);
 
   } catch(e) {
@@ -1872,16 +1879,33 @@ async function searchCourse() {
   }
 }
 
-async function fetchCourseData(url, name) {
-  const statusEl  = document.getElementById('courseSearchStatus');
+async function fetchSelectedCourse() {
+  const picker = document.getElementById('courseUrlPicker');
+  const idx = parseInt(picker.value);
+  if (isNaN(idx)) { alert('Please choose a result first'); return; }
+  const chosen = window._courseSearchResults[idx];
+  const statusEl = document.getElementById('courseSearchStatus');
   const resultsEl = document.getElementById('courseSearchResults');
-  statusEl.textContent = `Fetching data for ${name}…`;
+  statusEl.textContent = `Fetching tee data…`;
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch(`/api/courses/fetch?url=${encodeURIComponent(url)}`);
+    const resp = await fetch(`/api/courses/fetch?url=${encodeURIComponent(chosen.url)}`);
     const data = await resp.json();
-    if (!data.courses || data.courses.length === 0 || !data.courses[0].tees || data.courses[0].tees.length === 0) {
-      statusEl.textContent = `Could not find tee data at that page. The site may not show CR/Slope ratings.`;
+    if (!data.courses || !data.courses[0] || !data.courses[0].tees || data.courses[0].tees.length === 0) {
+      statusEl.textContent = 'No tee/rating data found on that page. Try another result.';
+      // Put the dropdown back
+      const opts = window._courseSearchResults.map((c, i) =>
+        `<option value="${i}">${c.title || c.url}</option>`
+      ).join('');
+      resultsEl.innerHTML = `
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+          <select id="courseUrlPicker" class="settings-input" style="flex:1;font-size:11px;">
+            <option value="">-- Choose a result --</option>
+            ${opts}
+          </select>
+          <button class="toggle-btn" style="font-size:11px;" onclick="fetchSelectedCourse()">Fetch →</button>
+        </div>
+      `;
       return;
     }
     statusEl.textContent = 'Found tee data — confirm tees to add:';
@@ -1895,7 +1919,7 @@ function _showCourseTeeResults(courses) {
   const resultsEl = document.getElementById('courseSearchResults');
   window._courseSearchResults = courses;
   resultsEl.innerHTML = courses.map((c, ci) => `
-    <div class="course-result" style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
+    <div style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
       <div style="font-weight:700;font-size:12px;">${c.club}</div>
       <div style="margin:4px 0;">
         ${c.tees.map((t, ti) => `
@@ -1916,9 +1940,7 @@ async function saveCourseResult(courseIndex) {
   if (!course) return;
   const checks = document.querySelectorAll(`input[data-ci="${courseIndex}"]`);
   const tees = [];
-  checks.forEach((cb) => {
-    if (cb.checked) tees.push(course.tees[parseInt(cb.dataset.ti)]);
-  });
+  checks.forEach(cb => { if (cb.checked) tees.push(course.tees[parseInt(cb.dataset.ti)]); });
   if (tees.length === 0) { alert('Select at least one tee'); return; }
   const statusEl = document.getElementById('courseSearchStatus');
   statusEl.textContent = 'Saving…';
@@ -1933,9 +1955,7 @@ async function saveCourseResult(courseIndex) {
     const sel = document.getElementById('sCourseSelect');
     for (const opt of sel.options) {
       if (opt.text.includes(course.club.substring(0, 8))) {
-        sel.value = opt.value;
-        await loadTeeOptions(parseInt(opt.value));
-        break;
+        sel.value = opt.value; await loadTeeOptions(parseInt(opt.value)); break;
       }
     }
     setTimeout(() => { toggleAddCourse(); statusEl.textContent = ''; }, 1500);
