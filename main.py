@@ -38,11 +38,12 @@ from backend.db import (
     save_credentials,
     get_all_courses,
     get_tees_for_course,
+    save_course,
     get_prohibited_winners,
     init_db,
     close_db,
 )
-from backend.scraper import scrape_players
+from backend.scraper import scrape_players, search_course_on_18birdies
 
 load_dotenv()
 
@@ -691,6 +692,36 @@ async def post_credentials(body: CredentialsRequest):
     except Exception as e:
         raise HTTPException(500, f"Could not save credentials: {str(e)}")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Course search & add
+# ---------------------------------------------------------------------------
+
+class SaveCourseRequest(BaseModel):
+    club:  str
+    name:  str
+    tees:  list[dict]
+
+@app.get("/api/courses/search")
+async def search_courses(q: str):
+    """Search 18birdies for a course by name and return tee data candidates."""
+    if not q or len(q.strip()) < 3:
+        raise HTTPException(400, "Query too short")
+    try:
+        results = await search_course_on_18birdies(q.strip())
+        return {"courses": results}
+    except Exception as e:
+        raise HTTPException(500, f"Search failed: {str(e)}")
+
+@app.post("/api/courses/save")
+async def save_course_endpoint(body: SaveCourseRequest):
+    """Save a searched course and its tees to the database."""
+    try:
+        course_id = await save_course(body.club, body.name, body.tees)
+        return {"course_id": course_id, "message": f"Saved {body.name} with {len(body.tees)} tees"}
+    except Exception as e:
+        raise HTTPException(500, f"Save failed: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
