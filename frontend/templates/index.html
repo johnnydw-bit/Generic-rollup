@@ -689,16 +689,11 @@
       <!-- Add course panel -->
       <div id="addCoursePanel" style="display:none;margin-top:6px;">
         <div class="settings-row">
-          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Course name or 18birdies.com URL…" style="flex:1;" />
+          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Type course name…" style="flex:1;" />
           <button class="toggle-btn" onclick="searchCourse()" style="margin-left:6px;font-size:11px;" id="courseSearchBtn">Search</button>
         </div>
         <div id="courseSearchStatus" style="font-size:11px;color:#666;padding:4px 0;"></div>
         <div id="courseSearchResults" style="margin-top:4px;"></div>
-        <div style="font-size:10px;color:#888;margin-top:4px;">
-          Tip: Find your course on
-          <a href="https://www.golfshake.com/course/search/" target="_blank" style="color:#1a73e8;">Golfshake</a>
-          and paste the URL, or just type the course name.
-        </div>
       </div>
     </div>
 
@@ -1843,80 +1838,107 @@ async function searchCourse() {
   const resultsEl = document.getElementById('courseSearchResults');
   const btn       = document.getElementById('courseSearchBtn');
   btn.disabled = true;
-  statusEl.textContent = 'Fetching course data…';
+  statusEl.textContent = 'Searching…';
   resultsEl.innerHTML = '';
   try {
     const resp = await fetch(`/api/courses/search?q=${encodeURIComponent(q)}`);
     const data = await resp.json();
     if (!data.courses || data.courses.length === 0) {
-      statusEl.textContent = 'No data found. Paste the full Golfshake URL.';
+      statusEl.textContent = 'No courses found. Try a more specific name.';
       return;
     }
-    if (data.courses[0] && data.courses[0].hint) {
-      statusEl.innerHTML = `Please paste a <a href="https://www.golfshake.com/course/search/?name=${encodeURIComponent(q)}" target="_blank" style="color:#1a73e8;">Golfshake URL ↗</a> for "${q}" rather than just the name.`;
-      return;
-    }
-    statusEl.textContent = `Found ${data.courses.length} result${data.courses.length > 1 ? 's' : ''} — select to add:`;
-    resultsEl.innerHTML = data.courses.map((c, ci) => `
-      <div class="course-result" style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
-        <div style="font-weight:700;font-size:12px;">${c.club}</div>
-        <div style="margin:4px 0;">
-          ${c.tees.map((t, ti) => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
-              <input type="checkbox" checked data-ci="${ci}" data-ti="${ti}" />
-              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.colour};border:1px solid #999;"></span>
-              ${t.name} (${t.gender}) — ${t.yardage}yds, Par ${t.par}, CR ${t.course_rating}, Slope ${t.slope}
-            </label>
-          `).join('')}
+
+    // Step 1: URL candidates — let user pick the right one
+    if (data.courses[0] && data.courses[0].search_result) {
+      statusEl.textContent = `Found ${data.courses.length} match${data.courses.length > 1 ? 'es' : ''} — select the right club:`;
+      resultsEl.innerHTML = data.courses.map((c, ci) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 6px;border:1px solid #ddd;border-radius:4px;margin-bottom:4px;background:#fafafa;">
+          <span style="font-size:12px;font-weight:600;">${c.name}</span>
+          <button class="toggle-btn" style="font-size:11px;" onclick="fetchCourseData('${c.url.replace(/'/g,"\'")}', '${c.name.replace(/'/g,"\'")}')">Select ↗</button>
         </div>
-        <button class="toggle-btn" style="font-size:11px;" onclick="saveCourseResult(${ci})">✓ Add this course</button>
-      </div>
-    `).join('');
-    // Store results for saveCourseResult to reference
-    window._courseSearchResults = data.courses;
+      `).join('');
+      return;
+    }
+
+    // Step 2: Full tee data — show tees with checkboxes
+    statusEl.textContent = `Found ${data.courses.length} result${data.courses.length > 1 ? 's' : ''} — select to add:`;
+    _showCourseTeeResults(data.courses);
+
   } catch(e) {
     statusEl.textContent = 'Search failed. Please try again.';
+    console.error(e);
   } finally {
     btn.disabled = false;
   }
 }
 
+async function fetchCourseData(url, name) {
+  const statusEl  = document.getElementById('courseSearchStatus');
+  const resultsEl = document.getElementById('courseSearchResults');
+  statusEl.textContent = `Fetching data for ${name}…`;
+  resultsEl.innerHTML = '';
+  try {
+    const resp = await fetch(`/api/courses/fetch?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+    if (!data.courses || data.courses.length === 0 || !data.courses[0].tees || data.courses[0].tees.length === 0) {
+      statusEl.textContent = `Could not find tee data at that page. The site may not show CR/Slope ratings.`;
+      return;
+    }
+    statusEl.textContent = 'Found tee data — confirm tees to add:';
+    _showCourseTeeResults(data.courses);
+  } catch(e) {
+    statusEl.textContent = 'Fetch failed. Please try again.';
+  }
+}
+
+function _showCourseTeeResults(courses) {
+  const resultsEl = document.getElementById('courseSearchResults');
+  window._courseSearchResults = courses;
+  resultsEl.innerHTML = courses.map((c, ci) => `
+    <div class="course-result" style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
+      <div style="font-weight:700;font-size:12px;">${c.club}</div>
+      <div style="margin:4px 0;">
+        ${c.tees.map((t, ti) => `
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
+            <input type="checkbox" checked data-ci="${ci}" data-ti="${ti}" />
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.colour};border:1px solid #999;"></span>
+            ${t.name} (${t.gender}) — Par ${t.par}, CR ${t.course_rating}, Slope ${t.slope}${t.yardage ? ', '+t.yardage+'yds' : ''}
+          </label>
+        `).join('')}
+      </div>
+      <button class="toggle-btn" style="font-size:11px;" onclick="saveCourseResult(${ci})">✓ Add this course</button>
+    </div>
+  `).join('');
+}
+
 async function saveCourseResult(courseIndex) {
   const course = window._courseSearchResults[courseIndex];
   if (!course) return;
-  // Collect only checked tees
   const checks = document.querySelectorAll(`input[data-ci="${courseIndex}"]`);
   const tees = [];
-  checks.forEach((cb, ti) => {
+  checks.forEach((cb) => {
     if (cb.checked) tees.push(course.tees[parseInt(cb.dataset.ti)]);
   });
   if (tees.length === 0) { alert('Select at least one tee'); return; }
   const statusEl = document.getElementById('courseSearchStatus');
   statusEl.textContent = 'Saving…';
   try {
-    const resp = await fetch('/api/courses/save', {
+    await fetch('/api/courses/save', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ club: course.club, name: course.name, tees }),
     });
-    const data = await resp.json();
-    statusEl.textContent = `✓ ${course.club} added successfully!`;
+    statusEl.textContent = `✓ ${course.club} added!`;
     document.getElementById('courseSearchResults').innerHTML = '';
-    // Reload course dropdown and select the new course
     await loadCourseOptions();
     const sel = document.getElementById('sCourseSelect');
-    // Select the newly added course
-    for (let opt of sel.options) {
-      if (opt.text.includes(course.club.substring(0, 10))) {
+    for (const opt of sel.options) {
+      if (opt.text.includes(course.club.substring(0, 8))) {
         sel.value = opt.value;
         await loadTeeOptions(parseInt(opt.value));
         break;
       }
     }
-    // Close the panel after 1.5s
-    setTimeout(() => {
-      toggleAddCourse();
-      statusEl.textContent = '';
-    }, 1500);
+    setTimeout(() => { toggleAddCourse(); statusEl.textContent = ''; }, 1500);
   } catch(e) {
     statusEl.textContent = 'Save failed. Please try again.';
   }
