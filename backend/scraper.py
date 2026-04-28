@@ -236,28 +236,177 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Fetch tee/rating data for a UK golf course from Golfshake.com.
-    Accepts either a direct Golfshake URL or a course name.
-    For name searches, returns a hint to use a URL instead since
-    server-side search engines block automated requests.
+    Step 1 of 2: Use the Anthropic API with web_search to find candidate
+    golf course URLs for the user to choose from.
+    Returns a list of {name, url} dicts — no tee data yet.
+    Step 2 (fetch_course_from_url) is called once the user picks one.
     """
+    import os, json as _json
     q = course_name.strip()
 
-    # Direct URL — fetch and parse immediately
-    if q.startswith("http") and "golfshake.com" in q:
-        return await _fetch_golfshake_course(q)
-
-    # Any other URL — try to fetch it
+    # If it's already a URL, skip search and fetch directly
     if q.startswith("http"):
-        return await _fetch_golfshake_course(q)
+        return await fetch_course_from_url(q)
 
-    # Name search — return a special marker so frontend can guide user
-    return [{"hint": True, "name": q}]
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        print("No ANTHROPIC_API_KEY — cannot search")
+        return []
+
+    prompt = f"""Search the web for the official website or handicap/slope rating page for the UK golf club named "{q}".
+
+Find up to 4 real candidate URLs. Prefer:
+1. The club's own intelligentgolf-hosted site (e.g. clubname.intelligentgolf.co.uk/slope_rating or /hcaplist.php)
+2. The club's own website with a slope/rating page
+3. Any page that clearly shows Course Rating and Slope data for the club
+
+Return ONLY a JSON array, no other text. Format:
+[
+  {{"name": "Full Club Name", "url": "https://..."}},
+  ...
+]"""
+
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 500,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+            )
+            data = resp.json()
+            print(f"Anthropic search status: {resp.status_code}")
+
+            # Extract text blocks from response
+            text = ""
+            for block in data.get("content", []):
+                if block.get("type") == "text":
+                    text += block.get("text", "")
+
+            print(f"Anthropic response text: {text[:300]}")
+
+            # Parse JSON array from response
+            import re as _re
+            m = _re.search(r'\[.*?\]', text, _re.DOTALL)
+            if not m:
+                print("No JSON array found in response")
+                return []
+
+            candidates = _json.loads(m.group(0))
+            # Return as search results with url_only flag so frontend shows picker
+            return [{"search_result": True, "name": c.get("name",""), "url": c.get("url","")}
+                    for c in candidates if c.get("url","").startswith("http")]
+
+    except Exception as e:
+        print(f"Anthropic search error: {e}")
+        return []
 
 
 async def fetch_course_from_url(url: str, client=None) -> list[dict]:
-    """Public alias — fetch course from a Golfshake URL."""
-    return await _fetch_golfshake_course(url, client=client)
+    """Fetch and parse tee/CR/slope data from a course URL.
+    Handles Golfshake pages and Intelligent Golf slope rating pages.
+    """
+    if "golfshake.com" in url:
+        return await _fetch_golfshake_course(url, client=client)
+    else:
+        return await _fetch_ig_slope_page(url, client=client)
+
+
+async def _fetch_ig_slope_page(url: str, client=None) -> list[dict]:
+    """
+    Fetch and parse an Intelligent Golf slope/rating page.
+    These pages typically have text like:
+      "Men's Yellow tees: Course Rating 68.9, Slope 128"
+      or tables with tee/CR/slope data.
+    """
+    import re as _re
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+    }
+
+    async def _do(c):
+        resp = await c.get(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        text = soup.get_text(" ", strip=True)
+
+        # Extract club name
+        h1 = soup.find("h1") or soup.find("h2")
+        page_name = h1.get_text(strip=True) if h1 else url.split("/")[2].replace(".intelligentgolf.co.uk","").replace("-"," ").title()
+
+        tees = []
+        seen = set()
+
+        # Pattern 1: "Yellow tees: Course Rating 68.9, Slope 128, Par 72"
+        # Pattern 2: "Yellow Men CR 68.9 Slope 128"
+        # Pattern 3: Table rows with tee name, CR, slope
+
+        # Try table parsing first (Golfshake-style SSS[slope])
+        for row in soup.select("table tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 4:
+                continue
+            for i, cell in enumerate(cells):
+                m = _re.match(r"^([\d.]+)\s*\[(\d+)\]$", cell)
+                if m:
+                    cr, slope = float(m.group(1)), int(m.group(2))
+                    tee_name = cells[1] if len(cells) > 1 else "Unknown"
+                    try: par = int(cells[2])
+                    except: par = 72
+                    try: yardage = int(cells[-1].replace(",",""))
+                    except: yardage = None
+                    key = (tee_name, "Men")
+                    if key not in seen and tee_name.lower() not in ("tee","course",""):
+                        seen.add(key)
+                        tees.append({"name": tee_name, "gender": "Men", "yardage": yardage,
+                                     "course_rating": cr, "slope": slope, "par": par,
+                                     "colour": _tee_colour(tee_name)})
+                    break
+
+        # Try free-text pattern: "Yellow ... Rating 68.9 ... Slope 128"
+        if not tees:
+            pattern = _re.compile(
+                r"(White|Yellow|Red|Blue|Black|Gold|Silver|Purple|Orange|Green)"
+                r"[^.]*?(?:Course\s*)?Rating[:\s]+([0-9.]+)"
+                r"[^.]*?Slope[:\s]+(\d+)"
+                r"(?:[^.]*?Par[:\s]+(\d+))?",
+                _re.IGNORECASE
+            )
+            for m in pattern.finditer(text):
+                tee_name = m.group(1).title()
+                cr = float(m.group(2))
+                slope = int(m.group(3))
+                par = int(m.group(4)) if m.group(4) else 72
+                key = (tee_name, "Men")
+                if key not in seen:
+                    seen.add(key)
+                    tees.append({"name": tee_name, "gender": "Men", "yardage": None,
+                                 "course_rating": cr, "slope": slope, "par": par,
+                                 "colour": _tee_colour(tee_name)})
+
+        print(f"_fetch_ig_slope_page: {len(tees)} tees from {url}")
+        if not tees:
+            sample = text[:300]
+            print(f"  Page text sample: {sample}")
+
+        if tees:
+            return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
+        return []
+
+    if client:
+        return await _do(client)
+    else:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
+            return await _do(c)
 
 
 async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
@@ -292,7 +441,7 @@ async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
                 continue
             # Find the SSS [slope] cell — matches "72 [135]" or "69 [128]"
             for i, cell in enumerate(cells):
-                m = re.match(r"^(\d+)\s*\[(\d+)\]$", cell)
+                m = re.match(r"^([\d.]+)\s*\[(\d+)\]$", cell)
                 if m:
                     cr  = float(m.group(1))
                     slope = int(m.group(2))
