@@ -346,14 +346,21 @@ async def fetch_course_from_url(url: str, client=None) -> list[dict]:
 
 
 async def _fetch_ncrdb_course(url: str, client=None) -> list[dict]:
-    """Parse the NCRDB courseTeeInfo page.
-    Table columns: Tee Name | Gender | Par | Course Rating | Bogey Rating | Slope Rating | ...
-    """
+    """Parse the NCRDB courseTeeInfo page."""
     import re as _re
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-GB,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Referer": "https://ncrdb.usga.org/NCRListing",
     }
 
     async def _do(c):
