@@ -1,4 +1,4 @@
-# Bramley Rollup — backend/db.py
+d# Bramley Rollup — backend/db.py
 # Per-request connections: opens a fresh connection for every DB operation,
 # closes it immediately after. Eliminates stale connection errors from Neon
 # dropping idle connections after ~5 minutes.
@@ -92,6 +92,8 @@ def _init_schema():
                     whs_mode        BOOLEAN NOT NULL DEFAULT FALSE,
                     whs_index_used  NUMERIC(4,1),
                     new_whs_index   NUMERIC(4,1),
+                    course_id       INTEGER REFERENCES courses(id),
+                    tee_id          INTEGER REFERENCES tees(id),
                     recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
@@ -100,7 +102,9 @@ def _init_schema():
                 ALTER TABLE rounds
                     ADD COLUMN IF NOT EXISTS whs_mode       BOOLEAN NOT NULL DEFAULT FALSE,
                     ADD COLUMN IF NOT EXISTS whs_index_used NUMERIC(4,1),
-                    ADD COLUMN IF NOT EXISTS new_whs_index  NUMERIC(4,1)
+                    ADD COLUMN IF NOT EXISTS new_whs_index  NUMERIC(4,1),
+                    ADD COLUMN IF NOT EXISTS course_id      INTEGER REFERENCES courses(id),
+                    ADD COLUMN IF NOT EXISTS tee_id         INTEGER REFERENCES tees(id)
             """)
 
             # ── Course / Tee tables ──────────────────────────────────────
@@ -146,6 +150,25 @@ def _init_schema():
                 (1, 'Red',    'Women', '#CC0000', 5281, 69, 71.2, 126),
             ]
             for t in tees:
+                cur.execute("""
+                    INSERT INTO tees (course_id, name, gender, colour, yardage, par, course_rating, slope)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (course_id, name, gender) DO NOTHING
+                """, t)
+
+            # Seed Clandon Regis Golf Club
+            cur.execute("""
+                INSERT INTO courses (id, name, club)
+                VALUES (2, 'Clandon Regis', 'Clandon Regis Golf Club')
+                ON CONFLICT DO NOTHING
+            """)
+
+            clandon_tees = [
+                (2, 'White',  'Men',   '#FFFFFF', 6464, 72, 71.9, 135),
+                (2, 'Yellow', 'Men',   '#FFD700', 5925, 72, 68.9, 128),
+                (2, 'Red',    'Women', '#CC0000', 5575, 72, 73.0, 134),
+            ]
+            for t in clandon_tees:
                 cur.execute("""
                     INSERT INTO tees (course_id, name, gender, colour, yardage, par, course_rating, slope)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -379,7 +402,7 @@ async def remove_player(player_id: int, rollup_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
-                        whs_mode: bool = False):
+                        whs_mode: bool = False, course_id=None, tee_id=None):
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -405,26 +428,30 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                     """, (new_whs, r.get("winner_prohibited", False), player_id))
                     cur.execute("""
                         INSERT INTO rounds (player_id, rollup_id, date, score,
-                            new_handicap, whs_mode, whs_index_used, new_whs_index)
-                        VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s)
+                            new_handicap, whs_mode, whs_index_used, new_whs_index,
+                            course_id, tee_id)
+                        VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                     """, (player_id, rollup_id, date_str, r["score"],
-                          r["new_handicap"], r.get("whs_index_used"), new_whs))
+                          r["new_handicap"], r.get("whs_index_used"), new_whs,
+                          course_id, tee_id))
                 else:
                     cur.execute(
                         "UPDATE players SET handicap = %s WHERE id = %s",
                         (r["new_handicap"], player_id)
                     )
                     cur.execute("""
-                        INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
+                            course_id, tee_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
-                    """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"]))
+                    """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"],
+                           course_id, tee_id))
 
 
 async def save_round_results(results: list[dict], date_str: str, rollup_id: int,
-                              whs_mode: bool = False) -> None:
-    await _run(_save_round_results, results, date_str, rollup_id, whs_mode)
+                              whs_mode: bool = False, course_id=None, tee_id=None) -> None:
+    await _run(_save_round_results, results, date_str, rollup_id, whs_mode, course_id, tee_id)
 
 
 def _get_prohibited_winners(rollup_id: int) -> list[str]:
