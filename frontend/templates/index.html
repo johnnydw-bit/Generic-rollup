@@ -689,15 +689,15 @@
       <!-- Add course panel -->
       <div id="addCoursePanel" style="display:none;margin-top:6px;">
         <div style="font-size:11px;margin-bottom:6px;">
-          <a id="ncrdbLink" href="https://ncrdb.usga.org/NCRListing" target="_blank" style="color:#1a73e8;font-weight:600;">Search USGA NCRDB ↗</a>
-          <span style="color:#666;"> — select England, type name, click result, copy CourseID from URL</span>
+          <b>Step 1:</b> <a href="https://ncrdb.usga.org/NCRListing" target="_blank" style="color:#1a73e8;">Open USGA NCRDB ↗</a>
+          <span style="color:#666;"> — select England, type name, click course</span><br>
+          <b>Step 2:</b> <span style="color:#666;">Select all text on that page (Ctrl+A), copy (Ctrl+C), paste below</span>
         </div>
-        <div class="settings-row">
-          <input class="settings-input" id="courseSearchInput" type="text"
-                 placeholder="Paste CourseID (e.g. 35907) or full NCRDB URL…"
-                 style="flex:1;" oninput="updateNcrdbLink(this.value)" />
-          <button class="toggle-btn" onclick="searchCourse()" style="margin-left:6px;font-size:11px;" id="courseSearchBtn">Fetch</button>
-        </div>
+        <textarea id="ncrdbPasteArea" class="settings-input"
+                  placeholder="Paste the full NCRDB course page text here (Ctrl+A, Ctrl+C on the NCRDB page)…"
+                  style="width:100%;height:80px;font-size:10px;resize:vertical;box-sizing:border-box;"
+                  oninput="checkPasteReady()"></textarea>
+        <button class="toggle-btn" onclick="parsePastedCourse()" style="margin-top:4px;font-size:11px;width:100%;" id="parsePasteBtn" disabled>Parse Tee Data</button>
         <div id="courseSearchStatus" style="font-size:11px;color:#666;padding:4px 0;"></div>
         <div id="courseSearchResults" style="margin-top:4px;"></div>
       </div>
@@ -1831,76 +1831,47 @@ function toggleAddCourse() {
   panel.style.display = open ? 'block' : 'none';
   btn.textContent = open ? '\u2715 Cancel' : '+ Add course';
   if (open) {
-    document.getElementById('courseSearchInput').value = '';
+    document.getElementById('ncrdbPasteArea').value = '';
     document.getElementById('courseSearchResults').innerHTML = '';
     document.getElementById('courseSearchStatus').textContent = '';
-    document.getElementById('courseSearchInput').focus();
+    document.getElementById('parsePasteBtn').disabled = true;
+    document.getElementById('ncrdbPasteArea').focus();
   }
 }
 
-function updateNcrdbLink(val) {
-  const link = document.getElementById('ncrdbLink');
-  const m = val.trim().match(/[0-9]{4,6}/);
-  if (m) {
-    link.href = 'https://ncrdb.usga.org/courseTeeInfo?CourseID=' + m[0];
-    link.textContent = 'Preview course ' + m[0] + ' on NCRDB \u2197';
-  } else {
-    link.href = 'https://ncrdb.usga.org/NCRListing';
-    link.textContent = 'Search USGA NCRDB \u2197';
-  }
+function checkPasteReady() {
+  const text = document.getElementById('ncrdbPasteArea').value.trim();
+  document.getElementById('parsePasteBtn').disabled = text.length < 50;
 }
 
-async function searchCourse() {
-  const q = document.getElementById('courseSearchInput').value.trim();
-  if (!q) { alert('Please enter a CourseID number'); return; }
+async function parsePastedCourse() {
+  const text = document.getElementById('ncrdbPasteArea').value.trim();
+  if (!text) { alert('Please paste the NCRDB page text first'); return; }
   const statusEl  = document.getElementById('courseSearchStatus');
   const resultsEl = document.getElementById('courseSearchResults');
-  const btn       = document.getElementById('courseSearchBtn');
+  const btn       = document.getElementById('parsePasteBtn');
   btn.disabled = true;
-  statusEl.textContent = 'Fetching course data\u2026';
+  statusEl.textContent = 'Parsing tee data\u2026';
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch('/api/courses/search?q=' + encodeURIComponent(q));
+    const resp = await fetch('/api/courses/parse-paste', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text: text, club_name: '' }),
+    });
     const data = await resp.json();
-    if (!data.courses || data.courses.length === 0) {
-      statusEl.textContent = 'No tee data found. Check the CourseID is correct.';
-      return;
-    }
-    if (data.courses[0].search_result && !data.courses[0].tees) {
-      statusEl.textContent = 'Found ' + data.courses.length + ' match(es) \u2014 select:';
-      const opts = data.courses.map((c, i) => '<option value="' + i + '">' + (c.title || c.url) + '</option>').join('');
-      resultsEl.innerHTML = '<div style="display:flex;gap:6px;align-items:center;margin-top:4px;"><select id="courseUrlPicker" class="settings-input" style="flex:1;font-size:11px;"><option value="">-- Choose --</option>' + opts + '</select><button class="toggle-btn" style="font-size:11px;" onclick="fetchSelectedCourse()">Fetch \u2192</button></div>';
-      window._courseSearchResults = data.courses;
+    if (!data.courses || data.courses.length === 0 || !data.courses[0].tees || !data.courses[0].tees.length) {
+      statusEl.textContent = 'No tee data found. Make sure you copied the full page (Ctrl+A then Ctrl+C on the NCRDB course page).';
+      btn.disabled = false;
       return;
     }
     statusEl.textContent = 'Found tee data \u2014 confirm tees to add:';
     _showCourseTeeResults(data.courses);
   } catch(e) {
-    statusEl.textContent = 'Fetch failed. Please try again.';
-    console.error(e);
-  } finally {
+    statusEl.textContent = 'Parse failed. Please try again.';
     btn.disabled = false;
+    console.error(e);
   }
-}
-
-async function fetchSelectedCourse() {
-  const picker = document.getElementById('courseUrlPicker');
-  const idx = parseInt(picker.value);
-  if (isNaN(idx)) { alert('Please choose a result'); return; }
-  const chosen = window._courseSearchResults[idx];
-  const statusEl = document.getElementById('courseSearchStatus');
-  statusEl.textContent = 'Fetching tee data\u2026';
-  document.getElementById('courseSearchResults').innerHTML = '';
-  try {
-    const resp = await fetch('/api/courses/fetch?url=' + encodeURIComponent(chosen.url));
-    const data = await resp.json();
-    if (!data.courses || !data.courses[0] || !data.courses[0].tees || !data.courses[0].tees.length) {
-      statusEl.textContent = 'No tee data found. Try another result.';
-      return;
-    }
-    statusEl.textContent = 'Found tee data \u2014 confirm tees to add:';
-    _showCourseTeeResults(data.courses);
-  } catch(e) { statusEl.textContent = 'Fetch failed.'; }
 }
 
 function _showCourseTeeResults(courses) {
