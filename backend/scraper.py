@@ -236,104 +236,140 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Fetch tee data from an 18birdies course URL directly.
-    If course_name looks like a URL, fetch it directly.
-    Otherwise return empty — the frontend should provide a URL.
+    Search for a UK golf course on Golfshake.com and return tee/rating data.
+    If course_name is a URL, fetch it directly.
     """
     import urllib.parse
 
-    # If it looks like a URL, fetch it directly
     if course_name.startswith("http"):
-        return await fetch_course_from_url(course_name)
+        return await _fetch_golfshake_course(course_name)
 
-    # Otherwise try to construct likely 18birdies URL from name
-    slug = course_name.lower().strip()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
-    slug = re.sub(r"\s+", "-", slug)
-    url = f"https://18birdies.com/golf-courses/club/search/{slug}"
+    # Use DuckDuckGo to find the Golfshake course page
+    query = f"site:golfshake.com/course/view {course_name}"
+    search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
 
-    # Try fetching 18birdies search page
-    search_url = f"https://18birdies.com/golf-courses/?q={urllib.parse.quote(course_name)}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
+        "Referer": "https://duckduckgo.com/",
     }
+
     async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as client:
-        try:
-            resp = await client.get(search_url)
-            soup = BeautifulSoup(resp.text, "html.parser")
-            # Find course links in search results
-            course_urls = []
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                if "/golf-courses/club/" in href and "/reviews" not in href:
-                    full = href if href.startswith("http") else f"https://18birdies.com{href}"
-                    full = full.split("?")[0].rstrip("/")
-                    if full not in course_urls:
-                        course_urls.append(full)
-            print(f"18birdies search found {len(course_urls)} URLs")
-            results = []
-            for u in course_urls[:3]:
-                r = await fetch_course_from_url(u, client=client)
-                results.extend(r)
-            return results
-        except Exception as e:
-            print(f"18birdies search error: {e}")
+        resp = await client.get(search_url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        course_urls = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            # DDG wraps URLs in uddg= param
+            if "golfshake.com/course/view/" in href:
+                if "uddg=" in href:
+                    parsed = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
+                    url = parsed.get("uddg", [None])[0]
+                    if url:
+                        url = urllib.parse.unquote(url).split("?")[0].rstrip("/")
+                else:
+                    url = href.split("?")[0].rstrip("/")
+                if url and url not in course_urls and "#" not in url:
+                    course_urls.append(url)
+
+        print(f"Golfshake search found {len(course_urls)} URLs for '{course_name}'")
+        for u in course_urls[:3]:
+            print(f"  {u}")
+
+        if not course_urls:
             return []
+
+        results = []
+        for url in course_urls[:3]:
+            r = await _fetch_golfshake_course(url, client=client)
+            results.extend(r)
+        return results
 
 
 async def fetch_course_from_url(url: str, client=None) -> list[dict]:
-    """Fetch and parse tee data from a specific 18birdies course page URL."""
+    """Public alias — fetch course from a Golfshake URL."""
+    return await _fetch_golfshake_course(url, client=client)
+
+
+async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
+    """
+    Fetch and parse tee/rating data from a Golfshake course page.
+    Scorecard table format:
+      Course | Tee | Par | SSS      | Yards
+      Club   | White | 72 | 72 [135] | 6464
+    SSS = Course Rating, [slope] in brackets.
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
     }
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
-        use_client = client or c
-        try:
-            resp = await use_client.get(url)
-            cs = BeautifulSoup(resp.text, "html.parser")
 
-            # Course name
-            title_el = cs.find("h2") or cs.find("h1")
-            page_name = title_el.get_text(strip=True) if title_el else url.split("/")[-1].replace("-", " ").title()
+    async def _do_fetch(c):
+        resp = await c.get(url)
+        cs = BeautifulSoup(resp.text, "html.parser")
 
-            # Parse tee lines — 18birdies format: "White 5930 yds (slope/cr) for Men"
-            tees = []
-            seen = set()
-            for el in cs.find_all(string=True):
-                m = re.match(
-                    r"^([\w][\w\s]*?)\s+(\d{3,5})\s+yds\s+\((\d+)/([\d.]+)\)\s+for\s+(Men|Women)$",
-                    el.strip()
-                )
+        # Course name from h1
+        h1 = cs.find("h1")
+        page_name = h1.get_text(strip=True) if h1 else url.split("/")[-1].replace("_", " ").replace("-", " ").title()
+
+        # Parse scorecard table
+        # Row format: Course | Tee | Par | SSS [slope] | Yards
+        tees = []
+        seen = set()
+        for row in cs.select("table tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 4:
+                continue
+            # Find the SSS [slope] cell — matches "72 [135]" or "69 [128]"
+            for i, cell in enumerate(cells):
+                m = re.match(r"^(\d+)\s*\[(\d+)\]$", cell)
                 if m:
-                    name, yds, slope, cr, gender = m.groups()
-                    key = (name.strip(), gender)
-                    if key not in seen:
+                    cr  = float(m.group(1))
+                    slope = int(m.group(2))
+                    # Tee name is usually cells[1], Par in cells[2], Yards in cells[-1] or cells[i+1]
+                    tee_name = cells[1] if len(cells) > 1 else "Unknown"
+                    try:
+                        par = int(cells[2])
+                    except (ValueError, IndexError):
+                        par = 72
+                    try:
+                        yardage = int(cells[-1].replace(",", ""))
+                    except (ValueError, IndexError):
+                        yardage = None
+                    key = (tee_name, "Men")
+                    if key not in seen and tee_name.lower() not in ("tee", "course", ""):
                         seen.add(key)
                         tees.append({
-                            "name":          name.strip(),
-                            "gender":        gender,
-                            "yardage":       int(yds),
-                            "course_rating": float(cr),
-                            "slope":         int(slope),
-                            "par":           72,
-                            "colour":        _tee_colour(name.strip()),
+                            "name":          tee_name,
+                            "gender":        "Men",
+                            "yardage":       yardage,
+                            "course_rating": cr,
+                            "slope":         slope,
+                            "par":           par,
+                            "colour":        _tee_colour(tee_name),
                         })
+                    break
 
-            print(f"fetch_course_from_url: {len(tees)} tees from {url}")
-            if not tees:
-                samples = [el.strip() for el in cs.find_all(string=True) if "yds" in el and len(el.strip()) < 80][:5]
-                print(f"  Sample yds strings: {samples}")
+        print(f"_fetch_golfshake_course: {len(tees)} tees from {url}")
+        if not tees:
+            # Log sample rows for debug
+            for row in cs.select("table tr")[:5]:
+                cells = [td.get_text(strip=True) for td in row.find_all("td")]
+                if cells:
+                    print(f"  Sample row: {cells}")
 
-            if tees:
-                return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
-            return []
-        except Exception as e:
-            print(f"fetch_course_from_url error for {url}: {e}")
-            return []
+        if tees:
+            return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
+        return []
+
+    if client:
+        return await _do_fetch(client)
+    else:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
+            return await _do_fetch(c)
 
 
 def _tee_colour(tee_name: str) -> str:
