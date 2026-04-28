@@ -1,4 +1,4 @@
-d# Bramley Rollup — backend/db.py
+# Bramley Rollup — backend/db.py
 # Per-request connections: opens a fresh connection for every DB operation,
 # closes it immediately after. Eliminates stale connection errors from Neon
 # dropping idle connections after ~5 minutes.
@@ -570,6 +570,48 @@ def _get_all_courses():
 
 async def get_all_courses() -> list[dict]:
     return await _run(_get_all_courses)
+
+
+def _save_course(name: str, club: str, tees: list[dict]) -> int:
+    """Insert a new course and its tees, return the course_id."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Insert course — if same club name exists reuse it
+            cur.execute("""
+                INSERT INTO courses (name, club)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                RETURNING id
+            """, (name, club))
+            row = cur.fetchone()
+            if row:
+                course_id = row["id"]
+            else:
+                cur.execute("SELECT id FROM courses WHERE name = %s AND club = %s", (name, club))
+                course_id = cur.fetchone()["id"]
+
+            for t in tees:
+                cur.execute("""
+                    INSERT INTO tees (course_id, name, gender, colour, yardage, par, course_rating, slope)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (course_id, name, gender) DO UPDATE SET
+                        yardage       = EXCLUDED.yardage,
+                        par           = EXCLUDED.par,
+                        course_rating = EXCLUDED.course_rating,
+                        slope         = EXCLUDED.slope,
+                        colour        = EXCLUDED.colour
+                """, (
+                    course_id,
+                    t["name"], t["gender"], t.get("colour", "#888888"),
+                    t.get("yardage"), t.get("par", 72),
+                    t["course_rating"], t["slope"],
+                ))
+            conn.commit()
+            return course_id
+
+
+async def save_course(name: str, club: str, tees: list[dict]) -> int:
+    return await _run(_save_course, name, club, tees)
 
 
 def _get_tees_for_course(course_id: int):
