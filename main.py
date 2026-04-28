@@ -43,7 +43,7 @@ from backend.db import (
     init_db,
     close_db,
 )
-from backend.scraper import scrape_players, search_course_on_18birdies
+from backend.scraper import scrape_players, search_course_on_18birdies, fetch_course_from_url
 
 load_dotenv()
 
@@ -705,11 +705,16 @@ class SaveCourseRequest(BaseModel):
 
 @app.get("/api/courses/search")
 async def search_courses(q: str):
-    """Search 18birdies for a course by name and return tee data candidates."""
+    """Search 18birdies for a course by name or fetch a direct URL."""
     if not q or len(q.strip()) < 3:
         raise HTTPException(400, "Query too short")
     try:
-        results = await search_course_on_18birdies(q.strip())
+        q = q.strip()
+        # If it's a URL, fetch directly
+        if q.startswith("http"):
+            results = await fetch_course_from_url(q)
+        else:
+            results = await search_course_on_18birdies(q)
         return {"courses": results}
     except Exception as e:
         raise HTTPException(500, f"Search failed: {str(e)}")
