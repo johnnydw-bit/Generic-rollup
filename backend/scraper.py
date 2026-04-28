@@ -236,56 +236,23 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Search for a UK golf course on Golfshake.com and return tee/rating data.
-    If course_name is a URL, fetch it directly.
+    Fetch tee/rating data for a UK golf course from Golfshake.com.
+    Accepts either a direct Golfshake URL or a course name.
+    For name searches, returns a hint to use a URL instead since
+    server-side search engines block automated requests.
     """
-    import urllib.parse
+    q = course_name.strip()
 
-    if course_name.startswith("http"):
-        return await _fetch_golfshake_course(course_name)
+    # Direct URL — fetch and parse immediately
+    if q.startswith("http") and "golfshake.com" in q:
+        return await _fetch_golfshake_course(q)
 
-    # Use DuckDuckGo to find the Golfshake course page
-    query = f"site:golfshake.com/course/view {course_name}"
-    search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+    # Any other URL — try to fetch it
+    if q.startswith("http"):
+        return await _fetch_golfshake_course(q)
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-GB,en;q=0.9",
-        "Referer": "https://duckduckgo.com/",
-    }
-
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as client:
-        resp = await client.get(search_url)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        course_urls = []
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            # DDG wraps URLs in uddg= param
-            if "golfshake.com/course/view/" in href:
-                if "uddg=" in href:
-                    parsed = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
-                    url = parsed.get("uddg", [None])[0]
-                    if url:
-                        url = urllib.parse.unquote(url).split("?")[0].rstrip("/")
-                else:
-                    url = href.split("?")[0].rstrip("/")
-                if url and url not in course_urls and "#" not in url:
-                    course_urls.append(url)
-
-        print(f"Golfshake search found {len(course_urls)} URLs for '{course_name}'")
-        for u in course_urls[:3]:
-            print(f"  {u}")
-
-        if not course_urls:
-            return []
-
-        results = []
-        for url in course_urls[:3]:
-            r = await _fetch_golfshake_course(url, client=client)
-            results.extend(r)
-        return results
+    # Name search — return a special marker so frontend can guide user
+    return [{"hint": True, "name": q}]
 
 
 async def fetch_course_from_url(url: str, client=None) -> list[dict]:
