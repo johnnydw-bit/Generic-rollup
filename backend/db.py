@@ -575,7 +575,7 @@ async def get_all_courses() -> list[dict]:
 def _save_course(name: str, club: str, tees: list[dict]) -> int:
     """Insert a new course and its tees, return the course_id."""
     with _get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Insert course — if same club name exists reuse it
             cur.execute("""
                 INSERT INTO courses (name, club)
