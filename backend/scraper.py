@@ -616,6 +616,56 @@ async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
             return await _do_fetch(c)
 
 
+def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
+    """
+    Parse tee data from plain text copied from an NCRDB courseTeeInfo page.
+    Row format: TeeName M/F Par CR BogeyR Slope ... Yardage
+    """
+    import re as _re
+    tees = []
+    seen = set()
+    pattern = _re.compile(
+        r'^([A-Za-z][A-Za-z\s]*?)\s+(M|F)\s+(\d+)\s+([\d.]+)\s+[\d.]+\s+(\d+).*?(\d{4,5})\s*$',
+        _re.MULTILINE
+    )
+    for m in pattern.finditer(text):
+        name   = m.group(1).strip().title()
+        gender = "Men" if m.group(2) == "M" else "Women"
+        par    = int(m.group(3))
+        cr     = float(m.group(4))
+        slope  = int(m.group(5))
+        yds    = int(m.group(6))
+        key = (name, gender)
+        if key not in seen and 3000 < yds < 8000:
+            seen.add(key)
+            tees.append({
+                "name":          name,
+                "gender":        gender,
+                "par":           par,
+                "course_rating": cr,
+                "slope":         slope,
+                "yardage":       yds,
+                "colour":        _tee_colour(name),
+            })
+
+    # Extract club name from text if not provided
+    if not club_name:
+        # First non-empty line before "Tee Name" header is usually the club name
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        for line in lines:
+            if "Tee Name" in line or "Gender" in line:
+                break
+            if len(line) > 5 and not line.startswith("National") and not line.startswith("Course Rating"):
+                club_name = line.split("(")[0].strip()
+                break
+
+    print(f"parse_ncrdb_paste: {len(tees)} tees, club='{club_name}'")
+    if tees:
+        return [{"club": club_name or "Golf Club", "name": club_name or "Golf Club",
+                 "url": "", "tees": tees}]
+    return []
+
+
 def _tee_colour(tee_name: str) -> str:
     """Map tee name to a hex colour."""
     colours = {
