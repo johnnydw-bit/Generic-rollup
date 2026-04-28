@@ -1912,10 +1912,18 @@ async function saveCourseResult(courseIndex) {
     });
     const saveData = await resp.json();
     const newCourseId = saveData.course_id || null;
-    statusEl.textContent = '\u2713 ' + course.club + ' added!';
+    statusEl.textContent = '\u2713 ' + course.club + ' added! Selecting in dropdown\u2026';
     document.getElementById('courseSearchResults').innerHTML = '';
+    // Reload courses then close panel
     await loadCourseOptions(newCourseId);
-    setTimeout(() => { toggleAddCourse(); statusEl.textContent = ''; }, 1500);
+    // Close the add panel
+    const addPanel = document.getElementById('addCoursePanel');
+    const addBtn   = document.getElementById('addCourseToggleBtn');
+    addPanel.style.display = 'none';
+    addBtn.textContent = '+ Add course';
+    statusEl.textContent = '';
+    // Scroll course dropdown into view
+    document.getElementById('sCourseSelect').scrollIntoView({behavior:'smooth', block:'nearest'});
   } catch(e) { statusEl.textContent = 'Save failed.'; }
 }
 
