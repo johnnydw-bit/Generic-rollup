@@ -705,19 +705,31 @@ class SaveCourseRequest(BaseModel):
 
 @app.get("/api/courses/search")
 async def search_courses(q: str):
-    """Search 18birdies for a course by name or fetch a direct URL."""
+    """Search for a UK golf course by name, or fetch tee data from a URL.
+    - Name query -> returns {search_result:true, name, url} candidates for user to pick
+    - URL query  -> returns {club, name, tees} with full tee data
+    """
     if not q or len(q.strip()) < 3:
         raise HTTPException(400, "Query too short")
     try:
         q = q.strip()
-        # If it's a URL, fetch directly
-        if q.startswith("http"):
-            results = await fetch_course_from_url(q)
-        else:
-            results = await search_course_on_18birdies(q)
+        results = await search_course_on_18birdies(q)
         return {"courses": results}
     except Exception as e:
+        print(f"Search error: {e}")
         raise HTTPException(500, f"Search failed: {str(e)}")
+
+@app.get("/api/courses/fetch")
+async def fetch_course(url: str):
+    """Fetch full tee data from a specific course URL chosen by the user."""
+    if not url or not url.startswith("http"):
+        raise HTTPException(400, "Valid URL required")
+    try:
+        results = await fetch_course_from_url(url.strip())
+        return {"courses": results}
+    except Exception as e:
+        print(f"Fetch error: {e}")
+        raise HTTPException(500, f"Fetch failed: {str(e)}")
 
 @app.post("/api/courses/save")
 async def save_course_endpoint(body: SaveCourseRequest):
