@@ -1,2437 +1,536 @@
-<!-- Bramley Rollup Manager - frontend/templates/index.html -->
-<!-- Updated: 2026-04-17 — WHS mode, player manager screen6, sync WHS indices -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="theme-color" content="#2D2B5B"/>
-  <title>Bramley Rollup</title>
-  <link rel="manifest" href="/static/manifest.json"/>
-  <link rel="apple-touch-icon" href="/static/icon-192.png"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; }
+"""
+Intelligent Golf scraper for Bramley Golf Club rollups.
+Uses httpx only - no browser required.
+Matches any rollup by search term rather than hardcoded MOTH.
+"""
 
-    .header { background: #2D2B5B; padding: 12px 16px 10px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
-    .header-logo { width: 44px; height: 44px; border-radius: 50%; background: #fff; flex-shrink: 0; overflow: hidden; padding: 3px; }
-    .header-logo img { width: 100%; height: 100%; object-fit: contain; }
-    .header-title { flex: 1; }
-    .header-title .club { color: #fff; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
-    .header-title .society { color: #FFD700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
-    .header-back { color: #FFD700; font-size: 26px; line-height: 1; background: none; border: none; cursor: pointer; flex-shrink: 0; }
-    .header-spacer { width: 26px; flex-shrink: 0; }
-
-    .screen { display: none; flex-direction: column; flex: 1; }
-    .screen.active { display: flex; }
-
-    /* Screen 1 */
-    .s1-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-    .field-group { display: flex; flex-direction: column; gap: 4px; }
-    .field-label { font-size: 10px; color: #2D2B5B; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-    .field-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; -webkit-appearance: none; }
-    .field-input:focus { outline: none; border-color: #2D2B5B; }
-    .btn-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .big-btn { border-radius: 12px; padding: 16px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; cursor: pointer; font-family: inherit; }
-    .big-btn .bi { font-size: 24px; }
-    .big-btn .bl { font-size: 13px; font-weight: 600; text-align: center; line-height: 1.3; }
-    .big-btn .bs { font-size: 10px; opacity: 0.7; text-align: center; }
-    .btn-navy { background: #2D2B5B; color: #fff; }
-    .btn-outline { background: #fff; color: #2D2B5B; border: 1.5px solid #2D2B5B !important; }
-    .btn-gold { background: #FFD700; color: #2D2B5B; border: none !important; }
-    .status-bar { text-align: center; font-size: 11px; font-weight: 500; padding: 6px; border-radius: 20px; }
-    .status-neutral { background: #2D2B5B15; color: #2D2B5B; }
-    .status-success { background: #EAF3DE; color: #3B6D11; }
-    .status-danger { background: #FCEBEB; color: #A32D2D; }
-    .error-box { background: #FCEBEB; border: 1px solid #A32D2D30; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #A32D2D; line-height: 1.5; }
-    .error-retry { font-size: 11px; font-weight: 600; text-decoration: underline; margin-top: 4px; display: block; }
-
-    /* Toggle */
-    .toggle-row { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1.5px solid #2D2B5B; }
-    .toggle-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; font-family: inherit; background: #fff; color: #2D2B5B; transition: background 0.15s; }
-    .toggle-btn.active { background: #2D2B5B; color: #FFD700; }
-
-    /* Screen 2 */
-    .autosave-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; background: #fff; border-bottom: 1px solid #ccc; }
-    .autosave-right { display: flex; align-items: center; gap: 4px; }
-    .autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: #3B6D11; }
-    .autosave-label { font-size: 10px; color: #3B6D11; }
-    .unassigned-warning { font-size: 10px; color: #A32D2D; font-weight: 600; }
-
-    /* Team config */
-    .team-size-btn { flex: 1; padding: 8px 4px; font-size: 11px; font-weight: 600; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; cursor: pointer; font-family: inherit; }
-    .team-size-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .team-structure-info { font-size: 11px; color: #2D2B5B; font-weight: 600; padding: 4px 0; min-height: 18px; }
-    .team-structure-info.error { color: #A32D2D; }
-    .structure-options { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-    .structure-option-btn { padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: left; }
-    .structure-option-btn.selected { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-
-    /* Team scoreboard */
-    .team-scoreboard { background: #fff; border-bottom: 1px solid #ccc; padding: 6px 8px; }
-    .team-scoreboard-title { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .team-scores-row { display: flex; gap: 6px; flex-wrap: wrap; }
-    .team-score-pill { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
-
-    /* Grid */
-    .grid-wrap { flex: 1; overflow-y: auto; background: #fff; }
-    table.xl { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; table-layout: fixed; }
-    table.xl thead th:nth-child(1) { width: 35%; }
-    table.xl thead th:nth-child(2) { width: 13%; }
-    table.xl thead th:nth-child(3) { width: 13%; }
-    table.xl thead th:nth-child(4) { width: 13%; }
-    table.xl thead th:nth-child(5) { width: 13%; }
-    table.xl thead th:nth-child(6) { width: 13%; }
-    table.xl thead tr { background: #D9D9D9; }
-    table.xl thead th { font-size: 10px; font-weight: 700; color: #000; padding: 3px 2px; border: 1px solid #999; text-align: center; overflow: hidden; }
-    table.xl thead th.left { text-align: left; }
-    table.xl tbody td { font-size: 11px; color: #000; padding: 2px 2px; border: 1px solid #ccc; background: #fff; vertical-align: middle; line-height: 1.6; }
-    table.xl tbody td.c { text-align: center; }
-    table.xl tbody td.sc { text-align: center; }
-    table.xl tbody td.nhc { text-align: center; white-space: normal; font-size: 9px; word-break: break-word; }
-    table.xl tbody td.sc input { width: 100%; border: none; background: transparent; font-size: 11px; text-align: center; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 0; outline: none; }
-    table.xl tbody td.remove-col { text-align: center; cursor: pointer; color: #A32D2D; font-size: 14px; font-weight: 700; }
-    table.xl tbody td.team-col { text-align: center; }
-    table.xl tbody td.team-col select { width: 100%; border: none; background: transparent; font-size: 10px; font-family: Arial, sans-serif; padding: 0; outline: none; }
-    table.xl tbody td.team-col.oversize { background: #FFEBEE !important; }
-    table.xl tbody tr.rank-gold td { background: #FFF9E0; }
-    table.xl tbody tr.rank-silver td { background: #F5F5F5; }
-    table.xl tbody tr.rank-bronze td { background: #FDF3ED; }
-    table.xl tbody tr.team-1 td { background: #E8F0FE; }
-    table.xl tbody tr.team-2 td { background: #FCE8E6; }
-    table.xl tbody tr.team-3 td { background: #E6F4EA; }
-    table.xl tbody tr.team-4 td { background: #FEF7E0; }
-    table.xl tbody tr.team-5 td { background: #F3E8FD; }
-    table.xl tbody tr.team-6 td { background: #E8F6FD; }
-    table.xl tbody tr.team-header td { font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 6px; }
-    table.xl tbody tr.team-header.team-1 td { background: #C5D8FF; color: #1a3a7a; }
-    table.xl tbody tr.team-header.team-2 td { background: #FFCDD2; color: #7a1a1a; }
-    table.xl tbody tr.team-header.team-3 td { background: #C8E6C9; color: #1a4a1a; }
-    table.xl tbody tr.team-header.team-4 td { background: #FFF9C4; color: #5a4a00; }
-    table.xl tbody tr.team-header.team-5 td { background: #E1BEE7; color: #4a1a5a; }
-    table.xl tbody tr.team-header.team-6 td { background: #B3E5FC; color: #0d3a5a; }
-    .team-pill-1 { background: #C5D8FF; color: #1a3a7a; }
-    .team-pill-2 { background: #FFCDD2; color: #7a1a1a; }
-    .team-pill-3 { background: #C8E6C9; color: #1a4a1a; }
-    .team-pill-4 { background: #FFF9C4; color: #5a4a00; }
-    .team-pill-5 { background: #E1BEE7; color: #4a1a5a; }
-    .team-pill-6 { background: #B3E5FC; color: #0d3a5a; }
-
-    /* Screen 3 - Results */
-    .results-nav { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f8f8f8; border-bottom: 1px solid #ddd; }
-    .nav-arrow { background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; cursor: pointer; font-family: inherit; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-    .nav-arrow:disabled { background: #ccc; color: #888; cursor: default; }
-    .date-select { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
-    .results-wrap { flex: 1; overflow-y: auto; background: #fff; }
-    table.rt { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; }
-    table.rt thead tr { background: #2D2B5B; }
-    table.rt thead th { font-size: 12px; font-weight: 600; color: #FFD700; padding: 5px 6px; border: 1px solid #2D2B5B; text-align: center; }
-    table.rt thead th.left { text-align: left; }
-    table.rt tbody td { font-size: 12px; color: #000; padding: 3px 6px; border: 1px solid #ccc; background: #fff; vertical-align: middle; cursor: pointer; }
-    table.rt tbody td.c { text-align: center; }
-    table.rt tbody tr.gold td { background: #FFF9E0; }
-    table.rt tbody tr.silver td { background: #F5F5F5; }
-    table.rt tbody tr.bronze td { background: #FDF3ED; }
-    table.rt tbody tr:hover td { filter: brightness(0.96); }
-    .medal { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; }
-    .medal.g { background: #FFD700; color: #7A5C00; }
-    .medal.s { background: #C0C0C0; color: #444; }
-    .medal.b { background: #CD7F32; color: #fff; }
-    .hc-change { font-size: 9px; color: #666; }
-    .hc-change.down { color: #3B6D11; }
-    .hc-change.up { color: #A32D2D; }
-    .results-footer { padding: 10px; background: #f5f5f0; }
-
-    /* Screen 4 - Player History */
-    .ph-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
-    .player-select-wrap { position: relative; }
-    .player-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; appearance: none; }
-    .player-select:focus { outline: none; border-color: #2D2B5B; }
-    .filter-row { display: flex; gap: 8px; align-items: flex-end; }
-    .filter-row .field-group { flex: 1; }
-    .filter-row input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #000; }
-    .filter-row input:focus { outline: none; border-color: #2D2B5B; }
-    .apply-btn { padding: 8px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .chart-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; padding: 12px; }
-    .chart-title { font-size: 11px; font-weight: 700; color: #2D2B5B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-    .ph-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .stat-card { background: #fff; border-radius: 10px; border: 1px solid #ddd; padding: 10px 8px; text-align: center; }
-    .stat-val { font-size: 22px; font-weight: 700; color: #2D2B5B; }
-    .stat-lbl { font-size: 10px; color: #888; margin-top: 2px; }
-    .ph-table-wrap { background: #fff; border-radius: 12px; border: 1px solid #ddd; overflow: hidden; }
-    table.ph { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    table.ph thead tr { background: #2D2B5B; }
-    table.ph thead th { font-size: 11px; font-weight: 600; color: #FFD700; padding: 5px 8px; text-align: center; }
-    table.ph thead th.left { text-align: left; }
-    table.ph tbody td { font-size: 12px; padding: 5px 8px; border-bottom: 1px solid #eee; text-align: center; }
-    table.ph tbody td.left { text-align: left; }
-    table.ph tbody tr:last-child td { border-bottom: none; }
-    .no-data { text-align: center; color: #aaa; font-size: 13px; padding: 30px; }
-
-    /* Settings screen5 */
-    .settings-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
-    .settings-section { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden; }
-    .settings-section-title { font-size: 10px; font-weight: 700; color: #fff; background: #2D2B5B; padding: 7px 12px; text-transform: uppercase; letter-spacing: 0.08em; }
-    .settings-row { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 4px; }
-    .settings-row:last-child { border-bottom: none; }
-    .settings-row-inline { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .settings-row-inline:last-child { border-bottom: none; }
-    .settings-label { font-size: 11px; font-weight: 600; color: #2D2B5B; }
-    .settings-sublabel { font-size: 10px; color: #888; margin-top: 2px; }
-    .settings-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2D2B5B30; font-size: 14px; background: #f9f9f9; color: #000; -webkit-appearance: none; font-family: inherit; }
-    .settings-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
-    .settings-input-sm { width: 80px; padding: 7px 10px; border-radius: 8px; border: 1px solid #2D2B5B30; font-size: 14px; background: #f9f9f9; color: #000; text-align: center; font-family: inherit; }
-    .settings-input-sm:focus { outline: none; border-color: #2D2B5B; background: #fff; }
-    .day-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .day-chip { padding: 5px 10px; border-radius: 20px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .day-chip.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .adj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .adj-table th { font-size: 10px; font-weight: 600; color: #888; padding: 4px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
-    .adj-table td { padding: 5px 6px; border-bottom: 1px solid #f5f5f5; text-align: center; }
-    .adj-table td:last-child { border-bottom: none; }
-    .adj-input { width: 50px; padding: 4px 6px; border-radius: 6px; border: 1px solid #2D2B5B30; font-size: 13px; text-align: center; font-family: inherit; background: #f9f9f9; }
-    .adj-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
-    .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 24px; cursor: pointer; transition: 0.2s; }
-    .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
-    input:checked + .toggle-slider { background: #2D2B5B; }
-    input:checked + .toggle-slider:before { transform: translateX(20px); }
-    .prize-pct-row { display: flex; gap: 8px; align-items: center; }
-    .prize-pct-label { font-size: 12px; color: #2D2B5B; font-weight: 600; min-width: 40px; }
-    .place-radio-row { display: flex; gap: 6px; }
-    .place-radio-btn { flex: 1; padding: 7px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: center; }
-    .place-radio-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-    .settings-save-bar { padding: 12px 14px; background: #f5f5f0; border-top: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 8px; }
-    .settings-save-btn { width: 100%; padding: 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .scoring-mode-row { display: flex; gap: 8px; }
-    .scoring-mode-btn { flex: 1; padding: 9px 6px; border-radius: 8px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: center; }
-    .scoring-mode-btn.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
-
-    /* Screen 6 - Player Manager */
-    .s6-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-    .s6-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8f8f8; border-bottom: 1px solid #e0e0e0; }
-    .s6-rollup-select { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 13px; background: #fff; color: #2D2B5B; font-weight: 600; -webkit-appearance: none; font-family: inherit; }
-    .s6-add-btn { padding: 9px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .s6-sync-btn { padding: 9px 14px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .s6-status { padding: 6px 12px; font-size: 11px; text-align: center; }
-    .s6-table-wrap { flex: 1; overflow-y: auto; background: #fff; }
-    table.s6t { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    table.s6t thead tr { background: #2D2B5B; }
-    table.s6t thead th { font-size: 10px; font-weight: 600; color: #FFD700; padding: 6px 4px; text-align: center; }
-    table.s6t thead th.left { text-align: left; padding-left: 10px; }
-    table.s6t tbody td { font-size: 11px; padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; text-align: center; }
-    table.s6t tbody td.left { text-align: left; padding-left: 10px; }
-    table.s6t tbody tr:last-child td { border-bottom: none; }
-    .s6-hc-input { width: 44px; padding: 4px 6px; border-radius: 6px; border: 1px solid #2D2B5B30; font-size: 12px; text-align: center; font-family: inherit; background: #f9f9f9; }
-    .s6-hc-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
-    .s6-save-btn { padding: 4px 8px; background: #2D2B5B; color: #FFD700; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .s6-save-whs-btn { padding: 4px 8px; background: #3B6D11; color: #fff; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .s6-del-btn { padding: 4px 7px; background: #A32D2D; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .prohibited-badge { font-size: 9px; display: inline-block; }
-
-    /* Nav bar */
-    .nav-bar { display: flex; background: #2D2B5B; border-top: 1px solid #1a1840; }
-    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; color: #ffffff80; gap: 2px; }
-    .nav-item.active { color: #FFD700; }
-    .nav-item .ni { font-size: 20px; }
-    .nav-item .nl { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; }
-
-    /* Dialogs */
-    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
-    .overlay.open { display: flex; }
-    .dialog { background: #fff; border-radius: 16px; padding: 20px; width: 88%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
-    .dialog-title { font-size: 15px; font-weight: 700; color: #2D2B5B; text-align: center; }
-    .dialog-body { font-size: 12px; color: #555; text-align: center; line-height: 1.6; }
-    .dialog-name { font-size: 13px; font-weight: 600; color: #2D2B5B; text-align: center; background: #f0f0f0; border-radius: 8px; padding: 8px; }
-    .dialog-btns { display: flex; gap: 10px; }
-    .dialog-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .btn-cancel { background: #e8e8e8; color: #555; }
-    .btn-confirm { background: #2D2B5B; color: #FFD700; }
-    .btn-danger { background: #A32D2D; color: #fff; }
-    .hc-number { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #2D2B5B; font-size: 20px; font-weight: 700; text-align: center; color: #2D2B5B; background: #fff; }
-    .hc-number:focus { outline: none; box-shadow: 0 0 0 3px #2D2B5B20; }
-    .name-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #2D2B5B40; font-size: 15px; background: #fff; color: #000; }
-    .name-input:focus { outline: none; border-color: #2D2B5B; }
-
-    /* Screen 0 - Login */
-    .s0-body { padding: 24px 20px; display: flex; flex-direction: column; gap: 18px; flex: 1; justify-content: center; }
-    .login-logo { display: flex; justify-content: center; margin-bottom: 8px; }
-    .login-logo img { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #2D2B5B; object-fit: contain; background: #fff; padding: 4px; }
-    .login-title { text-align: center; font-size: 20px; font-weight: 700; color: #2D2B5B; }
-    .login-subtitle { text-align: center; font-size: 12px; color: #888; margin-top: -10px; }
-    .login-section { font-size: 10px; color: #2D2B5B; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
-    .login-divider { border: none; border-top: 1px solid #e0e0e0; margin: 4px 0; }
-    .rollup-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #2D2B5B40; background: #fff; cursor: pointer; margin-bottom: 6px; }
-    .rollup-option.selected { border-color: #2D2B5B; background: #f0f0f8; }
-    .rollup-option-name { font-size: 14px; font-weight: 600; color: #2D2B5B; }
-    .rollup-option-term { font-size: 11px; color: #888; }
-    .rollup-radio { width: 18px; height: 18px; accent-color: #2D2B5B; flex-shrink: 0; }
-    .add-rollup-btn { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px dashed #2D2B5B60; background: transparent; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .settings-btn { background: none; border: none; cursor: pointer; color: #FFD700; font-size: 20px; flex-shrink: 0; }
-  </style>
-</head>
-<body>
-
-<!-- SCREEN 0 - Login -->
-<div id="screen0" class="screen active">
-  <div class="header">
-    <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
-    </div>
-    <div class="header-title">
-      <div class="club">Bramley Golf Club</div>
-      <div class="society">Rollup Manager</div>
-    </div>
-  </div>
-  <div class="s0-body">
-    <div class="login-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/>
-    </div>
-    <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Sign in with your Intelligent Golf credentials</div>
-
-    <div>
-      <div class="login-section">Intelligent Golf Login</div>
-      <div class="field-group" style="margin-bottom:10px;">
-        <div class="field-label">Member ID</div>
-        <input class="field-input" id="igUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-      </div>
-      <div class="field-group">
-        <div class="field-label">PIN</div>
-        <input class="field-input" id="igPin" type="password" placeholder="Your IG PIN" autocomplete="current-password" inputmode="numeric"/>
-      </div>
-    </div>
-
-    <hr class="login-divider"/>
-
-    <div>
-      <div class="login-section">Select Rollup</div>
-      <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
-        <option value="">Choose a rollup…</option>
-      </select>
-      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
-    </div>
-
-    <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
-      <span class="bl">Continue</span>
-    </button>
-
-    <div id="loginError" style="display:none;font-size:12px;color:#A32D2D;text-align:center;"></div>
-  </div>
-</div>
+from datetime import datetime
+import re
+import math
+import httpx
+from bs4 import BeautifulSoup
 
 
-<!-- SCREEN 1 -->
-<div id="screen1" class="screen">
-  <div class="header">
-    <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
-    </div>
-    <div class="header-title">
-      <div class="club" id="s1RollupName">Bramley Golf Club</div>
-      <div class="society">Rollup Manager</div>
-    </div>
-    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
-  </div>
-  <div class="s1-body">
-    <div class="field-group">
-      <div class="field-label">Round date</div>
-      <input class="field-input" id="roundDate" type="date"/>
-    </div>
-    <div id="s1Error" style="display:none" class="error-box">
-      <span id="s1ErrorMsg"></span>
-      <a class="error-retry" onclick="loadPlayers()">Retry</a>
-    </div>
-    <div id="s1Status" class="status-bar status-neutral" style="display:none;"></div>
-    <div class="btn-pair">
-      <button class="big-btn btn-navy" onclick="loadPlayers()">
-        <span class="bi">🏌️</span>
-        <span class="bl">Load Players</span>
-        <span class="bs">From Intelligent Golf</span>
-      </button>
-      <button class="big-btn btn-outline" onclick="showResultsScreen()">
-        <span class="bi">📋</span>
-        <span class="bl">View Results</span>
-        <span class="bs">Browse past rounds</span>
-      </button>
-    </div>
-    <div class="btn-pair">
-      <button class="big-btn btn-outline" onclick="showPlayerHistory()">
-        <span class="bi">📈</span>
-        <span class="bl">Player History</span>
-        <span class="bs">Scores &amp; handicaps</span>
-      </button>
-      <button class="big-btn btn-gold" onclick="showPlayerManager()">
-        <span class="bi">👥</span>
-        <span class="bl">Players</span>
-        <span class="bs">Manage player list</span>
-      </button>
-    </div>
-    <div id="lastRoundInfo" style="font-size:11px;color:#888;text-align:center;"></div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item active" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
-  </div>
-</div>
+BASE_URL = "https://www.bramleygolfclub.co.uk"
+LOGIN_URL = f"{BASE_URL}/login.php"
+CONSENT_URL = f"{BASE_URL}/ttbconsent.php"
+BOOKING_URL = f"{BASE_URL}/memberbooking/"
+HCAP_URL = f"{BASE_URL}/hcaplist.php"
 
-
-<!-- SCREEN 2 - Score Entry -->
-<div id="screen2" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">↩</button>
-    <div class="header-title">
-      <div class="club" id="s2RollupName">Score Entry</div>
-      <div class="society" id="s2DateLabel"></div>
-    </div>
-    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
-  </div>
-  <div class="autosave-bar">
-    <div id="prohibitedWarning" style="font-size:10px;color:#A32D2D;font-weight:700;display:none;"></div>
-    <div id="modeToggleWrap">
-      <div class="toggle-row">
-        <button class="toggle-btn active" id="indBtn" onclick="setGameMode('individual')">Individual</button>
-        <button class="toggle-btn" id="teamBtn" onclick="setGameMode('team')">Team</button>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:4px;">
-      <button class="toggle-btn" id="s2ModeRollup" onclick="setScoringMode('stableford')">Roll-Up</button>
-      <button class="toggle-btn" id="s2ModeWhs" onclick="setScoringMode('whs')">WHS</button>
-    </div>
-    <div class="autosave-right">
-      <div class="autosave-dot" id="saveDot"></div>
-      <span class="autosave-label" id="saveLabel">Ready</span>
-    </div>
-  </div>
-  <div id="teamConfigBar" style="display:none;padding:8px 10px;background:#f8f8f8;border-bottom:1px solid #ddd;">
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <span style="font-size:11px;color:#2D2B5B;font-weight:700;">Team size:</span>
-      <button class="team-size-btn active" id="ts2" onclick="setTeamSize(2)">Pairs</button>
-      <button class="team-size-btn" id="ts3" onclick="setTeamSize(3)">Threes</button>
-      <button class="team-size-btn" id="ts4" onclick="setTeamSize(4)">Fours</button>
-      <button style="padding:6px 10px;background:#FFD700;color:#2D2B5B;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" onclick="randomAssignTeams()">🎲 Random assign</button>
-    </div>
-    <div class="team-structure-info" id="teamStructureInfo"></div>
-    <div class="structure-options" id="structureOptions"></div>
-  </div>
-  <div id="teamScoreboardWrap" style="display:none;" class="team-scoreboard">
-    <div class="team-scoreboard-title">Team Scores</div>
-    <div class="team-scores-row" id="teamScoresRow"></div>
-  </div>
-  <div class="unassigned-warning" id="unassignedWarning" style="display:none;padding:4px 10px;"></div>
-  <div class="grid-wrap">
-    <table class="xl">
-      <thead>
-        <tr>
-          <th class="left">Player</th>
-          <th id="colWhsHead">WHS</th>
-          <th id="colHcHead">Course H/C</th>
-          <th>Score</th>
-          <th id="colAdjHead">H/C Adj</th>
-          <th id="col6Head">Remove</th>
-        </tr>
-      </thead>
-      <tbody id="scoreBody"></tbody>
-    </table>
-  </div>
-  <div style="padding:8px 10px;background:#f8f8f8;border-top:1px solid #ddd;display:flex;gap:8px;">
-    <button onclick="addWalkupPlayer()" style="flex:1;padding:10px;background:#fff;color:#2D2B5B;border:1.5px solid #2D2B5B;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">＋ Walk-up</button>
-    <button onclick="saveRound()" style="flex:2;padding:10px;background:#2D2B5B;color:#FFD700;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Save Round</button>
-  </div>
-</div>
-
-
-<!-- SCREEN 3 - Results -->
-<div id="screen3" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">↩</button>
-    <div class="header-title">
-      <div class="club" id="s3RollupName">Results</div>
-      <div class="society">Past rounds</div>
-    </div>
-    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
-  </div>
-  <div class="results-nav">
-    <button class="nav-arrow" id="prevRoundBtn" onclick="navigateRound(-1)">‹</button>
-    <select class="date-select" id="roundDateSelect" onchange="onRoundDateChange()"></select>
-    <button class="nav-arrow" id="nextRoundBtn" onclick="navigateRound(1)">›</button>
-  </div>
-  <div class="results-wrap">
-    <table class="rt">
-      <thead>
-        <tr>
-          <th class="left">Player</th>
-          <th>Score</th>
-          <th>HC After</th>
-          <th>Change</th>
-        </tr>
-      </thead>
-      <tbody id="resultsBody"></tbody>
-    </table>
-  </div>
-  <div class="results-footer">
-    <div class="nav-bar" style="border-radius:12px;border:none;">
-      <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-      <button class="nav-item active" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-      <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-      <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
-    </div>
-  </div>
-</div>
-
-
-<!-- SCREEN 4 - Player History -->
-<div id="screen4" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">↩</button>
-    <div class="header-title">
-      <div class="club" id="s4RollupName">Player History</div>
-      <div class="society">Scores &amp; handicaps</div>
-    </div>
-    <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
-  </div>
-  <div class="ph-body">
-    <div class="field-group">
-      <div class="field-label">Player</div>
-      <div class="player-select-wrap">
-        <select class="player-select" id="playerSelect" onchange="onPlayerSelectChange()">
-          <option value="">Choose a player…</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="filter-row">
-      <div class="field-group">
-        <div class="field-label">From</div>
-        <input type="date" id="filterFrom"/>
-      </div>
-      <div class="field-group">
-        <div class="field-label">To</div>
-        <input type="date" id="filterTo"/>
-      </div>
-      <button class="apply-btn" onclick="applyFilter()">Apply</button>
-    </div>
-
-    <div id="phContent" style="display:none;">
-      <div class="ph-stats" id="phStats"></div>
-      <div style="height:12px;"></div>
-      <div class="chart-wrap">
-        <div class="chart-title">Score &amp; Handicap per Round</div>
-        <canvas id="historyChart" height="200"></canvas>
-      </div>
-      <div style="height:12px;"></div>
-      <div class="ph-table-wrap">
-        <table class="ph">
-          <thead><tr>
-            <th class="left">Date</th>
-            <th>Score</th>
-            <th>HC After</th>
-            <th>Change</th>
-          </tr></thead>
-          <tbody id="phTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="phNoData" class="no-data" style="display:none;">No rounds found for this player in the selected range.</div>
-    <div id="phEmpty" class="no-data">Select a player to view their history.</div>
-  </div>
-
-  <div class="nav-bar">
-    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item active" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
-  </div>
-</div>
-
-
-<!-- SCREEN 5 - Settings -->
-<div id="screen5" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">↩</button>
-    <div class="header-title">
-      <div class="club">Settings</div>
-      <div class="society" id="s5RollupName"></div>
-    </div>
-    <div class="header-spacer"></div>
-  </div>
-  <div class="settings-body">
-
-    <!-- Section 1: Rollup Identity -->
-    <div class="settings-section">
-      <div class="settings-section-title">Rollup Identity</div>
-      <div class="settings-row">
-        <div class="settings-label">Rollup name</div>
-        <input class="settings-input" id="sDisplayName" type="text" placeholder="e.g. MOTH's Rollup"/>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">IG search term</div>
-        <div class="settings-sublabel">Matches the contact name in Intelligent Golf bookings</div>
-        <input class="settings-input" id="sIgTerm" type="text" placeholder="e.g. MOTH"/>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">Runs on</div>
-        <div class="day-chips" id="runDaysChips">
-          <button class="day-chip" data-day="Mon" onclick="toggleDay(this)">Mon</button>
-          <button class="day-chip" data-day="Tue" onclick="toggleDay(this)">Tue</button>
-          <button class="day-chip" data-day="Wed" onclick="toggleDay(this)">Wed</button>
-          <button class="day-chip" data-day="Thu" onclick="toggleDay(this)">Thu</button>
-          <button class="day-chip" data-day="Fri" onclick="toggleDay(this)">Fri</button>
-          <button class="day-chip" data-day="Sat" onclick="toggleDay(this)">Sat</button>
-          <button class="day-chip" data-day="Sun" onclick="toggleDay(this)">Sun</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 2: IG Credentials -->
-    <div class="settings-section">
-      <div class="settings-section-title">Intelligent Golf Credentials</div>
-      <div class="settings-row">
-        <div class="settings-label">Member ID</div>
-        <input class="settings-input" id="sIgUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">PIN</div>
-        <div class="settings-sublabel">Stored in this browser only — never sent to our servers</div>
-        <input class="settings-input" id="sIgPin" type="password" placeholder="Leave blank to keep current PIN" autocomplete="current-password" inputmode="numeric"/>
-      </div>
-    </div>
-
-    <!-- Section 3: Tee Times -->
-    <div class="settings-section">
-      <div class="settings-section-title">Tee Times</div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Tee interval</div>
-          <div class="settings-sublabel">Minutes between tee slots</div>
-        </div>
-        <input class="settings-input-sm" id="sTeeInterval" type="number" min="4" max="20" value="8"/>
-      </div>
-    </div>
-
-    <!-- Section 4: Handicap Mode -->
-    <div class="settings-section">
-      <div class="settings-section-title">Handicap Mode</div>
-      <div class="settings-row">
-        <div class="settings-label">Scoring mode</div>
-        <div class="scoring-mode-row">
-          <button class="scoring-mode-btn active" id="modeStableford" onclick="onScoringModeChange('stableford')">Roll-Up</button>
-          <button class="scoring-mode-btn" id="modeWhs" onclick="onScoringModeChange('whs')">WHS Index</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 4b: WHS Position Adjustments (shown when WHS mode) -->
-    <div class="settings-section" id="whsSection" style="display:none;">
-      <div class="settings-section-title">WHS Position Adjustments</div>
-      <div class="settings-row">
-        <div class="settings-label">Index reduction by finishing position</div>
-        <div class="settings-sublabel">% applied to the winner's WHS index for the next round (0 = no change)</div>
-      </div>
-      <div class="settings-row-inline">
-        <div class="settings-label">1st place</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input class="settings-input-sm" id="sWhsPct1" type="number" min="0" max="50" step="0.5" value="0"/>
-          <span style="font-size:12px;color:#888;">%</span>
-        </div>
-      </div>
-      <div class="settings-row-inline">
-        <div class="settings-label">2nd place</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input class="settings-input-sm" id="sWhsPct2" type="number" min="0" max="50" step="0.5" value="0"/>
-          <span style="font-size:12px;color:#888;">%</span>
-        </div>
-      </div>
-      <div class="settings-row-inline">
-        <div class="settings-label">3rd place</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input class="settings-input-sm" id="sWhsPct3" type="number" min="0" max="50" step="0.5" value="0"/>
-          <span style="font-size:12px;color:#888;">%</span>
-        </div>
-      </div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Winner prohibition</div>
-          <div class="settings-sublabel">Block last round's winner from winning again</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="sWhsProhibition"/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Section 4c: Course & Tee (shown when WHS mode) -->
-    <div class="settings-section" id="courseTeeSection" style="display:none;">
-      <div class="settings-section-title">Course &amp; Tee</div>
-      <div class="settings-row">
-        <div class="settings-label">Course</div>
-        <select class="settings-input" id="sCourseSelect" onchange="loadTeeOptions()">
-          <option value="">Select course…</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">Tee</div>
-        <select class="settings-input" id="sTeeSelect">
-          <option value="">Select tee…</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <button class="toggle-btn" onclick="toggleAddCourse()" id="addCourseToggleBtn" style="font-size:11px;">+ Add course</button>
-      </div>
-      <!-- Add course panel -->
-      <div id="addCoursePanel" style="display:none;margin-top:6px;">
-        <div class="settings-row">
-          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Type course name…" style="flex:1;" />
-          <button class="toggle-btn" onclick="searchCourse()" style="margin-left:6px;font-size:11px;" id="courseSearchBtn">Search</button>
-        </div>
-        <div id="courseSearchStatus" style="font-size:11px;color:#666;padding:4px 0;"></div>
-        <div id="courseSearchResults" style="margin-top:4px;"></div>
-      </div>
-    </div>
-
-    <!-- Section 5: Handicap Adjustment Table (Stableford only) -->
-    <div class="settings-section" id="adjTableSection">
-      <div class="settings-section-title">Handicap Adjustment Table</div>
-      <div class="settings-row">
-        <table class="adj-table" id="adjTable">
-          <thead><tr>
-            <th>Score ≤</th>
-            <th>Adjustment</th>
-          </tr></thead>
-          <tbody id="adjTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Section 6: Winner Penalty (Stableford only) -->
-    <div class="settings-section" id="winnerPenaltySection">
-      <div class="settings-section-title">Winner Penalty</div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Apply winner penalty</div>
-          <div class="settings-sublabel">Extra −1 applied to the round winner</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="sWinnerBonus" checked/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Gap penalty −1</div>
-          <div class="settings-sublabel">Extra −1 if winner beats 2nd by ≥ N pts (0 = off)</div>
-        </div>
-        <input class="settings-input-sm" id="sGapPenalty1" type="number" min="0" max="20" value="0"/>
-      </div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Gap penalty −2</div>
-          <div class="settings-sublabel">Extra −2 if winner beats 2nd by ≥ N pts (0 = off)</div>
-        </div>
-        <input class="settings-input-sm" id="sGapPenalty2" type="number" min="0" max="20" value="0"/>
-      </div>
-    </div>
-
-    <!-- Section 7: Entry & Prizes -->
-    <div class="settings-section">
-      <div class="settings-section-title">Entry &amp; Prizes</div>
-      <div class="settings-row-inline">
-        <div class="settings-label">Entry fee (£)</div>
-        <input class="settings-input-sm" id="sEntryFee" type="number" min="0" step="0.50" value="0"/>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">Prize places</div>
-        <div class="place-radio-row" id="prizePlacesRow">
-          <button class="place-radio-btn" data-places="1" onclick="setPrizePlaces(1)">1</button>
-          <button class="place-radio-btn" data-places="2" onclick="setPrizePlaces(2)">2</button>
-          <button class="place-radio-btn active" data-places="3" onclick="setPrizePlaces(3)">3</button>
-          <button class="place-radio-btn" data-places="4" onclick="setPrizePlaces(4)">4</button>
-        </div>
-      </div>
-      <div class="settings-row" id="prizePercentsRow">
-        <div class="settings-label">Prize split (%)</div>
-        <div id="prizePctInputs" style="display:flex;flex-direction:column;gap:6px;margin-top:4px;"></div>
-        <div id="prizePctError" style="font-size:11px;color:#A32D2D;margin-top:4px;display:none;">Percentages must add up to 100%</div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">Tie handling</div>
-        <div class="place-radio-row">
-          <button class="place-radio-btn active" id="tieTournament" onclick="setTieHandling('tournament')">Share prize</button>
-          <button class="place-radio-btn" id="tieCountback" onclick="setTieHandling('countback')">Countback</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 8: Team Play -->
-    <div class="settings-section">
-      <div class="settings-section-title">Team Play</div>
-      <div class="settings-row">
-        <div class="settings-label">Default team size</div>
-        <div class="place-radio-row">
-          <button class="place-radio-btn" id="teamSz2" data-size="2" onclick="setDefaultTeamSize(2)">Pairs</button>
-          <button class="place-radio-btn" id="teamSz3" data-size="3" onclick="setDefaultTeamSize(3)">Threes</button>
-          <button class="place-radio-btn active" id="teamSz4" data-size="4" onclick="setDefaultTeamSize(4)">Fours</button>
-        </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">Default scoring method</div>
-        <select class="settings-input" id="sTeamMethod">
-          <option value="best1">Best 1 score</option>
-          <option value="best2" selected>Best 2 scores</option>
-          <option value="best3">Best 3 scores</option>
-          <option value="all">All scores</option>
-          <option value="worst2">Best of worst 2</option>
-        </select>
-      </div>
-    </div>
-
-  </div>
-  <div class="settings-save-bar">
-    <div id="s5Status" class="status-bar status-neutral" style="display:none;"></div>
-    <button class="settings-save-btn" onclick="saveSettings()">Save Settings</button>
-  </div>
-</div>
-
-
-<!-- SCREEN 6 - Player Manager -->
-<div id="screen6" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goBack()">↩</button>
-    <div class="header-title">
-      <div class="club">Player Manager</div>
-      <div class="society" id="s6RollupLabel"></div>
-    </div>
-    <div class="header-spacer"></div>
-  </div>
-  <div class="s6-body">
-    <div class="s6-toolbar">
-      <select class="s6-rollup-select" id="s6RollupSelect" onchange="loadPlayerManager()">
-        <option value="">Select rollup…</option>
-      </select>
-      <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
-      <button class="s6-sync-btn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
-    </div>
-    <div class="s6-status status-bar status-neutral" id="s6Status"></div>
-    <div class="s6-table-wrap">
-      <table class="s6t">
-        <thead>
-          <tr>
-            <th class="left">Player</th>
-            <th>HC</th>
-            <th>WHS</th>
-            <th>Next Rd</th>
-            <th>Rds</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="s6TableBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <div class="nav-bar">
-    <button class="nav-item" onclick="showScreen('screen1')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nav-item" onclick="showResultsScreen()"><span class="ni">📋</span><span class="nl">Results</span></button>
-    <button class="nav-item" onclick="showPlayerHistory()"><span class="ni">📈</span><span class="nl">History</span></button>
-    <button class="nav-item active" onclick="showPlayerManager()"><span class="ni">👥</span><span class="nl">Players</span></button>
-  </div>
-</div>
-
-
-<!-- DIALOGS -->
-<div class="overlay" id="newPlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">New player found</div>
-    <div class="dialog-name" id="newPlayerName"></div>
-    <div class="dialog-body">Not in the <span id="newPlayerRollupName"></span> list yet. Enter a starting handicap to add them.</div>
-    <div class="field-group">
-      <div class="field-label" style="text-align:center">Starting handicap</div>
-      <input class="hc-number" id="newPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="skipNewPlayer()">Skip</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmNewPlayer()">Add player</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="reloadOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Reload players from IG?</div>
-    <div class="dialog-body">This will clear all entered scores and reload the player list from Intelligent Golf.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('reloadOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmReload()">Reload</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="removePlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Remove player?</div>
-    <div class="dialog-name" id="removePlayerName"></div>
-    <div class="dialog-body">This player will be removed from the round. They signed up but did not show.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('removePlayerOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmRemovePlayer()">Remove</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="walkupOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add walk-up player</div>
-    <div class="dialog-body">Enter player name — if they're in the system their handicap will be loaded automatically.</div>
-    <div class="field-group">
-      <div class="field-label">Player name</div>
-      <input class="name-input" id="walkupName" type="text" placeholder="First Last" autocomplete="off" onkeydown="if(event.key==='Enter') lookupWalkupPlayer()"/>
-    </div>
-    <div id="walkupHCRow" style="display:none;" class="field-group">
-      <div class="field-label">Starting handicap</div>
-      <input class="hc-number" id="walkupHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
-    </div>
-    <div id="walkupStatus" style="font-size:12px; color:#3B6D11; text-align:center; min-height:16px;"></div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('walkupOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" id="walkupLookupBtn" onclick="lookupWalkupPlayer()">Look up</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="addRollupOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add Rollup</div>
-    <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
-    <div class="field-group">
-      <div class="field-label">Rollup name</div>
-      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Rollup"/>
-    </div>
-    <div class="field-group">
-      <div class="field-label">Search term (from IG contact name)</div>
-      <input class="name-input" id="newRollupTerm" type="text" placeholder="e.g. SENIOR"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addRollupOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmAddRollup()">Add</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add player dialog (screen6) -->
-<div class="overlay" id="addPlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Add Player</div>
-    <div class="field-group">
-      <div class="field-label">Name</div>
-      <input class="name-input" id="addPlayerName" type="text" placeholder="First Last" autocomplete="off"/>
-    </div>
-    <div class="field-group">
-      <div class="field-label">Starting handicap</div>
-      <input class="hc-number" id="addPlayerHC" type="number" min="0" max="54" placeholder="e.g. 18" inputmode="numeric"/>
-    </div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('addPlayerOverlay')">Cancel</button>
-      <button class="dialog-btn btn-confirm" onclick="confirmAddPlayer()">Add</button>
-    </div>
-  </div>
-</div>
-
-<!-- Delete player confirmation dialog (screen6) -->
-<div class="overlay" id="deletePlayerOverlay">
-  <div class="dialog">
-    <div class="dialog-title">Delete Player?</div>
-    <div class="dialog-name" id="deletePlayerName"></div>
-    <div class="dialog-body">This will permanently remove this player and all their round history. This cannot be undone.</div>
-    <div class="dialog-btns">
-      <button class="dialog-btn btn-cancel" onclick="closeOverlay('deletePlayerOverlay')">Cancel</button>
-      <button class="dialog-btn btn-danger" onclick="confirmDeletePlayer()">Delete</button>
-    </div>
-  </div>
-</div>
-
-
-<script>
-// ═══════════════════════════════════════════
-// State
-// ═══════════════════════════════════════════
-let state = {
-  currentScreen: 'screen1',
-  players: [],
-  roundDate: '',
-  newPlayerQueue: [],
-  currentNewPlayer: null,
-  playerToRemove: null,
-  gameMode: 'individual',
-  teamSize: 2,
-  selectedStructure: null,
-  teamScores: [],
-  walkupFoundHC: null,
-  teeTimes: null,
-  teeStart: '',
-  allRoundDates: [],
-  currentRoundIdx: 0,
-  allPlayers: [],
-  historyData: [],
-  historyChart: null,
-  rollupSettings: null,
-  prohibitedWinner: null,
-};
-
-let session = {
-  rollupId: null,
-  rollupName: '',
-  rollupTerm: '',
-  igUsername: '',
-  igPin: '',
-};
-
-// ═══════════════════════════════════════════
-// Screen management
-// ═══════════════════════════════════════════
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  state.currentScreen = id;
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 "
+        "Mobile/15E148 Safari/604.1"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9",
 }
 
-function goBack() {
-  const s = state.currentScreen;
-  if (s === 'screen2') { showScreen('screen1'); return; }
-  if (s === 'screen3') { showScreen('screen1'); return; }
-  if (s === 'screen4') { showScreen('screen1'); return; }
-  if (s === 'screen5') { showScreen('screen1'); return; }
-  if (s === 'screen6') { showScreen('screen1'); return; }
-  showScreen('screen1');
-}
 
-function hasValidSession() {
-  return !!(session.rollupId && session.rollupName);
-}
+async def scrape_players(
+    username: str,
+    pin: str,
+    date_str: str,
+    ig_search_term: str = "MOTH",
+) -> dict:
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    date_param = dt.strftime("%d-%m-%Y")
 
-// ═══════════════════════════════════════════
-// Init
-// ═══════════════════════════════════════════
-async function init() {
-  session.igUsername = localStorage.getItem('ig_username') || '';
-  session.igPin = localStorage.getItem('ig_pin') || '';
-  session.rollupId = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
-  session.rollupName = localStorage.getItem('rollup_name') || '';
-  session.rollupTerm = localStorage.getItem('rollup_term') || '';
+    async with httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=30.0,
+    ) as client:
 
-  await loadRollupOptions();
+        # Step 1: GET login page for CSRF token
+        resp = await client.get(LOGIN_URL)
+        resp.raise_for_status()
 
-  if (hasValidSession()) {
-    updateHeaderNames();
-    setTodayDate();
-    await loadAuthStatus();
-    showScreen('screen1');
-  } else {
-    showScreen('screen0');
-  }
-}
+        soup = BeautifulSoup(resp.text, "html.parser")
+        csrf_input = soup.find("input", {"name": "_csrf_token"})
+        if not csrf_input:
+            raise Exception("Could not find CSRF token on login page.")
+        csrf_token = csrf_input.get("value", "")
 
-async function loadRollupOptions() {
-  try {
-    const resp = await fetch('/api/rollups');
-    const data = await resp.json();
-    const sel = document.getElementById('rollupSelect');
-    sel.innerHTML = '<option value="">Choose a rollup…</option>';
-    data.rollups.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.id;
-      opt.textContent = r.name;
-      opt.dataset.term = r.ig_search_term;
-      if (r.id === session.rollupId) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  } catch(e) {}
-}
+        # Step 2: POST login
+        login_data = {
+            "task": "login",
+            "topmenu": "1",
+            "memberid": username,
+            "pin": pin,
+            "cachemid": "1",
+            "_csrf_token": csrf_token,
+            "Submit": "Login",
+        }
+        resp = await client.post(LOGIN_URL, data=login_data)
+        resp.raise_for_status()
 
-function onRollupSelectChange() {
-  const sel = document.getElementById('rollupSelect');
-  const opt = sel.options[sel.selectedIndex];
-  if (opt && opt.value) {
-    session.rollupId = parseInt(opt.value);
-    session.rollupName = opt.textContent;
-    session.rollupTerm = opt.dataset.term || '';
-  }
-}
+        if str(resp.url).endswith("login.php"):
+            raise Exception("Login failed. Please check your username and PIN.")
 
-function updateHeaderNames() {
-  ['s1RollupName','s2RollupName','s3RollupName','s4RollupName'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = session.rollupName || 'Bramley Golf Club';
-  });
-}
+        # Step 3: Accept consent after login if needed
+        if "ttbconsent" in str(resp.url):
+            resp = await client.get(f"{CONSENT_URL}?action=accept")
+            resp.raise_for_status()
 
-function setTodayDate() {
-  const d = new Date();
-  const s = d.toISOString().split('T')[0];
-  document.getElementById('roundDate').value = s;
-  state.roundDate = s;
-}
+        # Step 4: GET booking page
+        resp = await client.get(
+            BOOKING_URL,
+            params={"date": date_param, "course": "1", "group": "1"},
+        )
+        resp.raise_for_status()
 
-async function loadAuthStatus() {
-  try {
-    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    const el = document.getElementById('lastRoundInfo');
-    if (data.last_round_date && data.last_round_date !== 'No previous round') {
-      el.textContent = `Last round: ${data.last_round_date}`;
-    }
-  } catch(e) {}
-}
+        if "ttbconsent" in str(resp.url):
+            resp = await client.get(f"{CONSENT_URL}?action=accept")
+            resp.raise_for_status()
+            resp = await client.get(
+                BOOKING_URL,
+                params={"date": date_param, "course": "1", "group": "1"},
+            )
+            resp.raise_for_status()
 
-// ═══════════════════════════════════════════
-// Login / Screen 0
-// ═══════════════════════════════════════════
-function saveLogin() {
-  const username = document.getElementById('igUsername').value.trim();
-  const pin = document.getElementById('igPin').value.trim();
-  const sel = document.getElementById('rollupSelect');
-  const opt = sel.options[sel.selectedIndex];
+        if "login" in str(resp.url).lower():
+            raise Exception("Session expired or login failed.")
 
-  if (!username || !pin) {
-    document.getElementById('loginError').textContent = 'Please enter your Member ID and PIN.';
-    document.getElementById('loginError').style.display = 'block';
-    return;
-  }
-  if (!opt || !opt.value) {
-    document.getElementById('loginError').textContent = 'Please select a rollup.';
-    document.getElementById('loginError').style.display = 'block';
-    return;
-  }
+        # Step 5: Find the rollup matching ig_search_term
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rollup_wrappers = soup.find_all("div", class_="isRollup")
 
-  session.igUsername = username;
-  session.igPin = pin;
-  session.rollupId = parseInt(opt.value);
-  session.rollupName = opt.textContent;
-  session.rollupTerm = opt.dataset.term || '';
+        if not rollup_wrappers:
+            raise Exception(
+                f"No rollups found on the booking page for {date_str}. "
+                "Check the date is correct."
+            )
 
-  localStorage.setItem('ig_username', username);
-  localStorage.setItem('ig_pin', pin);
-  localStorage.setItem('rollup_id', session.rollupId);
-  localStorage.setItem('rollup_name', session.rollupName);
-  localStorage.setItem('rollup_term', session.rollupTerm);
+        names = []
+        tee_times = 0
+        for wrapper in rollup_wrappers:
+            entrant_divs = wrapper.find_all("div", class_="rollup-entrants-list")
+            contact_div = None
+            signed_up_div = None
+            for div in entrant_divs:
+                t = div.get_text(strip=True)
+                if "Roll up Contact" in t:
+                    contact_div = div
+                elif "Signed up" in t:
+                    signed_up_div = div
 
-  document.getElementById('loginError').style.display = 'none';
-  updateHeaderNames();
-  setTodayDate();
-  loadAuthStatus();
-  showScreen('screen1');
-}
+            if contact_div and ig_search_term.upper() in contact_div.get_text().upper():
+                if not signed_up_div:
+                    raise Exception(f"Found '{ig_search_term}' rollup but no players have signed up yet.")
+                italic = signed_up_div.find("i")
+                if not italic:
+                    raise Exception(f"Found '{ig_search_term}' rollup but could not parse player names.")
+                names = [n.strip() for n in italic.get_text(strip=True).split(",") if n.strip()]
+                if not names:
+                    raise Exception(f"Found '{ig_search_term}' rollup but the signed-up list is empty.")
+                tee_times = _count_tee_times(wrapper, names)
+                break
 
-function showAddRollup() {
-  document.getElementById('newRollupName').value = '';
-  document.getElementById('newRollupTerm').value = '';
-  document.getElementById('addRollupOverlay').classList.add('open');
-}
+        if not names:
+            raise Exception(
+                f"Could not find a rollup matching '{ig_search_term}' on the booking page for {date_str}. "
+                "Check the rollup name and date are correct."
+            )
 
-async function confirmAddRollup() {
-  const name = document.getElementById('newRollupName').value.trim();
-  const term = document.getElementById('newRollupTerm').value.trim().toUpperCase();
-  if (!name || !term) { alert('Please enter both name and search term.'); return; }
-  try {
-    const resp = await fetch('/api/rollups/add', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({name, ig_search_term: term}),
-    });
-    const data = await resp.json();
-    closeOverlay('addRollupOverlay');
-    await loadRollupOptions();
-    const sel = document.getElementById('rollupSelect');
-    for (let i = 0; i < sel.options.length; i++) {
-      if (parseInt(sel.options[i].value) === data.id) { sel.selectedIndex = i; break; }
-    }
-    onRollupSelectChange();
-  } catch(e) { alert('Failed to add rollup.'); }
-}
+        # Step 6: Scrape WHS indices (same session, already logged in)
+        resp = await client.get(
+            HCAP_URL,
+            params={"action": "masterhcap", "filter": "", "sort": "0"},
+        )
+        resp.raise_for_status()
 
-// ═══════════════════════════════════════════
-// Screen 1 — Load Players
-// ═══════════════════════════════════════════
-async function loadPlayers() {
-  if (!hasValidSession()) { showScreen('screen0'); return; }
-  const date = document.getElementById('roundDate').value;
-  if (!date) { alert('Please select a date.'); return; }
-  state.roundDate = date;
+        soup = BeautifulSoup(resp.text, "html.parser")
+        indices = {}
+        # No tbody — rows are direct children of table; skip header rows (td vs th)
+        for row in soup.select("table.table tr"):
+            name_el = row.select_one("td:first-child a")
+            idx_el  = row.select_one("td:last-child")
+            if not name_el or not idx_el:
+                continue
+            name     = name_el.get_text(strip=True)
+            idx_text = idx_el.get_text(strip=True)
+            try:
+                indices[name] = float(idx_text)
+            except ValueError:
+                pass
 
-  const errEl = document.getElementById('s1Error');
-  const statusEl = document.getElementById('s1Status');
-  errEl.style.display = 'none';
-  statusEl.style.display = 'block';
-  statusEl.textContent = 'Loading players from Intelligent Golf…';
-  statusEl.className = 'status-bar status-neutral';
+        print(f"scrape_players: found {len(indices)} WHS indices")
+        return {
+            "names":     names,
+            "tee_times": tee_times,
+            "indices":   indices,
+        }
 
-  try {
-    const resp = await fetch('/api/load-players', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        date, ig_username: session.igUsername, ig_pin: session.igPin,
-        rollup_id: session.rollupId, ig_search_term: session.rollupTerm,
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.json();
-      errEl.innerHTML = `<span id="s1ErrorMsg">${err.detail || 'Could not load players.'}</span><a class="error-retry" onclick="loadPlayers()">Retry</a>`;
-      errEl.style.display = 'block';
-      statusEl.style.display = 'none';
-      return;
-    }
-    const data = await resp.json();
-    state.players = data.players;
-    state.newPlayerQueue = data.new_players.slice();
-    state.teeTimes = data.tee_times;
-    state.teeStart = data.tee_start || '';
-    statusEl.style.display = 'none';
 
-    await loadRollupSettings();
-    processNewPlayerQueue();
-  } catch(e) {
-    errEl.innerHTML = `<span>Network error — could not reach server.</span><a class="error-retry" onclick="loadPlayers()">Retry</a>`;
-    errEl.style.display = 'block';
-    statusEl.style.display = 'none';
-  }
-}
+def _count_tee_times(wrapper, names: list[str]) -> int:
+    time_span = wrapper.find("span", class_="comp-time-info")
+    if time_span:
+        match = re.search(r'(\d{2}):(\d{2})-(\d{2}):(\d{2})', time_span.get_text())
+        if match:
+            start = int(match.group(1)) * 60 + int(match.group(2))
+            end   = int(match.group(3)) * 60 + int(match.group(4))
+            if end > start:
+                return (end - start) // 8 + 1
+    return math.ceil(len(names) / 4)
 
-async function loadRollupSettings() {
-  try {
-    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
-    if (resp.ok) state.rollupSettings = await resp.json();
-  } catch(e) {}
-}
 
-// ═══════════════════════════════════════════
-// Screen 2 — Score Entry
-// ═══════════════════════════════════════════
-function openScoreEntry() {
-  document.getElementById('s2DateLabel').textContent = state.roundDate;
-  state.gameMode = 'individual';
-  document.getElementById('indBtn').classList.add('active');
-  document.getElementById('teamBtn').classList.remove('active');
-  document.getElementById('teamConfigBar').style.display = 'none';
-  document.getElementById('teamScoreboardWrap').style.display = 'none';
-  document.getElementById('prohibitedWarning').style.display = 'none';
-  state.prohibitedWinner = null;
-  // Sync mode toggle buttons with current settings
-  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
-  document.getElementById('s2ModeRollup').classList.toggle('active', !isWhs);
-  document.getElementById('s2ModeWhs').classList.toggle('active', isWhs);
-  renderGrid();
-  showScreen('screen2');
-}
+async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
+    """Scrape WHS indices for all members from the Bramley handicap list page."""
+    async with httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=30.0,
+    ) as client:
+        # Login
+        resp = await client.get(LOGIN_URL)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        csrf_input = soup.find("input", {"name": "_csrf_token"})
+        if not csrf_input:
+            raise Exception("Could not find CSRF token on login page.")
+        csrf_token = csrf_input.get("value", "")
 
-// Switch scoring mode directly from Screen 2 without reloading players
-async function setScoringMode(mode) {
-  if (!state.rollupSettings) return;
-  // Optimistically update local state
-  state.rollupSettings.scoring_mode = mode;
-  document.getElementById('s2ModeRollup').classList.toggle('active', mode === 'stableford');
-  document.getElementById('s2ModeWhs').classList.toggle('active', mode === 'whs');
-  // Persist to server
-  try {
-    const s = state.rollupSettings;
-    await fetch('/api/settings', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ ...s, rollup_id: session.rollupId, scoring_mode: mode }),
-    });
-  } catch(e) {}
-  // Recalculate with new mode
-  recalculate();
-}
+        login_data = {
+            "task": "login", "topmenu": "1",
+            "memberid": ig_username, "pin": ig_pin,
+            "cachemid": "1", "_csrf_token": csrf_token, "Submit": "Login",
+        }
+        resp = await client.post(LOGIN_URL, data=login_data)
+        resp.raise_for_status()
+        if str(resp.url).endswith("login.php"):
+            raise Exception("Login failed. Please check your username and PIN.")
 
-function setGameMode(mode) {
-  state.gameMode = mode;
-  document.getElementById('indBtn').classList.toggle('active', mode === 'individual');
-  document.getElementById('teamBtn').classList.toggle('active', mode === 'team');
-  document.getElementById('teamConfigBar').style.display = mode === 'team' ? 'block' : 'none';
-  if (mode === 'team') updateTeamStructureUI();
-  renderGrid();
-  recalculate();
-}
+        if "ttbconsent" in str(resp.url):
+            resp = await client.get(f"{CONSENT_URL}?action=accept")
+            resp.raise_for_status()
 
-function setTeamSize(n) {
-  state.teamSize = n;
-  [2,3,4].forEach(x => {
-    document.getElementById(`ts${x}`).classList.toggle('active', x === n);
-  });
-  state.selectedStructure = null;
-  updateTeamStructureUI();
-}
+        # Fetch handicap list
+        resp = await client.get(
+            HCAP_URL,
+            params={"action": "masterhcap", "filter": "", "sort": "0"},
+        )
+        resp.raise_for_status()
 
-function updateTeamStructureUI() {
-  const n = state.players.filter(p => p.score !== null || true).length;
-  const size = state.teamSize;
-  const structures = calculateTeamStructures(n, size);
-  const infoEl = document.getElementById('teamStructureInfo');
-  const optEl = document.getElementById('structureOptions');
-  optEl.innerHTML = '';
-  if (structures.length === 0) {
-    infoEl.textContent = 'Not enough players for teams.';
-    infoEl.className = 'team-structure-info error';
-    return;
-  }
-  if (structures.length === 1) {
-    state.selectedStructure = structures[0];
-    infoEl.textContent = describeStructure(structures[0]);
-    infoEl.className = 'team-structure-info';
-    return;
-  }
-  infoEl.textContent = 'Multiple structures possible:';
-  infoEl.className = 'team-structure-info';
-  structures.forEach((s, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'structure-option-btn' + (state.selectedStructure && JSON.stringify(state.selectedStructure) === JSON.stringify(s) ? ' selected' : '');
-    btn.textContent = describeStructure(s);
-    btn.onclick = () => {
-      state.selectedStructure = s;
-      document.querySelectorAll('.structure-option-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-    };
-    optEl.appendChild(btn);
-  });
-  if (!state.selectedStructure) state.selectedStructure = structures[0];
-}
+        soup = BeautifulSoup(resp.text, "html.parser")
+        indices = {}
+        # No tbody — rows are direct children of table; skip header rows (td vs th)
+        for row in soup.select("table.table tr"):
+            name_el = row.select_one("td:first-child a")
+            idx_el  = row.select_one("td:last-child")
+            if not name_el or not idx_el:
+                continue
+            name     = name_el.get_text(strip=True)
+            idx_text = idx_el.get_text(strip=True)
+            try:
+                indices[name] = float(idx_text)
+            except ValueError:
+                pass
 
-function calculateTeamStructures(n, size) {
-  if (n < 2) return [];
-  const structures = [];
-  for (let big = 0; big <= Math.floor(n / size); big++) {
-    const rem = n - big * size;
-    if (rem === 0) { structures.push({big, bigSize: size, small: 0, smallSize: 0}); break; }
-    if (size > 2 && rem % (size - 1) === 0) {
-      structures.push({big, bigSize: size, small: rem / (size - 1), smallSize: size - 1});
-    }
-  }
-  return structures.slice(0, 3);
-}
+        print(f"scrape_whs_indices: found {len(indices)} entries")
+        return {"indices": indices}
 
-function describeStructure(s) {
-  if (s.small === 0) return `${s.big} teams of ${s.bigSize}`;
-  return `${s.big} teams of ${s.bigSize} + ${s.small} team${s.small > 1 ? 's' : ''} of ${s.smallSize}`;
-}
 
-function randomAssignTeams() {
-  if (!state.selectedStructure) { updateTeamStructureUI(); }
-  const s = state.selectedStructure;
-  if (!s) { alert('Select a team structure first.'); return; }
-  const shuffled = [...state.players].sort(() => Math.random() - 0.5);
-  let team = 1, count = 0, sizes = [];
-  for (let i = 0; i < s.big; i++) sizes.push(s.bigSize);
-  for (let i = 0; i < s.small; i++) sizes.push(s.smallSize);
-  let idx = 0;
-  sizes.forEach((sz, ti) => {
-    for (let j = 0; j < sz; j++) { shuffled[idx++].team = ti + 1; }
-  });
-  state.players = state.players.map(p => {
-    const sp = shuffled.find(x => x.name === p.name);
-    return sp ? {...p, team: sp.team} : p;
-  });
-  updateUnassignedWarning();
-  renderGrid();
-  recalculate();
-}
+# ── Course search / tee data scraper ────────────────────────────────────────
 
-function updateUnassignedWarning() {
-  if (state.gameMode !== 'team') { document.getElementById('unassignedWarning').style.display = 'none'; return; }
-  const unassigned = state.players.filter(p => !p.team).length;
-  const el = document.getElementById('unassignedWarning');
-  if (unassigned > 0) {
-    el.textContent = `${unassigned} player${unassigned > 1 ? 's' : ''} not assigned to a team`;
-    el.style.display = 'block';
-  } else {
-    el.style.display = 'none';
-  }
-}
+async def search_course_on_18birdies(course_name: str) -> list[dict]:
+    """
+    Search Google for a golf course by name/location and return URL candidates.
+    Returns list of {search_result:true, title, url} for the user to pick from.
+    Once user picks a URL, fetch_course_from_url is called to get tee data.
+    """
+    import urllib.parse
+    q = course_name.strip()
 
-function renderGrid() {
-  const isTeam = state.gameMode === 'team';
-  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
-  const s = state.rollupSettings || {};
-  document.getElementById('col6Head').textContent = isTeam ? 'Team' : 'Remove';
-  document.getElementById('colWhsHead').textContent = 'WHS';
-  document.getElementById('colHcHead').textContent = isWhs ? 'Course H/C' : 'Roll-Up H/C';
-  document.getElementById('colAdjHead').textContent = isWhs ? 'WHS Adj' : 'H/C Adj';
-  const body = document.getElementById('scoreBody');
-  let rows = '';
-  const sorted = isTeam
-    ? [...state.players].sort((a,b) => (a.team||99) - (b.team||99) || a.name.localeCompare(b.name))
-    : state.players;
+    # Direct URL — skip search, fetch tee data immediately
+    if q.startswith("http"):
+        return await fetch_course_from_url(q)
 
-  // Pre-calculate course handicap data for WHS mode
-  const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
-  const hasTee = isWhs && cr !== null && cr !== undefined && slope && par;
+    # Append golf-specific terms to narrow results
+    search_term = f"{q} golf club slope rating course rating"
+    search_url = (
+        f"https://www.google.com/search"
+        f"?q={urllib.parse.quote(search_term)}&num=10&gl=gb&hl=en"
+    )
 
-  let lastTeam = null;
-  sorted.forEach((p, i) => {
-    const origIdx = state.players.indexOf(p);
-    if (isTeam && p.team !== lastTeam) {
-      lastTeam = p.team;
-      const tc = p.team ? `team-${p.team}` : '';
-      rows += `<tr class="team-header ${tc}"><td colspan="6">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
-    }
-    const _scored = sorted.filter(x => x.score !== null);
-    const _scores = [...new Set(_scored.map(x => x.score))].sort((a,b) => b - a);
-    const rankClass = (!isTeam && p.score !== null)
-      ? (p.score === _scores[0] ? 'rank-gold'
-       : p.score === _scores[1] ? 'rank-silver'
-       : p.score === _scores[2] ? 'rank-bronze' : '')
-      : '';
-
-    // WHS index column — always shows raw WHS index
-    const whsDisplay = (p.whs_index !== null && p.whs_index !== undefined)
-      ? p.whs_index.toFixed(1) : '—';
-
-    // Course H/C column
-    let hcDisplay;
-    if (isWhs) {
-      if (hasTee && p.whs_index !== null && p.whs_index !== undefined) {
-        hcDisplay = Math.round(p.whs_index * (slope / 113) + (cr - par));
-      } else {
-        hcDisplay = hasTee ? '?' : '—';
-      }
-    } else {
-      hcDisplay = p.handicap !== null ? p.handicap : '?';
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
     }
 
-    // Col 5: H/C Adj
-    // Roll-Up: new integer HC + adjustment e.g. "24 (-1)"
-    // WHS: show position % reduction e.g. "-15%" for top finishers, blank otherwise
-    let newHC = '';
-    if (isWhs) {
-      const adj = p.adjustment; // raw string e.g. "-15% -> 12.1" or "-"
-      if (p.score !== null && p.score !== undefined && adj && adj !== '-') {
-        // Extract just the % part e.g. "-15% -> 12.1" → "-15%"
-        newHC = adj.split('->')[0].trim();
-      }
-    } else {
-      newHC = p.new_handicap !== undefined && p.new_handicap !== null
-        ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
-    }
-    const col6 = isTeam
-      ? `<td class="team-col${p.team ? ' team-col' : ''}" ><select onchange="setPlayerTeam(${origIdx}, this.value)">
-          <option value="">—</option>
-          ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
-         </select></td>`
-      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\'")}')">✕</td>`;
-    rows += `<tr class="${rankClass}">
-      <td>${p.name}</td>
-      <td class="c">${whsDisplay}</td>
-      <td class="c">${hcDisplay}</td>
-      <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
-      <td class="nhc">${newHC}</td>
-      ${col6}
-    </tr>`;
-  });
-  body.innerHTML = rows;
-}
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=20.0) as client:
+        try:
+            resp = await client.get(search_url)
+            print(f"Google search status: {resp.status_code} for '{q}'")
 
-function setPlayerTeam(idx, val) {
-  state.players[idx].team = val ? parseInt(val) : null;
-  updateUnassignedWarning();
-}
+            if resp.status_code != 200:
+                print(f"Google blocked with {resp.status_code}, trying alternative")
+                # Fallback: try a different User-Agent
+                headers2 = dict(headers)
+                headers2["User-Agent"] = (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+                resp = await client.get(search_url, headers=headers2)
+                print(f"Retry status: {resp.status_code}")
 
-function updateScore(idx, val) {
-  state.players[idx].score = val === '' ? null : parseInt(val);
-  recalculate();
-}
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-async function recalculate() {
-  setSaveState('saving');
-  try {
-    const resp = await fetch('/api/autosave', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        date: state.roundDate, players: state.players,
-        team_mode: state.gameMode === 'team',
-        rollup_id: session.rollupId,
-      }),
-    });
-    const data = await resp.json();
-    state.players = state.players.map(p => {
-      const r = data.players.find(x => x.name === p.name);
-      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, adjustment: r.adjustment, position: r.position, winner: r.winner} : p;
-    });
-    state.teamScores = data.team_scores || [];
-    state.prohibitedWinner = data.prohibited_winner || null;
+            # Extract result URLs — Google wraps them in /url?q= redirects
+            results = []
+            seen = set()
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                # Google result links
+                if href.startswith("/url?q="):
+                    actual = href.split("/url?q=")[1].split("&")[0]
+                    actual = urllib.parse.unquote(actual)
+                elif "google.com" not in href and href.startswith("http"):
+                    actual = href
+                else:
+                    continue
 
-    const pwEl = document.getElementById('prohibitedWarning');
-    if (state.prohibitedWinner) {
-      pwEl.textContent = `⚠️ ${state.prohibitedWinner} won last round — cannot win again`;
-      pwEl.style.display = 'block';
-    } else {
-      pwEl.style.display = 'none';
-    }
+                # Filter to golf-relevant URLs only
+                if not actual.startswith("http"):
+                    continue
+                if actual in seen:
+                    continue
+                # Skip ad/tracking/irrelevant domains
+                skip = ["google.", "youtube.", "facebook.", "twitter.",
+                        "instagram.", "wikipedia.", "amazon.", "ebay.",
+                        "tripadvisor.", "booking.", "expedia."]
+                if any(s in actual for s in skip):
+                    continue
 
-    renderGrid();
-    renderTeamScoreboard();
-    setSaveState('saved');
-  } catch(e) {
-    setSaveState('error');
-  }
-}
+                seen.add(actual)
+                # Get the visible title text nearest to this link
+                title = a.get_text(strip=True)
+                if not title:
+                    title = actual.split("/")[2]  # domain as fallback
+                # Keep title short
+                title = title[:80]
 
-function renderTeamScoreboard() {
-  if (!state.teamScores || state.teamScores.length === 0) {
-    document.getElementById('teamScoreboardWrap').style.display = 'none';
-    return;
-  }
-  document.getElementById('teamScoreboardWrap').style.display = 'block';
-  const colors = ['team-pill-1','team-pill-2','team-pill-3','team-pill-4','team-pill-5','team-pill-6'];
-  document.getElementById('teamScoresRow').innerHTML = state.teamScores.map(t =>
-    `<div class="team-score-pill ${colors[(t.team-1)%6]}">
-      ${t.rank === 1 ? '🏆' : t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : `#${t.rank}`}
-      Team ${t.team}: ${t.total}
-     </div>`
-  ).join('');
-}
+                results.append({
+                    "search_result": True,
+                    "title": title,
+                    "url": actual,
+                })
 
-async function saveRound() {
-  if (state.prohibitedWinner) {
-    alert(`Cannot save: ${state.prohibitedWinner} won last round and cannot win again. Please review scores.`);
-    return;
-  }
-  const scored = state.players.filter(p => p.score !== null);
-  if (scored.length === 0) { alert('No scores entered.'); return; }
-  if (!confirm(`Save round for ${scored.length} players on ${state.roundDate}?`)) return;
-  try {
-    const resp = await fetch('/api/save-round', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        date: state.roundDate, players: state.players,
-        team_mode: state.gameMode === 'team',
-        rollup_id: session.rollupId,
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.json();
-      alert(err.detail || 'Failed to save round.');
-      return;
-    }
-    const data = await resp.json();
-    state.players = data.players;
-    state.allRoundDates = [];
-    await showResultsScreen();
-  } catch(e) {
-    alert('Network error — could not save round.');
-  }
-}
+                if len(results) >= 8:
+                    break
 
-function setSaveState(s) {
-  const dot = document.getElementById('saveDot');
-  const label = document.getElementById('saveLabel');
-  if (s === 'saving') { dot.style.background = '#888'; label.style.color = '#888'; label.textContent = 'Calculating…'; }
-  else if (s === 'saved') { dot.style.background = '#3B6D11'; label.style.color = '#3B6D11'; label.textContent = 'Ready'; }
-  else { dot.style.background = '#A32D2D'; label.style.color = '#A32D2D'; label.textContent = 'Error'; }
-}
+            print(f"Google search found {len(results)} results for '{q}'")
+            for r in results:
+                print(f"  {r['url']}")
 
-// ═══════════════════════════════════════════
-// Screen 3 — Results
-// ═══════════════════════════════════════════
-async function showResultsScreen() {
-  showScreen('screen3');
-  if (state.allRoundDates.length === 0) await loadRoundDates();
-  else renderResultsForCurrentIdx();
-}
+            return results
 
-async function loadRoundDates() {
-  try {
-    const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    state.allRoundDates = data.dates || [];
-    state.currentRoundIdx = 0;
-    const sel = document.getElementById('roundDateSelect');
-    sel.innerHTML = state.allRoundDates.map((d,i) => `<option value="${i}">${d}</option>`).join('');
-    if (state.allRoundDates.length > 0) loadRoundByIdx(0);
-  } catch(e) {}
-}
+        except Exception as e:
+            print(f"Google search error: {e}")
+            return []
 
-function navigateRound(dir) {
-  const newIdx = state.currentRoundIdx + dir;
-  if (newIdx < 0 || newIdx >= state.allRoundDates.length) return;
-  state.currentRoundIdx = newIdx;
-  document.getElementById('roundDateSelect').value = newIdx;
-  loadRoundByIdx(newIdx);
-}
 
-function onRoundDateChange() {
-  state.currentRoundIdx = parseInt(document.getElementById('roundDateSelect').value);
-  loadRoundByIdx(state.currentRoundIdx);
-}
+async def fetch_course_from_url(url: str, client=None) -> list[dict]:
+    """Fetch and parse tee/CR/slope data from a course URL.
+    Handles Golfshake pages and Intelligent Golf slope rating pages.
+    """
+    if "golfshake.com" in url:
+        return await _fetch_golfshake_course(url, client=client)
+    else:
+        return await _fetch_ig_slope_page(url, client=client)
 
-async function loadRoundByIdx(idx) {
-  const date = state.allRoundDates[idx];
-  if (!date) return;
-  document.getElementById('prevRoundBtn').disabled = idx >= state.allRoundDates.length - 1;
-  document.getElementById('nextRoundBtn').disabled = idx <= 0;
-  try {
-    const resp = await fetch(`/api/round?date=${date}&rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    renderResults(data.players, date);
-  } catch(e) {}
-}
 
-function renderResults(players, date) {
-  const sorted = [...players].sort((a,b) => b.score - a.score);
-  const body = document.getElementById('resultsBody');
-  body.innerHTML = sorted.map((p, i) => {
-    const rowClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-    const medal = i === 0 ? '<span class="medal g">1</span>' : i === 1 ? '<span class="medal s">2</span>' : i === 2 ? '<span class="medal b">3</span>' : '';
-    const hcChange = p.new_handicap !== undefined && p.new_handicap !== null
-      ? (() => {
-          const diff = p.new_handicap - (p.handicap_before || p.new_handicap);
-          return '';
-        })() : '';
-    return `<tr class="${rowClass}" onclick="showPlayerHistoryFor('${p.name.replace(/'/g,"\\'")}')">
-      <td>${medal} ${p.name}</td>
-      <td class="c">${p.score}</td>
-      <td class="c">${p.new_handicap !== null ? p.new_handicap : '—'}</td>
-      <td class="c hc-change">—</td>
-    </tr>`;
-  }).join('');
-}
-
-function renderResultsForCurrentIdx() {
-  loadRoundByIdx(state.currentRoundIdx);
-}
-
-// ═══════════════════════════════════════════
-// Screen 4 — Player History
-// ═══════════════════════════════════════════
-async function showPlayerHistory() {
-  showScreen('screen4');
-  if (state.allPlayers.length === 0) await loadPlayerList();
-}
-
-async function loadPlayerList() {
-  try {
-    const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
-    const data = await resp.json();
-    state.allPlayers = data.players;
-    const sel = document.getElementById('playerSelect');
-    sel.innerHTML = '<option value="">Choose a player…</option>';
-    data.players.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      opt.textContent = p.name;
-      sel.appendChild(opt);
-    });
-  } catch(e) {}
-}
-
-function showPlayerHistoryFor(name) {
-  showPlayerHistory().then(() => {
-    const sel = document.getElementById('playerSelect');
-    sel.value = name;
-    loadHistory(name);
-  });
-}
-
-function onPlayerSelectChange() {
-  const name = document.getElementById('playerSelect').value;
-  if (name) loadHistory(name);
-}
-
-async function loadHistory(name) {
-  const from = document.getElementById('filterFrom').value;
-  const to = document.getElementById('filterTo').value;
-  let url = `/api/player-history?name=${encodeURIComponent(name)}&rollup_id=${session.rollupId}`;
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) { showHistoryEmpty(); return; }
-    const data = await resp.json();
-    let rounds = data.rounds;
-    if (from) rounds = rounds.filter(r => r.date >= from);
-    if (to) rounds = rounds.filter(r => r.date <= to);
-    state.historyData = rounds;
-    if (rounds.length === 0) { showHistoryEmpty(); return; }
-    renderHistory(name, rounds);
-  } catch(e) { showHistoryEmpty(); }
-}
-
-function applyFilter() {
-  const name = document.getElementById('playerSelect').value;
-  if (name) loadHistory(name);
-}
-
-function showHistoryEmpty() {
-  document.getElementById('phContent').style.display = 'none';
-  document.getElementById('phEmpty').style.display = 'none';
-  document.getElementById('phNoData').style.display = 'block';
-}
-
-function renderHistory(name, rounds) {
-  document.getElementById('phNoData').style.display = 'none';
-  document.getElementById('phEmpty').style.display = 'none';
-  document.getElementById('phContent').style.display = 'block';
-
-  const scores = rounds.map(r => r.score);
-  const hcs = rounds.map(r => r.new_handicap);
-  const avgScore = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
-  const bestScore = scores.length ? Math.max(...scores) : '—';
-  const currentHC = hcs.length ? hcs[0] : '—';
-
-  document.getElementById('phStats').innerHTML = `
-    <div class="stat-card"><div class="stat-val">${rounds.length}</div><div class="stat-lbl">Rounds</div></div>
-    <div class="stat-card"><div class="stat-val">${avgScore}</div><div class="stat-lbl">Avg Score</div></div>
-    <div class="stat-card"><div class="stat-val">${bestScore}</div><div class="stat-lbl">Best Score</div></div>
-  `;
-
-  const labels = [...rounds].reverse().map(r => r.date.substring(5));
-  const scoreData = [...rounds].reverse().map(r => r.score);
-  const hcData = [...rounds].reverse().map(r => r.new_handicap);
-
-  if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
-  const ctx = document.getElementById('historyChart').getContext('2d');
-  state.historyChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Score', data: scoreData, borderColor: '#2D2B5B', backgroundColor: '#2D2B5B20', tension: 0.3, yAxisID: 'y' },
-        { label: 'Handicap', data: hcData, borderColor: '#FFD700', backgroundColor: '#FFD70020', tension: 0.3, borderDash: [4,2], yAxisID: 'y1' },
-      ]
-    },
-    options: {
-      responsive: true, interaction: { mode: 'index', intersect: false },
-      scales: {
-        y: { position: 'left', title: { display: true, text: 'Score' } },
-        y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'HC' } },
-      }
-    }
-  });
-
-  const tbody = document.getElementById('phTableBody');
-  tbody.innerHTML = rounds.map((r, i) => {
-    const prev = rounds[i+1];
-    const hcDiff = prev ? r.new_handicap - prev.new_handicap : 0;
-    const diffClass = hcDiff < 0 ? 'down' : hcDiff > 0 ? 'up' : '';
-    const diffStr = hcDiff !== 0 ? (hcDiff > 0 ? `+${hcDiff}` : hcDiff) : '—';
-    return `<tr>
-      <td class="left">${r.date}</td>
-      <td>${r.score}</td>
-      <td>${r.new_handicap}</td>
-      <td class="hc-change ${diffClass}">${diffStr}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════
-// Screen 5 — Settings
-// ═══════════════════════════════════════════
-async function showSettings() {
-  document.getElementById('s5RollupName').textContent = session.rollupName;
-  showScreen('screen5');
-  await loadSettingsForm();
-}
-
-async function loadSettingsForm() {
-  try {
-    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
-    if (!resp.ok) return;
-    const s = await resp.json();
-    state.rollupSettings = s;
-    populateSettingsForm(s);
-    await loadCourseOptions(s.course_id, s.tee_id);
-  } catch(e) {}
-}
-
-function populateSettingsForm(s) {
-  document.getElementById('sDisplayName').value = s.display_name || '';
-  document.getElementById('sIgTerm').value = s.ig_search_term || '';
-  document.getElementById('sTeeInterval').value = s.tee_interval_minutes || 8;
-  document.getElementById('sIgUsername').value = session.igUsername || '';
-  // Don't pre-fill PIN
-
-  // Run days
-  document.querySelectorAll('.day-chip').forEach(chip => {
-    chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
-  });
-
-  // Scoring mode
-  const mode = s.scoring_mode || 'stableford';
-  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
-  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
-  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
-  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
-
-  // WHS fields
-  document.getElementById('sWhsPct1').value = s.whs_pct_1st || 0;
-  document.getElementById('sWhsPct2').value = s.whs_pct_2nd || 0;
-  document.getElementById('sWhsPct3').value = s.whs_pct_3rd || 0;
-  document.getElementById('sWhsProhibition').checked = s.whs_winner_prohibition || false;
-
-  // Stableford fields
-  document.getElementById('sWinnerBonus').checked = s.winner_bonus_enabled !== false;
-  document.getElementById('sGapPenalty1').value = s.winner_gap_penalty1 || 0;
-  document.getElementById('sGapPenalty2').value = s.winner_gap_penalty2 || 0;
-
-  // Adjustment table
-  populateAdjTable(s.adjustment_table || []);
-
-  // Prizes
-  document.getElementById('sEntryFee').value = s.entry_fee || 0;
-  setPrizePlaces(s.prize_places || 3, {
-    pct_1st: s.prize_pct_1st, pct_2nd: s.prize_pct_2nd,
-    pct_3rd: s.prize_pct_3rd, pct_4th: s.prize_pct_4th,
-  });
-  setTieHandling(s.tie_handling || 'tournament');
-
-  // Team
-  setDefaultTeamSize(s.preferred_team_size || 4);
-  document.getElementById('sTeamMethod').value = s.team_scoring_method || 'best2';
-}
-
-function onScoringModeChange(mode) {
-  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
-  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
-  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
-  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
-  if (mode === 'whs') loadCourseOptions();
-}
-
-async function loadCourseOptions(selectedCourseId, selectedTeeId) {
-  try {
-    const resp = await fetch('/api/courses');
-    const data = await resp.json();
-    const sel = document.getElementById('sCourseSelect');
-    sel.innerHTML = '<option value="">Select course…</option>';
-    data.courses.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.name} — ${c.club}`;
-      if (c.id === selectedCourseId) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    if (selectedCourseId) await loadTeeOptions(selectedCourseId, selectedTeeId);
-  } catch(e) {}
-}
-
-function toggleAddCourse() {
-  const panel = document.getElementById('addCoursePanel');
-  const btn   = document.getElementById('addCourseToggleBtn');
-  const open  = panel.style.display === 'none';
-  panel.style.display = open ? 'block' : 'none';
-  btn.textContent = open ? '✕ Cancel' : '+ Add course';
-  if (open) {
-    document.getElementById('courseSearchInput').focus();
-    document.getElementById('courseSearchResults').innerHTML = '';
-    document.getElementById('courseSearchStatus').textContent = '';
-  }
-}
-
-async function searchCourse() {
-  const q = document.getElementById('courseSearchInput').value.trim();
-  if (q.length < 3) { alert('Please enter at least 3 characters'); return; }
-  const statusEl  = document.getElementById('courseSearchStatus');
-  const resultsEl = document.getElementById('courseSearchResults');
-  const btn       = document.getElementById('courseSearchBtn');
-  btn.disabled = true;
-  statusEl.textContent = 'Searching…';
-  resultsEl.innerHTML = '';
-  try {
-    const resp = await fetch(`/api/courses/search?q=${encodeURIComponent(q)}`);
-    const data = await resp.json();
-    if (!data.courses || data.courses.length === 0) {
-      statusEl.textContent = 'No results found. Try a different name.';
-      return;
+async def _fetch_ig_slope_page(url: str, client=None) -> list[dict]:
+    """
+    Fetch and parse an Intelligent Golf slope/rating page.
+    These pages typically have text like:
+      "Men's Yellow tees: Course Rating 68.9, Slope 128"
+      or tables with tee/CR/slope data.
+    """
+    import re as _re
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
     }
 
-    // Show URL candidates as a dropdown
-    if (data.courses[0].search_result) {
-      statusEl.textContent = 'Select the best match:';
-      const opts = data.courses.map((c, i) =>
-        `<option value="${i}">${c.title || c.url}</option>`
-      ).join('');
-      resultsEl.innerHTML = `
-        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
-          <select id="courseUrlPicker" class="settings-input" style="flex:1;font-size:11px;">
-            <option value="">-- Choose a result --</option>
-            ${opts}
-          </select>
-          <button class="toggle-btn" style="font-size:11px;" onclick="fetchSelectedCourse()">Fetch →</button>
-        </div>
-      `;
-      window._courseSearchResults = data.courses;
-      return;
+    async def _do(c):
+        resp = await c.get(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        text = soup.get_text(" ", strip=True)
+
+        # Extract club name
+        h1 = soup.find("h1") or soup.find("h2")
+        page_name = h1.get_text(strip=True) if h1 else url.split("/")[2].replace(".intelligentgolf.co.uk","").replace("-"," ").title()
+
+        tees = []
+        seen = set()
+
+        # Pattern 1: "Yellow tees: Course Rating 68.9, Slope 128, Par 72"
+        # Pattern 2: "Yellow Men CR 68.9 Slope 128"
+        # Pattern 3: Table rows with tee name, CR, slope
+
+        # Try table parsing first (Golfshake-style SSS[slope])
+        for row in soup.select("table tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 4:
+                continue
+            for i, cell in enumerate(cells):
+                m = _re.match(r"^([\d.]+)\s*\[(\d+)\]$", cell)
+                if m:
+                    cr, slope = float(m.group(1)), int(m.group(2))
+                    tee_name = cells[1] if len(cells) > 1 else "Unknown"
+                    try: par = int(cells[2])
+                    except: par = 72
+                    try: yardage = int(cells[-1].replace(",",""))
+                    except: yardage = None
+                    key = (tee_name, "Men")
+                    if key not in seen and tee_name.lower() not in ("tee","course",""):
+                        seen.add(key)
+                        tees.append({"name": tee_name, "gender": "Men", "yardage": yardage,
+                                     "course_rating": cr, "slope": slope, "par": par,
+                                     "colour": _tee_colour(tee_name)})
+                    break
+
+        # Try free-text pattern: "Yellow ... Rating 68.9 ... Slope 128"
+        if not tees:
+            pattern = _re.compile(
+                r"(White|Yellow|Red|Blue|Black|Gold|Silver|Purple|Orange|Green)"
+                r"[^.]*?(?:Course\s*)?Rating[:\s]+([0-9.]+)"
+                r"[^.]*?Slope[:\s]+(\d+)"
+                r"(?:[^.]*?Par[:\s]+(\d+))?",
+                _re.IGNORECASE
+            )
+            for m in pattern.finditer(text):
+                tee_name = m.group(1).title()
+                cr = float(m.group(2))
+                slope = int(m.group(3))
+                par = int(m.group(4)) if m.group(4) else 72
+                key = (tee_name, "Men")
+                if key not in seen:
+                    seen.add(key)
+                    tees.append({"name": tee_name, "gender": "Men", "yardage": None,
+                                 "course_rating": cr, "slope": slope, "par": par,
+                                 "colour": _tee_colour(tee_name)})
+
+        print(f"_fetch_ig_slope_page: {len(tees)} tees from {url}")
+        if not tees:
+            sample = text[:300]
+            print(f"  Page text sample: {sample}")
+
+        if tees:
+            return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
+        return []
+
+    if client:
+        return await _do(client)
+    else:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
+            return await _do(c)
+
+
+async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
+    """
+    Fetch and parse tee/rating data from a Golfshake course page.
+    Scorecard table format:
+      Course | Tee | Par | SSS      | Yards
+      Club   | White | 72 | 72 [135] | 6464
+    SSS = Course Rating, [slope] in brackets.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
     }
 
-    // Full tee data returned directly (URL was passed in)
-    statusEl.textContent = 'Found tee data — confirm tees to add:';
-    _showCourseTeeResults(data.courses);
+    async def _do_fetch(c):
+        resp = await c.get(url)
+        cs = BeautifulSoup(resp.text, "html.parser")
 
-  } catch(e) {
-    statusEl.textContent = 'Search failed. Please try again.';
-    console.error(e);
-  } finally {
-    btn.disabled = false;
-  }
-}
+        # Course name from h1
+        h1 = cs.find("h1")
+        page_name = h1.get_text(strip=True) if h1 else url.split("/")[-1].replace("_", " ").replace("-", " ").title()
 
-async function fetchSelectedCourse() {
-  const picker = document.getElementById('courseUrlPicker');
-  const idx = parseInt(picker.value);
-  if (isNaN(idx)) { alert('Please choose a result first'); return; }
-  const chosen = window._courseSearchResults[idx];
-  const statusEl = document.getElementById('courseSearchStatus');
-  const resultsEl = document.getElementById('courseSearchResults');
-  statusEl.textContent = `Fetching tee data…`;
-  resultsEl.innerHTML = '';
-  try {
-    const resp = await fetch(`/api/courses/fetch?url=${encodeURIComponent(chosen.url)}`);
-    const data = await resp.json();
-    if (!data.courses || !data.courses[0] || !data.courses[0].tees || data.courses[0].tees.length === 0) {
-      statusEl.textContent = 'No tee/rating data found on that page. Try another result.';
-      // Put the dropdown back
-      const opts = window._courseSearchResults.map((c, i) =>
-        `<option value="${i}">${c.title || c.url}</option>`
-      ).join('');
-      resultsEl.innerHTML = `
-        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
-          <select id="courseUrlPicker" class="settings-input" style="flex:1;font-size:11px;">
-            <option value="">-- Choose a result --</option>
-            ${opts}
-          </select>
-          <button class="toggle-btn" style="font-size:11px;" onclick="fetchSelectedCourse()">Fetch →</button>
-        </div>
-      `;
-      return;
+        # Parse scorecard table
+        # Row format: Course | Tee | Par | SSS [slope] | Yards
+        tees = []
+        seen = set()
+        for row in cs.select("table tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 4:
+                continue
+            # Find the SSS [slope] cell — matches "72 [135]" or "69 [128]"
+            for i, cell in enumerate(cells):
+                m = re.match(r"^([\d.]+)\s*\[(\d+)\]$", cell)
+                if m:
+                    cr  = float(m.group(1))
+                    slope = int(m.group(2))
+                    # Tee name is usually cells[1], Par in cells[2], Yards in cells[-1] or cells[i+1]
+                    tee_name = cells[1] if len(cells) > 1 else "Unknown"
+                    try:
+                        par = int(cells[2])
+                    except (ValueError, IndexError):
+                        par = 72
+                    try:
+                        yardage = int(cells[-1].replace(",", ""))
+                    except (ValueError, IndexError):
+                        yardage = None
+                    key = (tee_name, "Men")
+                    if key not in seen and tee_name.lower() not in ("tee", "course", ""):
+                        seen.add(key)
+                        tees.append({
+                            "name":          tee_name,
+                            "gender":        "Men",
+                            "yardage":       yardage,
+                            "course_rating": cr,
+                            "slope":         slope,
+                            "par":           par,
+                            "colour":        _tee_colour(tee_name),
+                        })
+                    break
+
+        print(f"_fetch_golfshake_course: {len(tees)} tees from {url}")
+        if not tees:
+            # Log sample rows for debug
+            for row in cs.select("table tr")[:5]:
+                cells = [td.get_text(strip=True) for td in row.find_all("td")]
+                if cells:
+                    print(f"  Sample row: {cells}")
+
+        if tees:
+            return [{"club": page_name, "name": page_name, "url": url, "tees": tees}]
+        return []
+
+    if client:
+        return await _do_fetch(client)
+    else:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as c:
+            return await _do_fetch(c)
+
+
+def _tee_colour(tee_name: str) -> str:
+    """Map tee name to a hex colour."""
+    colours = {
+        "white":  "#FFFFFF",
+        "yellow": "#FFD700",
+        "red":    "#CC0000",
+        "blue":   "#1E90FF",
+        "black":  "#222222",
+        "gold":   "#FFD700",
+        "green":  "#228B22",
+        "orange": "#FF8C00",
+        "purple": "#6A0DAD",
+        "silver": "#C0C0C0",
     }
-    statusEl.textContent = 'Found tee data — confirm tees to add:';
-    _showCourseTeeResults(data.courses);
-  } catch(e) {
-    statusEl.textContent = 'Fetch failed. Please try again.';
-  }
-}
-
-function _showCourseTeeResults(courses) {
-  const resultsEl = document.getElementById('courseSearchResults');
-  window._courseSearchResults = courses;
-  resultsEl.innerHTML = courses.map((c, ci) => `
-    <div style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
-      <div style="font-weight:700;font-size:12px;">${c.club}</div>
-      <div style="margin:4px 0;">
-        ${c.tees.map((t, ti) => `
-          <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
-            <input type="checkbox" checked data-ci="${ci}" data-ti="${ti}" />
-            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.colour};border:1px solid #999;"></span>
-            ${t.name} (${t.gender}) — Par ${t.par}, CR ${t.course_rating}, Slope ${t.slope}${t.yardage ? ', '+t.yardage+'yds' : ''}
-          </label>
-        `).join('')}
-      </div>
-      <button class="toggle-btn" style="font-size:11px;" onclick="saveCourseResult(${ci})">✓ Add this course</button>
-    </div>
-  `).join('');
-}
-
-async function saveCourseResult(courseIndex) {
-  const course = window._courseSearchResults[courseIndex];
-  if (!course) return;
-  const checks = document.querySelectorAll(`input[data-ci="${courseIndex}"]`);
-  const tees = [];
-  checks.forEach(cb => { if (cb.checked) tees.push(course.tees[parseInt(cb.dataset.ti)]); });
-  if (tees.length === 0) { alert('Select at least one tee'); return; }
-  const statusEl = document.getElementById('courseSearchStatus');
-  statusEl.textContent = 'Saving…';
-  try {
-    await fetch('/api/courses/save', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ club: course.club, name: course.name, tees }),
-    });
-    statusEl.textContent = `✓ ${course.club} added!`;
-    document.getElementById('courseSearchResults').innerHTML = '';
-    await loadCourseOptions();
-    const sel = document.getElementById('sCourseSelect');
-    for (const opt of sel.options) {
-      if (opt.text.includes(course.club.substring(0, 8))) {
-        sel.value = opt.value; await loadTeeOptions(parseInt(opt.value)); break;
-      }
-    }
-    setTimeout(() => { toggleAddCourse(); statusEl.textContent = ''; }, 1500);
-  } catch(e) {
-    statusEl.textContent = 'Save failed. Please try again.';
-  }
-}
-
-async function loadTeeOptions(courseId, selectedTeeId) {
-  const cid = courseId || parseInt(document.getElementById('sCourseSelect').value);
-  if (!cid) return;
-  try {
-    const resp = await fetch(`/api/tees?course_id=${cid}`);
-    const data = await resp.json();
-    const sel = document.getElementById('sTeeSelect');
-    sel.innerHTML = '<option value="">Select tee…</option>';
-    data.tees.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = `${t.name} (${t.gender}) — CR ${t.course_rating} / Slope ${t.slope}`;
-      if (t.id === selectedTeeId) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  } catch(e) {}
-}
-
-function populateAdjTable(table) {
-  const tbody = document.getElementById('adjTableBody');
-  tbody.innerHTML = table.map((row, i) => {
-    const isLast = row.max_score === null || i === table.length - 1;
-    const scoreCell = isLast
-      ? '<td style="color:#888;font-size:11px;">Otherwise</td>'
-      : `<td><input class="adj-input" type="number" value="${row.max_score}" onchange="updateAdjRow(${i},'max_score',this.value)"/></td>`;
-    return `<tr>${scoreCell}
-      <td><input class="adj-input" type="number" min="-5" max="5" value="${row.adjustment}" onchange="updateAdjRow(${i},'adjustment',this.value)"/></td>
-    </tr>`;
-  }).join('');
-}
-
-function updateAdjRow(idx, field, val) {
-  if (!state.rollupSettings) return;
-  state.rollupSettings.adjustment_table[idx][field] = field === 'max_score'
-    ? (val === '' ? null : parseInt(val)) : parseInt(val);
-}
-
-function toggleDay(el) { el.classList.toggle('active'); }
-
-let currentPrizePlaces = 3;
-let currentPrizePcts = { pct_1st: 60, pct_2nd: 30, pct_3rd: 10, pct_4th: 0 };
-
-function setPrizePlaces(n, pcts) {
-  currentPrizePlaces = n;
-  if (pcts) currentPrizePcts = pcts;
-  document.querySelectorAll('.place-radio-btn[data-places]').forEach(b => {
-    b.classList.toggle('active', parseInt(b.dataset.places) === n);
-  });
-  renderPrizePctInputs(n);
-}
-
-function renderPrizePctInputs(n) {
-  const container = document.getElementById('prizePctInputs');
-  const labels = ['1st','2nd','3rd','4th'];
-  const keys = ['pct_1st','pct_2nd','pct_3rd','pct_4th'];
-  container.innerHTML = labels.slice(0, n).map((lbl, i) =>
-    `<div class="prize-pct-row">
-      <span class="prize-pct-label">${lbl}</span>
-      <input class="settings-input-sm" type="number" min="0" max="100" id="prizePct${i+1}" value="${currentPrizePcts[keys[i]] || 0}" onchange="validatePrizePcts()"/>
-      <span style="font-size:12px;color:#888;">%</span>
-     </div>`
-  ).join('');
-}
-
-function validatePrizePcts() {
-  const n = currentPrizePlaces;
-  let total = 0;
-  for (let i = 1; i <= n; i++) {
-    const el = document.getElementById(`prizePct${i}`);
-    if (el) total += parseInt(el.value) || 0;
-  }
-  document.getElementById('prizePctError').style.display = total !== 100 ? 'block' : 'none';
-}
-
-let currentTieHandling = 'tournament';
-function setTieHandling(val) {
-  currentTieHandling = val;
-  document.getElementById('tieTournament').classList.toggle('active', val === 'tournament');
-  document.getElementById('tieCountback').classList.toggle('active', val === 'countback');
-}
-
-let currentDefaultTeamSize = 4;
-function setDefaultTeamSize(n) {
-  currentDefaultTeamSize = n;
-  [2,3,4].forEach(x => {
-    const el = document.getElementById(`teamSz${x}`);
-    if (el) el.classList.toggle('active', x === n);
-  });
-}
-
-async function saveSettings() {
-  const mode = document.getElementById('modeWhs').classList.contains('active') ? 'whs' : 'stableford';
-  const runDays = [...document.querySelectorAll('.day-chip.active')].map(c => c.dataset.day);
-  const adjTable = state.rollupSettings ? state.rollupSettings.adjustment_table : [];
-  const igUsername = document.getElementById('sIgUsername').value.trim();
-  const igPin = document.getElementById('sIgPin').value.trim();
-
-  const n = currentPrizePlaces;
-  let pcts = [0, 0, 0, 0];
-  for (let i = 1; i <= n; i++) {
-    const el = document.getElementById(`prizePct${i}`);
-    pcts[i-1] = el ? (parseInt(el.value) || 0) : 0;
-  }
-  const total = pcts.reduce((a,b)=>a+b,0);
-  if (total !== 100) { alert('Prize percentages must add up to 100%.'); return; }
-
-  const courseId = document.getElementById('sCourseSelect').value;
-  const teeId = document.getElementById('sTeeSelect').value;
-
-  const payload = {
-    rollup_id: session.rollupId,
-    display_name: document.getElementById('sDisplayName').value.trim(),
-    ig_search_term: document.getElementById('sIgTerm').value.trim().toUpperCase(),
-    run_days: runDays,
-    tee_interval_minutes: parseInt(document.getElementById('sTeeInterval').value) || 8,
-    scoring_mode: mode,
-    adjustment_table: adjTable,
-    winner_bonus_enabled: document.getElementById('sWinnerBonus').checked,
-    winner_gap_penalty1: parseInt(document.getElementById('sGapPenalty1').value) || 0,
-    winner_gap_penalty2: parseInt(document.getElementById('sGapPenalty2').value) || 0,
-    whs_pct_1st: parseFloat(document.getElementById('sWhsPct1').value) || 0,
-    whs_pct_2nd: parseFloat(document.getElementById('sWhsPct2').value) || 0,
-    whs_pct_3rd: parseFloat(document.getElementById('sWhsPct3').value) || 0,
-    whs_winner_prohibition: document.getElementById('sWhsProhibition').checked,
-    course_id: courseId ? parseInt(courseId) : null,
-    tee_id: teeId ? parseInt(teeId) : null,
-    entry_fee: parseFloat(document.getElementById('sEntryFee').value) || 0,
-    prize_places: n,
-    prize_pct_1st: pcts[0], prize_pct_2nd: pcts[1], prize_pct_3rd: pcts[2], prize_pct_4th: pcts[3],
-    tie_handling: currentTieHandling,
-    preferred_team_size: currentDefaultTeamSize,
-    team_scoring_method: document.getElementById('sTeamMethod').value,
-  };
-
-  const statusEl = document.getElementById('s5Status');
-  statusEl.style.display = 'block';
-  statusEl.className = 'status-bar status-neutral';
-  statusEl.textContent = 'Saving…';
-
-  try {
-    const resp = await fetch('/api/settings', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      const err = await resp.json();
-      statusEl.className = 'status-bar status-danger';
-      statusEl.textContent = err.detail || 'Save failed.';
-      return;
-    }
-    // Save credentials to localStorage and DB
-    if (igUsername) {
-      localStorage.setItem('ig_username', igUsername);
-      session.igUsername = igUsername;
-    }
-    if (igPin) {
-      localStorage.setItem('ig_pin', igPin);
-      session.igPin = igPin;
-    }
-    // Update rollup name in session if changed
-    session.rollupName = payload.display_name || session.rollupName;
-    session.rollupTerm = payload.ig_search_term || session.rollupTerm;
-    localStorage.setItem('rollup_name', session.rollupName);
-    localStorage.setItem('rollup_term', session.rollupTerm);
-    updateHeaderNames();
-
-    statusEl.className = 'status-bar status-success';
-    statusEl.textContent = 'Settings saved ✓';
-    setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
-  } catch(e) {
-    statusEl.className = 'status-bar status-danger';
-    statusEl.textContent = 'Network error.';
-  }
-}
-
-// ═══════════════════════════════════════════
-// Screen 6 — Player Manager
-// ═══════════════════════════════════════════
-let s6State = { rollupId: null, players: [], playerToDelete: null };
-
-async function showPlayerManager() {
-  showScreen('screen6');
-  // Populate rollup dropdown
-  try {
-    const resp = await fetch('/api/rollups');
-    const data = await resp.json();
-    const sel = document.getElementById('s6RollupSelect');
-    sel.innerHTML = '<option value="">Select rollup…</option>';
-    data.rollups.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.id;
-      opt.textContent = r.name;
-      if (r.id === session.rollupId) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    s6State.rollupId = session.rollupId;
-    document.getElementById('s6RollupLabel').textContent = session.rollupName;
-    if (s6State.rollupId) await loadPlayerManager();
-  } catch(e) {}
-}
-
-async function loadPlayerManager() {
-  const sel = document.getElementById('s6RollupSelect');
-  const opt = sel.options[sel.selectedIndex];
-  if (!opt || !opt.value) return;
-  s6State.rollupId = parseInt(opt.value);
-  document.getElementById('s6RollupLabel').textContent = opt.textContent;
-  setS6Status('Loading…', 'neutral');
-  try {
-    const resp = await fetch(`/api/players/detail?rollup_id=${s6State.rollupId}`);
-    const data = await resp.json();
-    s6State.players = data.players;
-    renderPlayerTable();
-    setS6Status(`${s6State.players.length} players`, 'neutral');
-  } catch(e) {
-    setS6Status('Failed to load players', 'danger');
-  }
-}
-
-function renderPlayerTable() {
-  const tbody = document.getElementById('s6TableBody');
-  if (s6State.players.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>';
-    return;
-  }
-  tbody.innerHTML = s6State.players.map(p => {
-    const prohibBadge = p.winner_prohibited ? ' <span class="prohibited-badge" title="Winner prohibited">🚫</span>' : '';
-    const whsVal = p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : '—';
-    const nextVal = p.whs_index_next_round !== null && p.whs_index_next_round !== undefined ? p.whs_index_next_round.toFixed(1) : '—';
-    return `<tr>
-      <td class="left">${p.name}${prohibBadge}</td>
-      <td><input class="s6-hc-input" id="hc_${p.id}" type="number" min="0" max="54" value="${p.handicap}" inputmode="numeric"/></td>
-      <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
-      <td style="font-size:11px;color:#888;">${nextVal}</td>
-      <td style="font-size:11px;color:#888;">${p.round_count}</td>
-      <td style="display:flex;gap:3px;padding:3px 4px;">
-        <button class="s6-save-btn" onclick="savePlayerHC(${p.id})">HC</button>
-        <button class="s6-save-whs-btn" onclick="savePlayerWHS(${p.id})">WHS</button>
-        <button class="s6-del-btn" onclick="promptDeletePlayer(${p.id}, '${p.name.replace(/'/g,"\\'")}')">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function setS6Status(msg, type) {
-  const el = document.getElementById('s6Status');
-  el.textContent = msg;
-  el.className = `s6-status status-bar status-${type}`;
-}
-
-async function savePlayerHC(playerId) {
-  const input = document.getElementById(`hc_${playerId}`);
-  const hc = parseInt(input.value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Handicap must be 0–54.'); return; }
-  try {
-    const resp = await fetch('/api/players/update-handicap', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ player_id: playerId, handicap: hc, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    const p = s6State.players.find(p => p.id === playerId);
-    if (p) p.handicap = hc;
-    setS6Status('HC saved ✓', 'success');
-    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
-  } catch(e) { setS6Status('Save failed', 'danger'); }
-}
-
-async function savePlayerWHS(playerId) {
-  const input = document.getElementById(`whs_${playerId}`);
-  const val = input.value.trim();
-  if (val === '') { alert('Enter a WHS index (e.g. 14.2)'); return; }
-  const whs = parseFloat(val);
-  if (isNaN(whs) || whs < 0 || whs > 54) { alert('WHS index must be between 0 and 54.'); return; }
-  const whsRounded = Math.round(whs * 10) / 10;
-  try {
-    const resp = await fetch('/api/players/update-whs-index', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ player_id: playerId, whs_index: whsRounded, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    const p = s6State.players.find(p => p.id === playerId);
-    if (p) p.whs_index = whsRounded;
-    input.value = whsRounded.toFixed(1);
-    setS6Status('WHS index saved ✓', 'success');
-    setTimeout(() => setS6Status(`${s6State.players.length} players`, 'neutral'), 1500);
-  } catch(e) { setS6Status('Save failed', 'danger'); }
-}
-
-function promptDeletePlayer(playerId, name) {
-  s6State.playerToDelete = playerId;
-  document.getElementById('deletePlayerName').textContent = name;
-  document.getElementById('deletePlayerOverlay').classList.add('open');
-}
-
-async function confirmDeletePlayer() {
-  closeOverlay('deletePlayerOverlay');
-  try {
-    const resp = await fetch('/api/players/delete', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ player_id: s6State.playerToDelete, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    await loadPlayerManager();
-  } catch(e) { setS6Status('Delete failed', 'danger'); }
-}
-
-function showAddPlayerDialog() {
-  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
-  document.getElementById('addPlayerName').value = '';
-  document.getElementById('addPlayerHC').value = '';
-  document.getElementById('addPlayerOverlay').classList.add('open');
-}
-
-async function confirmAddPlayer() {
-  const name = document.getElementById('addPlayerName').value.trim();
-  const hc = parseInt(document.getElementById('addPlayerHC').value);
-  if (!name) { alert('Please enter a name.'); return; }
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  try {
-    const resp = await fetch('/api/new-player', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ name, handicap: hc, rollup_id: s6State.rollupId }),
-    });
-    if (!resp.ok) throw new Error();
-    closeOverlay('addPlayerOverlay');
-    await loadPlayerManager();
-  } catch(e) { setS6Status('Add failed', 'danger'); }
-}
-
-async function syncWhsIndices() {
-  if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
-  const igUsername = localStorage.getItem('ig_username') || session.igUsername || '';
-  const igPin = localStorage.getItem('ig_pin') || session.igPin || '';
-  if (!igUsername || !igPin) {
-    alert('IG credentials not set. Please sign in first.');
-    return;
-  }
-  setS6Status('Syncing WHS indices from IG…', 'neutral');
-  try {
-    const resp = await fetch('/api/scrape-whs-indices', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        ig_username: igUsername,
-        ig_pin: igPin,
-        rollup_id: s6State.rollupId,
-      }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setS6Status(data.detail || 'Sync failed', 'danger'); return; }
-    const msg = `Updated ${data.updated} player${data.updated !== 1 ? 's' : ''}` +
-      (data.not_found.length ? ` · ${data.not_found.length} not matched` : '');
-    setS6Status(msg, 'success');
-    await loadPlayerManager();
-  } catch(e) { setS6Status('Sync failed — network error', 'danger'); }
-}
-
-// ═══════════════════════════════════════════
-// New player queue
-// ═══════════════════════════════════════════
-function processNewPlayerQueue() {
-  if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
-  state.currentNewPlayer = state.newPlayerQueue.shift();
-  document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
-  document.getElementById('newPlayerRollupName').textContent = session.rollupName;
-  document.getElementById('newPlayerHC').value = '';
-  document.getElementById('newPlayerOverlay').classList.add('open');
-}
-
-async function confirmNewPlayer() {
-  const hc = parseInt(document.getElementById('newPlayerHC').value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}) });
-  const p = state.players.find(p => p.name === state.currentNewPlayer);
-  if (p) { p.handicap = hc; p.new_player = false; }
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-function skipNewPlayer() {
-  state.players = state.players.filter(p => p.name !== state.currentNewPlayer);
-  closeOverlay('newPlayerOverlay');
-  processNewPlayerQueue();
-}
-
-function promptRemovePlayer(name) {
-  state.playerToRemove = name;
-  document.getElementById('removePlayerName').textContent = name;
-  document.getElementById('removePlayerOverlay').classList.add('open');
-}
-
-function confirmRemovePlayer() {
-  state.players = state.players.filter(p => p.name !== state.playerToRemove);
-  state.playerToRemove = null;
-  closeOverlay('removePlayerOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI();
-  updateUnassignedWarning();
-  renderGrid();
-}
-
-function addWalkupPlayer() {
-  document.getElementById('walkupName').value = '';
-  document.getElementById('walkupHCRow').style.display = 'none';
-  document.getElementById('walkupStatus').textContent = '';
-  document.getElementById('walkupLookupBtn').textContent = 'Look up';
-  document.getElementById('walkupLookupBtn').onclick = lookupWalkupPlayer;
-  state.walkupFoundHC = null;
-  document.getElementById('walkupOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('walkupName').focus(), 100);
-}
-
-async function lookupWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) { alert('Please enter a player name.'); return; }
-  if (state.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
-    document.getElementById('walkupStatus').textContent = 'Player is already in the round.';
-    document.getElementById('walkupStatus').style.color = '#A32D2D'; return;
-  }
-  document.getElementById('walkupStatus').textContent = 'Looking up…';
-  document.getElementById('walkupStatus').style.color = '#888';
-  try {
-    const resp = await fetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, rollup_id: session.rollupId}) });
-    const data = await resp.json();
-    if (data.found) {
-      state.walkupFoundHC = data.handicap;
-      document.getElementById('walkupStatus').textContent = `Found — handicap ${data.handicap}`;
-      document.getElementById('walkupStatus').style.color = '#3B6D11';
-      document.getElementById('walkupHCRow').style.display = 'none';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    } else {
-      state.walkupFoundHC = null;
-      document.getElementById('walkupStatus').textContent = 'New player — enter starting handicap';
-      document.getElementById('walkupStatus').style.color = '#2D2B5B';
-      document.getElementById('walkupHCRow').style.display = 'flex';
-      document.getElementById('walkupHC').value = '';
-      document.getElementById('walkupLookupBtn').textContent = 'Add player';
-      document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-    }
-  } catch(e) {
-    document.getElementById('walkupStatus').textContent = 'Lookup failed — enter handicap manually';
-    document.getElementById('walkupStatus').style.color = '#A32D2D';
-    document.getElementById('walkupHCRow').style.display = 'flex';
-    document.getElementById('walkupLookupBtn').textContent = 'Add player';
-    document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
-  }
-}
-
-async function confirmWalkupPlayer() {
-  const name = document.getElementById('walkupName').value.trim();
-  if (!name) return;
-  let hc = state.walkupFoundHC;
-  if (hc === null) {
-    hc = parseInt(document.getElementById('walkupHC').value);
-    if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-    await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc, rollup_id: session.rollupId}) });
-  }
-  state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
-  closeOverlay('walkupOverlay');
-  state.selectedStructure = null;
-  updateTeamStructureUI();
-  updateUnassignedWarning();
-  renderGrid();
-}
-
-function confirmReload() { closeOverlay('reloadOverlay'); state.players = []; loadPlayers(); }
-function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
+    return colours.get(tee_name.lower(), "#888888")
