@@ -619,106 +619,121 @@ async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
 def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
     """
     Parse tee data from plain text copied from an NCRDB courseTeeInfo page.
-    Handles both spaced and squashed column formats.
+    Handles two copy formats:
+    - PC (squashed): "YellowM7069.292.5126..."
+    - Android (one token per line): "Yellow\nM\n70\n69.2\n92.5\n126..."
     """
     import re as _re
     tees = []
     seen = set()
 
-    for line in text.split("\n"):
-        line = line.strip()
-        if not line or "Tee Name" in line or "Gender" in line:
-            continue
+    # ── Android/multiline format ──────────────────────────────────────────
+    # Detect by checking if M or F appear as standalone lines
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    gender_lines = [i for i, l in enumerate(lines) if l in ("M", "F")]
 
-        # Split on M or F gender marker
-        gm = _re.search(r"^(.*?)(M|F)(.+)$", line)
-        if not gm:
-            continue
-
-        raw_name    = gm.group(1).strip()
-        gender_char = gm.group(2)
-        numbers_str = gm.group(3)
-
-        # Clean tee name
-        name = _re.sub(r"^[\d\s./]+", "", raw_name).strip().title()
-        if not name:
-            nums_in_name = _re.findall(r"\d+", raw_name)
-            name = nums_in_name[-1] if nums_in_name else raw_name.strip()
-        if not name or name.lower() in ("tee name", "gender", "par", "course"):
-            continue
-
-        # Split on first "/" to isolate par+CR+bogey+slope from F9/B9 fractions
-        main = numbers_str.split("/")[0].replace(" ", "")
-
-        # Try 3-digit slope first, then 2-digit if out of range
-        par, cr, slope = None, None, None
-        for slope_digits in (3, 2):
-            pat = (_re.compile(r"^(\d{2})(\d{2,3}\.\d)(\d{2,3}\.\d)(\d{" + str(slope_digits) + r"})"))
-            dm = pat.match(main)
-            if dm:
-                p, c, _, s = int(dm.group(1)), float(dm.group(2)), dm.group(3), int(dm.group(4))
-                if 50 <= s <= 155:
-                    par, cr, slope = p, c, s
-                    break
-
-        if par is None:
-            # Fallback: spaced format
-            nums = _re.findall(r"[\d]+\.?[\d]*", numbers_str)
-            if len(nums) >= 4:
-                try:
-                    par, cr, slope = int(nums[0]), float(nums[1]), int(nums[3])
-                except (ValueError, IndexError):
+    if gender_lines:
+        # Token-based parsing: each cell is its own line
+        skip_names = {"gender", "tee name", "par", "course rating", "bogey rating",
+                      "slope rating", "front (9)", "back (9)", "ch", ""}
+        for gi in gender_lines:
+            gender = "Men" if lines[gi] == "M" else "Women"
+            # Name is the line before M/F
+            name = lines[gi - 1].title() if gi > 0 else ""
+            if name.lower() in skip_names:
+                continue
+            # After M/F: par, CR, bogey, slope (then front/back fractions)
+            try:
+                par   = int(lines[gi + 1])
+                cr    = float(lines[gi + 2])
+                # lines[gi+3] is bogey, lines[gi+4] is slope
+                slope = int(lines[gi + 4])
+                if not (50 <= slope <= 155 and 55 <= cr <= 85 and 60 <= par <= 80):
                     continue
+                key = (name, gender)
+                if key not in seen:
+                    seen.add(key)
+                    tees.append({
+                        "name": name, "gender": gender, "par": par,
+                        "course_rating": cr, "slope": slope, "yardage": None,
+                        "colour": _tee_colour(name),
+                    })
+            except (ValueError, IndexError):
+                continue
 
-        if par is None:
-            continue
+    # ── PC/squashed format ────────────────────────────────────────────────
+    if not tees:
+        for line in lines:
+            if "Tee Name" in line or "Gender" in line:
+                continue
+            line = line.replace("\t", " ")  # normalise tabs
+            gm = _re.search(r"^(.*?)(M|F)(.+)$", line)
+            if not gm:
+                continue
+            raw_name    = gm.group(1).strip()
+            gender_char = gm.group(2)
+            numbers_str = gm.group(3)
+            name = _re.sub(r"^[\d\s./]+", "", raw_name).strip().title()
+            if not name:
+                nums_in_name = _re.findall(r"\d+", raw_name)
+                name = nums_in_name[-1] if nums_in_name else raw_name.strip()
+            if not name or name.lower() in ("tee name", "gender", "par", "course"):
+                continue
+            main = numbers_str.split("/")[0].replace(" ", "")
+            par, cr, slope = None, None, None
+            for slope_digits in (3, 2):
+                pat = _re.compile(
+                    r"^(\d{2})(\d{2,3}\.\d)(\d{2,3}\.\d)(\d{" + str(slope_digits) + r"})"
+                )
+                dm = pat.match(main)
+                if dm:
+                    p, c, s = int(dm.group(1)), float(dm.group(2)), int(dm.group(4))
+                    if 50 <= s <= 155:
+                        par, cr, slope = p, c, s
+                        break
+            if par is None:
+                nums = _re.findall(r"[\d]+\.?[\d]*", numbers_str)
+                if len(nums) >= 4:
+                    try:
+                        par, cr, slope = int(nums[0]), float(nums[1]), int(nums[3])
+                    except (ValueError, IndexError):
+                        continue
+            if par is None:
+                continue
+            gender = "Men" if gender_char == "M" else "Women"
+            if not (50 <= slope <= 155 and 55 <= cr <= 85 and 60 <= par <= 80):
+                continue
+            key = (name, gender)
+            if key not in seen:
+                seen.add(key)
+                tees.append({
+                    "name": name, "gender": gender, "par": par,
+                    "course_rating": cr, "slope": slope, "yardage": None,
+                    "colour": _tee_colour(name),
+                })
 
-        gender = "Men" if gender_char == "M" else "Women"
-        if not (50 <= slope <= 155 and 55 <= cr <= 85 and 60 <= par <= 80):
-            continue
-
-        key = (name, gender)
-        if key not in seen:
-            seen.add(key)
-            tees.append({
-                "name":          name,
-                "gender":        gender,
-                "par":           par,
-                "course_rating": cr,
-                "slope":         slope,
-                "yardage":       None,
-                "colour":        _tee_colour(name),
-            })
-
-    # Extract club name — look for "Club/Course Name" header or the line
-    # just before the tee table that contains the club name + city
+    # ── Club name extraction ──────────────────────────────────────────────
     if not club_name:
         skip = {"usga", "logo", "championships", "video", "playing", "advancing",
                 "history", "giving", "tickets", "shop", "national course rating",
                 "course rating search", "course handicap", "only 18-hole",
                 "enter your", "tee name", "gender", "par", "front", "back",
                 "new search", "questions", "usga partners", "follow us", "about us",
-                "club/course", "city", "state/province", "about us", "careers",
-                "contact us", "media", "privacy", "terms of use", "accessibility"}
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        # Find the line containing club name — it has "(NNNNNN)" course ID pattern
+                "club/course", "city", "state/province", "careers", "contact us",
+                "media", "privacy", "terms of use", "accessibility"}
         for line in lines:
             if _re.search(r"\(\d{6,7}\)", line):
-                # Extract just the club name before the ID
                 candidate = line.split("(")[0].strip()
-                # Strip leading header junk like "Club/Course NameCityState/Province"
                 candidate = _re.sub(r"^.*?Province", "", candidate).strip()
                 candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
                 if candidate and len(candidate) > 4:
                     club_name = candidate
                     break
-        # Fallback: look for line before Tee Name header
         if not club_name:
             for i, line in enumerate(lines):
                 if "Tee Name" in line and "Gender" in line:
                     for prev in reversed(lines[:i]):
-                        prev_lower = prev.lower()
-                        if any(s in prev_lower for s in skip):
+                        if any(s in prev.lower() for s in skip):
                             continue
                         if len(prev) < 5:
                             continue
@@ -729,7 +744,7 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
                             break
                     break
 
-    print(f"parse_ncrdb_paste: {len(tees)} tees, club='{club_name}'")
+    print(f"parse_ncrdb_paste: {len(tees)} tees, club=\'{club_name}\'")
     if not tees:
         print(f"  Raw text sample: {repr(text[:500])}")
     if tees:
