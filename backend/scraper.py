@@ -619,25 +619,64 @@ async def _fetch_golfshake_course(url: str, client=None) -> list[dict]:
 def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
     """
     Parse tee data from plain text copied from an NCRDB courseTeeInfo page.
-    Row format: TeeName M/F Par CR BogeyR Slope ... Yardage
+    Handles both spaced and squashed column formats.
     """
     import re as _re
     tees = []
     seen = set()
-    # Match: TeeName  M/F  Par  CR  BogeyR  Slope (yardage optional)
-    pattern = _re.compile(
-        r'^([A-Za-z][A-Za-z\s]*?)\s+(M|F)\s+(\d+)\s+([\d.]+)\s+[\d.]+\s+(\d+)',
-        _re.MULTILINE
-    )
-    for m in pattern.finditer(text):
-        name   = m.group(1).strip().title()
-        gender = "Men" if m.group(2) == "M" else "Women"
-        par    = int(m.group(3))
-        cr     = float(m.group(4))
-        slope  = int(m.group(5))
-        # Skip header row
-        if name in ("Tee Name", "Gender", "Course"):
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line or "Tee Name" in line or "Gender" in line:
             continue
+
+        # Split on M or F gender marker
+        gm = _re.search(r"^(.*?)(M|F)(.+)$", line)
+        if not gm:
+            continue
+
+        raw_name    = gm.group(1).strip()
+        gender_char = gm.group(2)
+        numbers_str = gm.group(3)
+
+        # Clean tee name
+        name = _re.sub(r"^[\d\s./]+", "", raw_name).strip().title()
+        if not name:
+            nums_in_name = _re.findall(r"\d+", raw_name)
+            name = nums_in_name[-1] if nums_in_name else raw_name.strip()
+        if not name or name.lower() in ("tee name", "gender", "par", "course"):
+            continue
+
+        # Split on first "/" to isolate par+CR+bogey+slope from F9/B9 fractions
+        main = numbers_str.split("/")[0].replace(" ", "")
+
+        # Try 3-digit slope first, then 2-digit if out of range
+        par, cr, slope = None, None, None
+        for slope_digits in (3, 2):
+            pat = (_re.compile(r"^(\d{2})(\d{2,3}\.\d)(\d{2,3}\.\d)(\d{" + str(slope_digits) + r"})"))
+            dm = pat.match(main)
+            if dm:
+                p, c, _, s = int(dm.group(1)), float(dm.group(2)), dm.group(3), int(dm.group(4))
+                if 50 <= s <= 155:
+                    par, cr, slope = p, c, s
+                    break
+
+        if par is None:
+            # Fallback: spaced format
+            nums = _re.findall(r"[\d]+\.?[\d]*", numbers_str)
+            if len(nums) >= 4:
+                try:
+                    par, cr, slope = int(nums[0]), float(nums[1]), int(nums[3])
+                except (ValueError, IndexError):
+                    continue
+
+        if par is None:
+            continue
+
+        gender = "Men" if gender_char == "M" else "Women"
+        if not (50 <= slope <= 155 and 55 <= cr <= 85 and 60 <= par <= 80):
+            continue
+
         key = (name, gender)
         if key not in seen:
             seen.add(key)
@@ -653,16 +692,20 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
 
     # Extract club name from text if not provided
     if not club_name:
-        # First non-empty line before "Tee Name" header is usually the club name
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        for line in lines:
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line or len(line) < 5:
+                continue
             if "Tee Name" in line or "Gender" in line:
                 break
-            if len(line) > 5 and not line.startswith("National") and not line.startswith("Course Rating"):
-                club_name = line.split("(")[0].strip()
-                break
+            if not line.startswith("National") and not line.startswith("Course Rating"):
+                candidate = line.split("(")[0].strip()
+                candidate = _re.sub(r"^[\d\s.]+", "", candidate).strip()
+                if candidate:
+                    club_name = candidate
+                    break
 
-    print(f"parse_ncrdb_paste: {len(tees)} tees, club='{club_name}'")
+    print(f"parse_ncrdb_paste: {len(tees)} tees, club=\'{club_name}\'")
     if tees:
         return [{"club": club_name or "Golf Club", "name": club_name or "Golf Club",
                  "url": "", "tees": tees}]
