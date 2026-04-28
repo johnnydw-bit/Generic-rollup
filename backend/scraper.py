@@ -237,12 +237,13 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
     Find a UK golf course tee/rating data without any search API.
-    Strategy:
     1. Generate likely Intelligent Golf subdomain slugs from the name
-    2. Probe each one — if it responds, fetch the slope/rating page
-    3. Return URL candidates for the user to confirm
+    2. Probe each one for publicly accessible slope/rating pages
+    3. Also try Golfshake as fallback
+    Returns URL candidates for the user to pick from.
     """
     import urllib.parse, re as _re
+    from bs4 import BeautifulSoup as _BS
     q = course_name.strip()
 
     # Direct URL — skip search, fetch tee data immediately
@@ -250,20 +251,20 @@ async def search_course_on_18birdies(course_name: str) -> list[dict]:
         return await fetch_course_from_url(q)
 
     # Generate slug candidates from the club name
-    clean = _re.sub(r"(golf|club|gc|g\.c\.)", "", q, flags=_re.IGNORECASE)
+    clean = _re.sub(r"\b(golf|club|gc|g\.c\.)\b", "", q, flags=_re.IGNORECASE)
     clean = _re.sub(r"[^a-z0-9\s]", "", clean.lower()).strip()
     words = clean.split()
 
     slugs = []
-    slugs.append("".join(words))          # e.g. "hankleycommon"
-    if words:
-        slugs.append(words[0])             # e.g. "hankley"
+    slugs.append("".join(words))
+    if words: slugs.append(words[0])
     if len(words) >= 2:
-        slugs.append("".join(words[:2]))   # e.g. "hankleycommon" (same)
-        slugs.append("-".join(words[:2]))  # e.g. "hankley-common"
+        slugs.append("-".join(words[:2]))
+        slugs.append("".join(words[:2]))
     if len(words) >= 3:
         slugs.append("".join(words[:3]))
-    slugs = list(dict.fromkeys(slugs))     # dedupe
+        slugs.append("-".join(words[:3]))
+    slugs = list(dict.fromkeys(slugs))
 
     print(f"Trying IG slugs for '{q}': {slugs}")
 
@@ -273,54 +274,104 @@ async def search_course_on_18birdies(course_name: str) -> list[dict]:
         "Accept-Language": "en-GB,en;q=0.9",
     }
 
-    # Pages to try on each IG subdomain (in priority order)
+    # Public slope/rating pages to try (login-protected pages excluded)
     ig_pages = [
         "/slope_rating",
         "/slope_ratings",
         "/course_and_slope_ratings",
         "/whs_-_course_slope_rating_tables",
+        "/course-rating",
+        "/course_handicap_table",
         "/scorecard",
-        "/hcaplist.php?action=masterhcap",
+    ]
+
+    # Keywords that indicate a page is login-protected or not useful
+    protected_keywords = [
+        "please log in", "please login", "members only",
+        "login required", "sign in to", "log in to access",
+        "_csrf_token", "loginform", "memberid",
     ]
 
     candidates = []
     async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=10.0) as client:
         for slug in slugs:
             base = f"https://{slug}.intelligentgolf.co.uk"
-            # First probe the root to see if the subdomain exists
             try:
+                # Probe root
                 probe = await client.get(base + "/", timeout=6.0)
-                if probe.status_code not in (200, 301, 302):
+                if probe.status_code not in (200, 301, 302, 403):
                     continue
-                # Check it's actually a golf club site
-                if "intelligentgolf" not in probe.text.lower() and "golf" not in probe.text.lower():
+                page_text_lower = probe.text.lower()
+                # Must look like an IG golf site
+                if "intelligentgolf" not in page_text_lower and "golf" not in page_text_lower:
                     continue
                 print(f"  Found IG site: {base}")
 
-                # Try each slope rating page
                 for page in ig_pages:
                     url = base + page
                     try:
                         r = await client.get(url, timeout=6.0)
-                        if r.status_code == 200 and len(r.text) > 500:
-                            # Extract club name from page
-                            from bs4 import BeautifulSoup as _BS
-                            soup = _BS(r.text, "html.parser")
-                            title = soup.find("title")
-                            club_name = title.get_text(strip=True).split("::")[0].split("|")[0].strip() if title else slug.title() + " Golf Club"
-                            candidates.append({
-                                "search_result": True,
-                                "title": f"{club_name} — {page.strip('/')}",
-                                "url": url,
-                            })
-                            print(f"    Found page: {url}")
-                            break  # Found a good page for this slug, move on
-                    except Exception:
+                        if r.status_code != 200 or len(r.text) < 500:
+                            continue
+                        text_lower = r.text.lower()
+                        # Skip login/protected pages
+                        if any(kw in text_lower for kw in protected_keywords):
+                            print(f"    Skipping protected page: {url}")
+                            continue
+                        # Must contain slope/rating content
+                        if not any(kw in text_lower for kw in ["slope", "course rating", "cr ", "sss", "handicap"]):
+                            continue
+                        # Get club name from page title
+                        soup = _BS(r.text, "html.parser")
+                        title_el = soup.find("title")
+                        raw_title = title_el.get_text(strip=True) if title_el else ""
+                        # Clean up IG title format "Page Name :: Club Name"
+                        parts = [p.strip() for p in _re.split(r"::|\|", raw_title)]
+                        club_name = next((p for p in reversed(parts) if len(p) > 4), slug.replace("-"," ").title() + " Golf Club")
+                        page_label = page.strip("/").replace("_"," ").replace("-"," ").title()
+                        candidates.append({
+                            "search_result": True,
+                            "title": f"{club_name} — {page_label}",
+                            "url": url,
+                        })
+                        print(f"    Found public page: {url}")
+                        break  # One page per slug is enough
+                    except Exception as e:
+                        print(f"    Error on {url}: {e}")
                         continue
-            except Exception:
+            except Exception as e:
+                print(f"  Error probing {base}: {e}")
                 continue
 
-    print(f"Found {len(candidates)} IG candidates for '{q}'")
+        # Fallback: try Golfshake direct URL construction
+        if not candidates:
+            print(f"  No IG pages found, trying Golfshake for '{q}'")
+            gs_slug = "-".join(
+                (_re.sub(r"[^a-z0-9]", "", w.lower()) for w in q.split()
+                 if w.lower() not in ("the","a","an","of","at","&","and"))
+            )
+            gs_url = f"https://www.golfshake.com/course/search.php?name={urllib.parse.quote(q)}"
+            try:
+                r = await client.get(gs_url, timeout=8.0)
+                if r.status_code == 200 and "course/view/" in r.text:
+                    soup = _BS(r.text, "html.parser")
+                    for a in soup.select("a[href*='/course/view/']")[:4]:
+                        href = a.get("href","")
+                        if not href.startswith("http"):
+                            href = "https://www.golfshake.com" + href
+                        href = href.split("?")[0]
+                        label = a.get_text(strip=True) or href
+                        if href not in [c["url"] for c in candidates]:
+                            candidates.append({
+                                "search_result": True,
+                                "title": label[:80],
+                                "url": href,
+                            })
+                            print(f"    Golfshake result: {href}")
+            except Exception as e:
+                print(f"  Golfshake error: {e}")
+
+    print(f"Found {len(candidates)} candidates for '{q}'")
     return candidates
 
 
