@@ -624,8 +624,9 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
     import re as _re
     tees = []
     seen = set()
+    # Match: TeeName  M/F  Par  CR  BogeyR  Slope (yardage optional)
     pattern = _re.compile(
-        r'^([A-Za-z][A-Za-z\s]*?)\s+(M|F)\s+(\d+)\s+([\d.]+)\s+[\d.]+\s+(\d+).*?(\d{4,5})\s*$',
+        r'^([A-Za-z][A-Za-z\s]*?)\s+(M|F)\s+(\d+)\s+([\d.]+)\s+[\d.]+\s+(\d+)',
         _re.MULTILINE
     )
     for m in pattern.finditer(text):
@@ -634,9 +635,11 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
         par    = int(m.group(3))
         cr     = float(m.group(4))
         slope  = int(m.group(5))
-        yds    = int(m.group(6))
+        # Skip header row
+        if name in ("Tee Name", "Gender", "Course"):
+            continue
         key = (name, gender)
-        if key not in seen and 3000 < yds < 8000:
+        if key not in seen:
             seen.add(key)
             tees.append({
                 "name":          name,
@@ -644,7 +647,7 @@ def parse_ncrdb_paste(text: str, club_name: str = "") -> list[dict]:
                 "par":           par,
                 "course_rating": cr,
                 "slope":         slope,
-                "yardage":       yds,
+                "yardage":       None,
                 "colour":        _tee_colour(name),
             })
 
