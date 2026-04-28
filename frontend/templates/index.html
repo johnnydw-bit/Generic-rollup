@@ -1850,6 +1850,10 @@ async function searchCourse() {
 
     // Show URL candidates as a dropdown
     if (data.courses[0].search_result) {
+      if (data.courses[0].url === '') {
+        statusEl.innerHTML = data.courses[0].title + '<br><small>Add <b>GOOGLE_CSE_KEY</b> and <b>GOOGLE_CSE_ID</b> to Render env vars. Free setup at <a href="https://programmablesearchengine.google.com/" target="_blank" style="color:#1a73e8;">programmablesearchengine.google.com ↗</a></small>';
+        return;
+      }
       statusEl.textContent = 'Select the best match:';
       const opts = data.courses.map((c, i) =>
         `<option value="${i}">${c.title || c.url}</option>`
