@@ -576,19 +576,13 @@ def _save_course(name: str, club: str, tees: list[dict]) -> int:
     """Insert a new course and its tees, return the course_id."""
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Insert course — if same club name exists reuse it
+            # Insert course and always get the id back
             cur.execute("""
                 INSERT INTO courses (name, club)
                 VALUES (%s, %s)
-                ON CONFLICT DO NOTHING
                 RETURNING id
             """, (name, club))
-            row = cur.fetchone()
-            if row:
-                course_id = row["id"]
-            else:
-                cur.execute("SELECT id FROM courses WHERE name = %s AND club = %s", (name, club))
-                course_id = cur.fetchone()["id"]
+            course_id = cur.fetchone()["id"]
 
             for t in tees:
                 cur.execute("""
