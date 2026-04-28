@@ -236,78 +236,117 @@ async def scrape_whs_indices(ig_username: str, ig_pin: str) -> dict:
 
 async def search_course_on_18birdies(course_name: str) -> list[dict]:
     """
-    Step 1 of 2: Use the Anthropic API with web_search to find candidate
-    golf course URLs for the user to choose from.
-    Returns a list of {name, url} dicts — no tee data yet.
-    Step 2 (fetch_course_from_url) is called once the user picks one.
+    Search Google for a golf course by name/location and return URL candidates.
+    Returns list of {search_result:true, title, url} for the user to pick from.
+    Once user picks a URL, fetch_course_from_url is called to get tee data.
     """
-    import os, json as _json
+    import urllib.parse
     q = course_name.strip()
 
-    # If it's already a URL, skip search and fetch directly
+    # Direct URL — skip search, fetch tee data immediately
     if q.startswith("http"):
         return await fetch_course_from_url(q)
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        print("No ANTHROPIC_API_KEY — cannot search")
-        return []
+    # Append golf-specific terms to narrow results
+    search_term = f"{q} golf club slope rating course rating"
+    search_url = (
+        f"https://www.google.com/search"
+        f"?q={urllib.parse.quote(search_term)}&num=10&gl=gb&hl=en"
+    )
 
-    prompt = f"""Search the web for the official website or handicap/slope rating page for the UK golf club named "{q}".
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
-Find up to 4 real candidate URLs. Prefer:
-1. The club's own intelligentgolf-hosted site (e.g. clubname.intelligentgolf.co.uk/slope_rating or /hcaplist.php)
-2. The club's own website with a slope/rating page
-3. Any page that clearly shows Course Rating and Slope data for the club
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=20.0) as client:
+        try:
+            resp = await client.get(search_url)
+            print(f"Google search status: {resp.status_code} for '{q}'")
 
-Return ONLY a JSON array, no other text. Format:
-[
-  {{"name": "Full Club Name", "url": "https://..."}},
-  ...
-]"""
+            if resp.status_code != 200:
+                print(f"Google blocked with {resp.status_code}, trying alternative")
+                # Fallback: try a different User-Agent
+                headers2 = dict(headers)
+                headers2["User-Agent"] = (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+                resp = await client.get(search_url, headers=headers2)
+                print(f"Retry status: {resp.status_code}")
 
-    try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": "claude-haiku-4-5-20251001",
-                    "max_tokens": 500,
-                    "tools": [{"type": "web_search_20250305", "name": "web_search"}],
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-            )
-            data = resp.json()
-            print(f"Anthropic search status: {resp.status_code}")
+            print(f"Google response length: {len(resp.text)}, first 200: {resp.text[:200]!r}")
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-            # Extract text blocks from response
-            text = ""
-            for block in data.get("content", []):
-                if block.get("type") == "text":
-                    text += block.get("text", "")
+            # Count all links for debug
+            all_links = soup.find_all("a", href=True)
+            print(f"Total links on page: {len(all_links)}")
+            # Show first few hrefs to understand structure
+            for a in all_links[:5]:
+                print(f"  href sample: {a['href'][:80]!r}")
 
-            print(f"Anthropic response text: {text[:300]}")
+            # Extract result URLs — Google wraps them in /url?q= redirects
+            results = []
+            seen = set()
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                # Google result links
+                if href.startswith("/url?q="):
+                    actual = href.split("/url?q=")[1].split("&")[0]
+                    actual = urllib.parse.unquote(actual)
+                elif "google.com" not in href and href.startswith("http"):
+                    actual = href
+                else:
+                    continue
 
-            # Parse JSON array from response
-            import re as _re
-            m = _re.search(r'\[.*?\]', text, _re.DOTALL)
-            if not m:
-                print("No JSON array found in response")
-                return []
+                # Filter to golf-relevant URLs only
+                if not actual.startswith("http"):
+                    continue
+                if actual in seen:
+                    continue
+                # Skip ad/tracking/irrelevant domains
+                skip = ["google.", "youtube.", "facebook.", "twitter.",
+                        "instagram.", "wikipedia.", "amazon.", "ebay.",
+                        "tripadvisor.", "booking.", "expedia."]
+                if any(s in actual for s in skip):
+                    continue
 
-            candidates = _json.loads(m.group(0))
-            # Return as search results with url_only flag so frontend shows picker
-            return [{"search_result": True, "name": c.get("name",""), "url": c.get("url","")}
-                    for c in candidates if c.get("url","").startswith("http")]
+                seen.add(actual)
+                # Get the visible title text nearest to this link
+                title = a.get_text(strip=True)
+                if not title:
+                    title = actual.split("/")[2]  # domain as fallback
+                # Keep title short
+                title = title[:80]
 
-    except Exception as e:
-        print(f"Anthropic search error: {e}")
-        return []
+                results.append({
+                    "search_result": True,
+                    "title": title,
+                    "url": actual,
+                })
+
+                if len(results) >= 8:
+                    break
+
+            print(f"Google search found {len(results)} results for '{q}'")
+            for r in results:
+                print(f"  {r['url']}")
+
+            return results
+
+        except Exception as e:
+            print(f"Google search error: {e}")
+            return []
 
 
 async def fetch_course_from_url(url: str, client=None) -> list[dict]:
