@@ -99,6 +99,23 @@ def _init_schema():
             """)
 
             cur.execute("""
+                ALTER TABLE courses
+                    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            """)
+            # Remove duplicate courses (keep lowest id)
+            cur.execute("""
+                DELETE FROM courses WHERE id NOT IN (
+                    SELECT MIN(id) FROM courses GROUP BY name, club
+                )
+            """)
+            try:
+                cur.execute("""
+                    ALTER TABLE courses ADD CONSTRAINT courses_name_club_unique UNIQUE (name, club)
+                """)
+            except Exception:
+                pass  # Constraint already exists
+
+            cur.execute("""
                 ALTER TABLE rounds
                     ADD COLUMN IF NOT EXISTS whs_mode       BOOLEAN NOT NULL DEFAULT FALSE,
                     ADD COLUMN IF NOT EXISTS whs_index_used NUMERIC(4,1),
@@ -114,7 +131,8 @@ def _init_schema():
                     id          SERIAL PRIMARY KEY,
                     name        TEXT NOT NULL,
                     club        TEXT NOT NULL,
-                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (name, club)
                 )
             """)
 
@@ -583,6 +601,7 @@ def _save_course(name: str, club: str, tees: list[dict]) -> int:
             cur.execute("""
                 INSERT INTO courses (name, club)
                 VALUES (%s, %s)
+                ON CONFLICT (name, club) DO UPDATE SET name = EXCLUDED.name
                 RETURNING id
             """, (name, club))
             course_id = cur.fetchone()["id"]
