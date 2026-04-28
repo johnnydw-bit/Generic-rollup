@@ -683,6 +683,18 @@
           <option value="">Select tee…</option>
         </select>
       </div>
+      <div class="settings-row">
+        <button class="toggle-btn" onclick="toggleAddCourse()" id="addCourseToggleBtn" style="font-size:11px;">+ Add course</button>
+      </div>
+      <!-- Add course panel -->
+      <div id="addCoursePanel" style="display:none;margin-top:6px;">
+        <div class="settings-row">
+          <input class="settings-input" id="courseSearchInput" type="text" placeholder="Type course name…" style="flex:1;" />
+          <button class="toggle-btn" onclick="searchCourse()" style="margin-left:6px;font-size:11px;" id="courseSearchBtn">Search</button>
+        </div>
+        <div id="courseSearchStatus" style="font-size:11px;color:#666;padding:4px 0;"></div>
+        <div id="courseSearchResults" style="margin-top:4px;"></div>
+      </div>
     </div>
 
     <!-- Section 5: Handicap Adjustment Table (Stableford only) -->
@@ -1804,6 +1816,101 @@ async function loadCourseOptions(selectedCourseId, selectedTeeId) {
     });
     if (selectedCourseId) await loadTeeOptions(selectedCourseId, selectedTeeId);
   } catch(e) {}
+}
+
+function toggleAddCourse() {
+  const panel = document.getElementById('addCoursePanel');
+  const btn   = document.getElementById('addCourseToggleBtn');
+  const open  = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? '✕ Cancel' : '+ Add course';
+  if (open) {
+    document.getElementById('courseSearchInput').focus();
+    document.getElementById('courseSearchResults').innerHTML = '';
+    document.getElementById('courseSearchStatus').textContent = '';
+  }
+}
+
+async function searchCourse() {
+  const q = document.getElementById('courseSearchInput').value.trim();
+  if (q.length < 3) { alert('Please enter at least 3 characters'); return; }
+  const statusEl  = document.getElementById('courseSearchStatus');
+  const resultsEl = document.getElementById('courseSearchResults');
+  const btn       = document.getElementById('courseSearchBtn');
+  btn.disabled = true;
+  statusEl.textContent = 'Searching…';
+  resultsEl.innerHTML = '';
+  try {
+    const resp = await fetch(`/api/courses/search?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    if (!data.courses || data.courses.length === 0) {
+      statusEl.textContent = 'No courses found. Try a different search.';
+      return;
+    }
+    statusEl.textContent = `Found ${data.courses.length} result${data.courses.length > 1 ? 's' : ''} — select to add:`;
+    resultsEl.innerHTML = data.courses.map((c, ci) => `
+      <div class="course-result" style="border:1px solid #ccc;border-radius:4px;padding:6px;margin-bottom:6px;background:#fafafa;">
+        <div style="font-weight:700;font-size:12px;">${c.club}</div>
+        <div style="margin:4px 0;">
+          ${c.tees.map((t, ti) => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
+              <input type="checkbox" checked data-ci="${ci}" data-ti="${ti}" />
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.colour};border:1px solid #999;"></span>
+              ${t.name} (${t.gender}) — ${t.yardage}yds, Par ${t.par}, CR ${t.course_rating}, Slope ${t.slope}
+            </label>
+          `).join('')}
+        </div>
+        <button class="toggle-btn" style="font-size:11px;" onclick="saveCourseResult(${ci})">✓ Add this course</button>
+      </div>
+    `).join('');
+    // Store results for saveCourseResult to reference
+    window._courseSearchResults = data.courses;
+  } catch(e) {
+    statusEl.textContent = 'Search failed. Please try again.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveCourseResult(courseIndex) {
+  const course = window._courseSearchResults[courseIndex];
+  if (!course) return;
+  // Collect only checked tees
+  const checks = document.querySelectorAll(`input[data-ci="${courseIndex}"]`);
+  const tees = [];
+  checks.forEach((cb, ti) => {
+    if (cb.checked) tees.push(course.tees[parseInt(cb.dataset.ti)]);
+  });
+  if (tees.length === 0) { alert('Select at least one tee'); return; }
+  const statusEl = document.getElementById('courseSearchStatus');
+  statusEl.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/api/courses/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ club: course.club, name: course.name, tees }),
+    });
+    const data = await resp.json();
+    statusEl.textContent = `✓ ${course.club} added successfully!`;
+    document.getElementById('courseSearchResults').innerHTML = '';
+    // Reload course dropdown and select the new course
+    await loadCourseOptions();
+    const sel = document.getElementById('sCourseSelect');
+    // Select the newly added course
+    for (let opt of sel.options) {
+      if (opt.text.includes(course.club.substring(0, 10))) {
+        sel.value = opt.value;
+        await loadTeeOptions(parseInt(opt.value));
+        break;
+      }
+    }
+    // Close the panel after 1.5s
+    setTimeout(() => {
+      toggleAddCourse();
+      statusEl.textContent = '';
+    }, 1500);
+  } catch(e) {
+    statusEl.textContent = 'Save failed. Please try again.';
+  }
 }
 
 async function loadTeeOptions(courseId, selectedTeeId) {
