@@ -43,7 +43,7 @@ from backend.db import (
     init_db,
     close_db,
 )
-from backend.scraper import scrape_players, search_course_on_18birdies, fetch_course_from_url
+from backend.scraper import scrape_players, search_course_on_18birdies, fetch_course_from_url, parse_ncrdb_paste
 
 load_dotenv()
 
@@ -730,6 +730,20 @@ async def fetch_course(url: str):
     except Exception as e:
         print(f"Fetch error: {e}")
         raise HTTPException(500, f"Fetch failed: {str(e)}")
+
+class ParsePasteRequest(BaseModel):
+    text: str
+    club_name: str = ""
+
+@app.post("/api/courses/parse-paste")
+async def parse_course_paste(body: ParsePasteRequest):
+    """Parse tee data from text copied from an NCRDB course page."""
+    try:
+        results = parse_ncrdb_paste(body.text, body.club_name)
+        return {"courses": results}
+    except Exception as e:
+        raise HTTPException(500, f"Parse failed: {str(e)}")
+
 
 @app.post("/api/courses/save")
 async def save_course_endpoint(body: SaveCourseRequest):
