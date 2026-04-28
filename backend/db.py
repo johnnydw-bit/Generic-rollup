@@ -165,6 +165,8 @@ def _init_schema():
 
             # Reset sequence to avoid conflicts with explicitly seeded IDs
             cur.execute("SELECT setval('courses_id_seq', (SELECT MAX(id) FROM courses))")
+
+            clandon_tees = [
                 (2, 'White',  'Men',   '#FFFFFF', 6464, 72, 71.9, 135),
                 (2, 'Yellow', 'Men',   '#FFD700', 5925, 72, 68.9, 128),
                 (2, 'Red',    'Women', '#CC0000', 5575, 72, 73.0, 134),
