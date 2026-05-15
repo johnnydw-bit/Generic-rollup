@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#2D2B5B"/>
-  <title>Bramley Rollup</title>
+  <title>{{ tenant_name }} Rollup</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <link rel="apple-touch-icon" href="/static/icon-192.png"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -272,6 +272,7 @@
     .rollup-radio { width: 18px; height: 18px; accent-color: #2D2B5B; flex-shrink: 0; }
     .add-rollup-btn { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px dashed #2D2B5B60; background: transparent; color: #2D2B5B; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .settings-btn { background: none; border: none; cursor: pointer; color: #FFD700; font-size: 20px; flex-shrink: 0; }
+
   </style>
 </head>
 <body>
@@ -280,11 +281,11 @@
 <div id="screen0" class="screen active">
   <div class="header">
     <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Rollup Manager"/>
     </div>
     <div class="header-title">
-      <div class="club">Bramley Golf Club</div>
-      <div class="society">Rollup Manager</div>
+      <div class="club" id="s0TenantName">{{ tenant_name }}</div>
+      <div class="society">Select your rollup</div>
     </div>
   </div>
   <div class="s0-body">
@@ -329,10 +330,10 @@
 <div id="screen1" class="screen">
   <div class="header">
     <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Bramley Golf Club"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="{{ tenant_name }}"/>
     </div>
     <div class="header-title">
-      <div class="club" id="s1RollupName">Bramley Golf Club</div>
+      <div class="club" id="s1RollupName">{{ tenant_name }}</div>
       <div class="society">Rollup Manager</div>
     </div>
     <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
@@ -964,6 +965,10 @@
 
 
 <script>
+// Injected by server — identifies which club this page belongs to
+const TENANT_SLUG = "{{ tenant_slug }}";
+const TENANT_NAME = "{{ tenant_name }}";
+
 // ═══════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════
@@ -991,12 +996,27 @@ let state = {
 };
 
 let session = {
+  // Tenant (club) — set from server-injected constants
+  tenantSlug: TENANT_SLUG,
+  tenantName: TENANT_NAME,
+  // Rollup / IG
   rollupId: null,
   rollupName: '',
   rollupTerm: '',
   igUsername: '',
   igPin: '',
 };
+
+// ═══════════════════════════════════════════
+// API fetch helper — injects X-Tenant-Slug on every call
+// ═══════════════════════════════════════════
+function apiFetch(url, options = {}) {
+  const headers = {
+    ...(options.headers || {}),
+    'X-Tenant-Slug': session.tenantSlug,
+  };
+  return fetch(url, { ...options, headers });
+}
 
 // ═══════════════════════════════════════════
 // Screen management
@@ -1018,16 +1038,19 @@ function goBack() {
 }
 
 function hasValidSession() {
-  return !!(session.rollupId && session.rollupName);
+  return !!(session.tenantSlug && session.rollupId && session.rollupName);
 }
 
 // ═══════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════
 async function init() {
+  // Tenant slug/name come from server-injected constants — no login needed
+  document.getElementById('s0TenantName').textContent = session.tenantName;
+
   session.igUsername = localStorage.getItem('ig_username') || '';
-  session.igPin = localStorage.getItem('ig_pin') || '';
-  session.rollupId = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
+  session.igPin      = localStorage.getItem('ig_pin')      || '';
+  session.rollupId   = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
   session.rollupName = localStorage.getItem('rollup_name') || '';
   session.rollupTerm = localStorage.getItem('rollup_term') || '';
 
@@ -1045,7 +1068,8 @@ async function init() {
 
 async function loadRollupOptions() {
   try {
-    const resp = await fetch('/api/rollups');
+    const resp = await apiFetch('/api/rollups');
+    if (!resp.ok) return;
     const data = await resp.json();
     const sel = document.getElementById('rollupSelect');
     sel.innerHTML = '<option value="">Choose a rollup…</option>';
@@ -1073,7 +1097,7 @@ function onRollupSelectChange() {
 function updateHeaderNames() {
   ['s1RollupName','s2RollupName','s3RollupName','s4RollupName'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.textContent = session.rollupName || 'Bramley Golf Club';
+    if (el) el.textContent = session.rollupName || session.tenantName;
   });
 }
 
@@ -1086,7 +1110,7 @@ function setTodayDate() {
 
 async function loadAuthStatus() {
   try {
-    const resp = await fetch(`/auth/status?rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/auth/status?rollup_id=${session.rollupId}`);
     const data = await resp.json();
     const el = document.getElementById('lastRoundInfo');
     if (data.last_round_date && data.last_round_date !== 'No previous round') {
@@ -1145,7 +1169,7 @@ async function confirmAddRollup() {
   const term = document.getElementById('newRollupTerm').value.trim().toUpperCase();
   if (!name || !term) { alert('Please enter both name and search term.'); return; }
   try {
-    const resp = await fetch('/api/rollups/add', {
+    const resp = await apiFetch('/api/rollups/add', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({name, ig_search_term: term}),
     });
@@ -1177,7 +1201,7 @@ async function loadPlayers() {
   statusEl.className = 'status-bar status-neutral';
 
   try {
-    const resp = await fetch('/api/load-players', {
+    const resp = await apiFetch('/api/load-players', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         date, ig_username: session.igUsername, ig_pin: session.igPin,
@@ -1209,7 +1233,7 @@ async function loadPlayers() {
 
 async function loadRollupSettings() {
   try {
-    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/settings?rollup_id=${session.rollupId}`);
     if (resp.ok) state.rollupSettings = await resp.json();
   } catch(e) {}
 }
@@ -1244,7 +1268,7 @@ async function setScoringMode(mode) {
   // Persist to server
   try {
     const s = state.rollupSettings;
-    await fetch('/api/settings', {
+    await apiFetch('/api/settings', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ ...s, rollup_id: session.rollupId, scoring_mode: mode }),
     });
@@ -1452,7 +1476,7 @@ function updateScore(idx, val) {
 async function recalculate() {
   setSaveState('saving');
   try {
-    const resp = await fetch('/api/autosave', {
+    const resp = await apiFetch('/api/autosave', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         date: state.roundDate, players: state.players,
@@ -1508,7 +1532,7 @@ async function saveRound() {
   if (scored.length === 0) { alert('No scores entered.'); return; }
   if (!confirm(`Save round for ${scored.length} players on ${state.roundDate}?`)) return;
   try {
-    const resp = await fetch('/api/save-round', {
+    const resp = await apiFetch('/api/save-round', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         date: state.roundDate, players: state.players,
@@ -1549,7 +1573,7 @@ async function showResultsScreen() {
 
 async function loadRoundDates() {
   try {
-    const resp = await fetch(`/api/round-dates?rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/round-dates?rollup_id=${session.rollupId}`);
     const data = await resp.json();
     state.allRoundDates = data.dates || [];
     state.currentRoundIdx = 0;
@@ -1578,7 +1602,7 @@ async function loadRoundByIdx(idx) {
   document.getElementById('prevRoundBtn').disabled = idx >= state.allRoundDates.length - 1;
   document.getElementById('nextRoundBtn').disabled = idx <= 0;
   try {
-    const resp = await fetch(`/api/round?date=${date}&rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/round?date=${date}&rollup_id=${session.rollupId}`);
     const data = await resp.json();
     renderResults(data.players, date);
   } catch(e) {}
@@ -1618,7 +1642,7 @@ async function showPlayerHistory() {
 
 async function loadPlayerList() {
   try {
-    const resp = await fetch(`/api/players?rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/players?rollup_id=${session.rollupId}`);
     const data = await resp.json();
     state.allPlayers = data.players;
     const sel = document.getElementById('playerSelect');
@@ -1650,7 +1674,7 @@ async function loadHistory(name) {
   const to = document.getElementById('filterTo').value;
   let url = `/api/player-history?name=${encodeURIComponent(name)}&rollup_id=${session.rollupId}`;
   try {
-    const resp = await fetch(url);
+    const resp = await apiFetch(url);
     if (!resp.ok) { showHistoryEmpty(); return; }
     const data = await resp.json();
     let rounds = data.rounds;
@@ -1740,7 +1764,7 @@ async function showSettings() {
 
 async function loadSettingsForm() {
   try {
-    const resp = await fetch(`/api/settings?rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/settings?rollup_id=${session.rollupId}`);
     if (!resp.ok) return;
     const s = await resp.json();
     state.rollupSettings = s;
@@ -1809,7 +1833,7 @@ function onScoringModeChange(mode) {
 
 async function loadCourseOptions(selectedCourseId, selectedTeeId) {
   try {
-    const resp = await fetch('/api/courses');
+    const resp = await apiFetch('/api/courses');
     const data = await resp.json();
     const sel = document.getElementById('sCourseSelect');
     sel.innerHTML = '<option value="">Select course…</option>';
@@ -1854,7 +1878,7 @@ async function parsePastedCourse() {
   statusEl.textContent = 'Parsing tee data\u2026';
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch('/api/courses/parse-paste', {
+    const resp = await apiFetch('/api/courses/parse-paste', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ text: text, club_name: '' }),
@@ -1906,7 +1930,7 @@ async function saveCourseResult(courseIndex) {
   const statusEl = document.getElementById('courseSearchStatus');
   statusEl.textContent = 'Saving\u2026';
   try {
-    const resp = await fetch('/api/courses/save', {
+    const resp = await apiFetch('/api/courses/save', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ club: course.club, name: course.name, tees }),
     });
@@ -1931,7 +1955,7 @@ async function loadTeeOptions(courseId, selectedTeeId) {
   const cid = courseId || parseInt(document.getElementById('sCourseSelect').value);
   if (!cid) return;
   try {
-    const resp = await fetch(`/api/tees?course_id=${cid}`);
+    const resp = await apiFetch(`/api/tees?course_id=${cid}`);
     const data = await resp.json();
     const sel = document.getElementById('sTeeSelect');
     sel.innerHTML = '<option value="">Select tee…</option>';
@@ -2067,7 +2091,7 @@ async function saveSettings() {
   statusEl.textContent = 'Saving…';
 
   try {
-    const resp = await fetch('/api/settings', {
+    const resp = await apiFetch('/api/settings', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
@@ -2111,7 +2135,7 @@ async function showPlayerManager() {
   showScreen('screen6');
   // Populate rollup dropdown
   try {
-    const resp = await fetch('/api/rollups');
+    const resp = await apiFetch('/api/rollups');
     const data = await resp.json();
     const sel = document.getElementById('s6RollupSelect');
     sel.innerHTML = '<option value="">Select rollup…</option>';
@@ -2136,7 +2160,7 @@ async function loadPlayerManager() {
   document.getElementById('s6RollupLabel').textContent = opt.textContent;
   setS6Status('Loading…', 'neutral');
   try {
-    const resp = await fetch(`/api/players/detail?rollup_id=${s6State.rollupId}`);
+    const resp = await apiFetch(`/api/players/detail?rollup_id=${s6State.rollupId}`);
     const data = await resp.json();
     s6State.players = data.players;
     renderPlayerTable();
@@ -2182,7 +2206,7 @@ async function savePlayerHC(playerId) {
   const hc = parseInt(input.value);
   if (isNaN(hc) || hc < 0 || hc > 54) { alert('Handicap must be 0–54.'); return; }
   try {
-    const resp = await fetch('/api/players/update-handicap', {
+    const resp = await apiFetch('/api/players/update-handicap', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ player_id: playerId, handicap: hc, rollup_id: s6State.rollupId }),
     });
@@ -2202,7 +2226,7 @@ async function savePlayerWHS(playerId) {
   if (isNaN(whs) || whs < 0 || whs > 54) { alert('WHS index must be between 0 and 54.'); return; }
   const whsRounded = Math.round(whs * 10) / 10;
   try {
-    const resp = await fetch('/api/players/update-whs-index', {
+    const resp = await apiFetch('/api/players/update-whs-index', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ player_id: playerId, whs_index: whsRounded, rollup_id: s6State.rollupId }),
     });
@@ -2224,7 +2248,7 @@ function promptDeletePlayer(playerId, name) {
 async function confirmDeletePlayer() {
   closeOverlay('deletePlayerOverlay');
   try {
-    const resp = await fetch('/api/players/delete', {
+    const resp = await apiFetch('/api/players/delete', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ player_id: s6State.playerToDelete, rollup_id: s6State.rollupId }),
     });
@@ -2246,7 +2270,7 @@ async function confirmAddPlayer() {
   if (!name) { alert('Please enter a name.'); return; }
   if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
   try {
-    const resp = await fetch('/api/new-player', {
+    const resp = await apiFetch('/api/new-player', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ name, handicap: hc, rollup_id: s6State.rollupId }),
     });
@@ -2266,7 +2290,7 @@ async function syncWhsIndices() {
   }
   setS6Status('Syncing WHS indices from IG…', 'neutral');
   try {
-    const resp = await fetch('/api/scrape-whs-indices', {
+    const resp = await apiFetch('/api/scrape-whs-indices', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         ig_username: igUsername,
@@ -2298,7 +2322,7 @@ function processNewPlayerQueue() {
 async function confirmNewPlayer() {
   const hc = parseInt(document.getElementById('newPlayerHC').value);
   if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}) });
+  await apiFetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}) });
   const p = state.players.find(p => p.name === state.currentNewPlayer);
   if (p) { p.handicap = hc; p.new_player = false; }
   closeOverlay('newPlayerOverlay');
@@ -2348,7 +2372,7 @@ async function lookupWalkupPlayer() {
   document.getElementById('walkupStatus').textContent = 'Looking up…';
   document.getElementById('walkupStatus').style.color = '#888';
   try {
-    const resp = await fetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, rollup_id: session.rollupId}) });
+    const resp = await apiFetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, rollup_id: session.rollupId}) });
     const data = await resp.json();
     if (data.found) {
       state.walkupFoundHC = data.handicap;
@@ -2382,7 +2406,7 @@ async function confirmWalkupPlayer() {
   if (hc === null) {
     hc = parseInt(document.getElementById('walkupHC').value);
     if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-    await fetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc, rollup_id: session.rollupId}) });
+    await apiFetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc, rollup_id: session.rollupId}) });
   }
   state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
   closeOverlay('walkupOverlay');

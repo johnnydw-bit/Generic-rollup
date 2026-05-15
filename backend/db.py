@@ -2,10 +2,22 @@
 # Per-request connections: opens a fresh connection for every DB operation,
 # closes it immediately after. Eliminates stale connection errors from Neon
 # dropping idle connections after ~5 minutes.
+#
+# Multi-tenant architecture (Option A — row-level tenant_id on rollups).
+# Tenants are identified by their URL slug; no tenant-level password is
+# required (the URL is the access key). Admin auth is handled separately
+# in main.py via HTTP Basic Auth against env vars.
+#
+# To migrate to Option B (schema-per-tenant) later: swap _get_conn() to
+# SET search_path = <slug> and remove WHERE tenant_id = %s clauses —
+# main.py and the frontend stay unchanged.
 
 import json
 import os
 import asyncio
+import hashlib
+import binascii
+import secrets
 from functools import partial
 from contextlib import contextmanager
 
@@ -41,12 +53,56 @@ def _run(func, *args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
+# Password helpers  (used for admin credentials only)
+# ---------------------------------------------------------------------------
+
+def _hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 200_000)
+    return binascii.hexlify(salt).decode() + ":" + binascii.hexlify(dk).decode()
+
+
+def _verify_password(stored_hash: str, password: str) -> bool:
+    try:
+        salt_hex, dk_hex = stored_hash.split(":")
+        salt = binascii.unhexlify(salt_hex)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 200_000)
+        return binascii.hexlify(dk).decode() == dk_hex
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Schema init
 # ---------------------------------------------------------------------------
 
 def _init_schema():
     with _get_conn() as conn:
         with conn.cursor() as cur:
+
+            # ── Tenants ──────────────────────────────────────────────────
+            # One row per club/society. Identified by slug (e.g. "bramley").
+            # The slug is embedded in the URL members use to access the app —
+            # no tenant-level password is stored or required.
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tenants (
+                    id         SERIAL PRIMARY KEY,
+                    name       TEXT NOT NULL,
+                    slug       TEXT NOT NULL UNIQUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            # Per-tenant IG credentials (replaces the old app_credentials singleton)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tenant_credentials (
+                    tenant_id   INTEGER PRIMARY KEY REFERENCES tenants(id),
+                    ig_username TEXT NOT NULL DEFAULT '',
+                    ig_pin      TEXT NOT NULL DEFAULT '',
+                    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
 
             # ── Core tables ──────────────────────────────────────────────
 
@@ -57,6 +113,12 @@ def _init_schema():
                     ig_search_term  TEXT NOT NULL,
                     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
+            """)
+
+            # Add tenant_id to rollups (safe upgrade)
+            cur.execute("""
+                ALTER TABLE rollups
+                    ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)
             """)
 
             cur.execute("""
@@ -73,7 +135,6 @@ def _init_schema():
                 )
             """)
 
-            # Safe upgrade — add WHS columns if not present
             cur.execute("""
                 ALTER TABLE players
                     ADD COLUMN IF NOT EXISTS whs_index            NUMERIC(4,1),
@@ -102,7 +163,6 @@ def _init_schema():
                 ALTER TABLE courses
                     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             """)
-            # Remove duplicate courses (keep lowest id) — delete tees first
             cur.execute("""
                 DELETE FROM tees WHERE course_id NOT IN (
                     SELECT MIN(id) FROM courses GROUP BY name, club
@@ -113,7 +173,6 @@ def _init_schema():
                     SELECT MIN(id) FROM courses GROUP BY name, club
                 )
             """)
-            # Add unique constraint using savepoint so failure doesn't abort transaction
             cur.execute("SAVEPOINT before_unique_constraint")
             try:
                 cur.execute("""
@@ -159,7 +218,6 @@ def _init_schema():
                 )
             """)
 
-            # Seed Bramley Golf Club
             cur.execute("""
                 INSERT INTO courses (id, name, club)
                 VALUES (1, 'Bramley', 'Bramley Golf Club')
@@ -182,14 +240,12 @@ def _init_schema():
                     ON CONFLICT (course_id, name, gender) DO NOTHING
                 """, t)
 
-            # Seed Clandon Regis Golf Club
             cur.execute("""
                 INSERT INTO courses (id, name, club)
                 VALUES (2, 'Clandon Regis', 'Clandon Regis Golf Club')
                 ON CONFLICT DO NOTHING
             """)
 
-            # Reset sequence to avoid conflicts with explicitly seeded IDs
             cur.execute("SELECT setval('courses_id_seq', (SELECT MAX(id) FROM courses))")
 
             clandon_tees = [
@@ -244,7 +300,6 @@ def _init_schema():
                 )
             """)
 
-            # Safe upgrade
             cur.execute("""
                 ALTER TABLE rollup_settings
                     ADD COLUMN IF NOT EXISTS scoring_mode           TEXT NOT NULL DEFAULT 'stableford',
@@ -256,6 +311,7 @@ def _init_schema():
                     ADD COLUMN IF NOT EXISTS tee_id                 INTEGER REFERENCES tees(id)
             """)
 
+            # Legacy singleton credentials — kept for backward compatibility
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS app_credentials (
                     id          INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -270,7 +326,44 @@ def _init_schema():
                 ON CONFLICT (id) DO NOTHING
             """)
 
+            # ── Default tenant seed ──────────────────────────────────────
+            # Creates the first tenant from env vars on a fresh deployment.
+            # Existing rollups with tenant_id IS NULL are assigned to it.
+
+            cur.execute("SELECT COUNT(*) FROM tenants")
+            if cur.fetchone()[0] == 0:
+                default_name = os.getenv("DEFAULT_TENANT_NAME", "Bramley Golf Club")
+                default_slug = os.getenv("DEFAULT_TENANT_SLUG", "bramley")
+                cur.execute("""
+                    INSERT INTO tenants (name, slug)
+                    VALUES (%s, %s)
+                    ON CONFLICT (slug) DO NOTHING
+                    RETURNING id
+                """, (default_name, default_slug))
+                row = cur.fetchone()
+                if row:
+                    new_id = row[0]
+                    cur.execute(
+                        "UPDATE rollups SET tenant_id = %s WHERE tenant_id IS NULL",
+                        (new_id,)
+                    )
+                    cur.execute("""
+                        INSERT INTO tenant_credentials (tenant_id, ig_username, ig_pin)
+                        SELECT %s, ig_username, ig_pin FROM app_credentials WHERE id = 1
+                        ON CONFLICT (tenant_id) DO NOTHING
+                    """, (new_id,))
+                    print(f"[db] Default tenant '{default_slug}' created (id={new_id}).")
+
+            # Assign any rollups still missing a tenant to the first tenant
+            cur.execute("""
+                UPDATE rollups SET tenant_id = (SELECT MIN(id) FROM tenants)
+                WHERE tenant_id IS NULL
+                  AND (SELECT COUNT(*) FROM tenants) > 0
+            """)
+
             # ── Indexes ──────────────────────────────────────────────────
+            cur.execute("CREATE INDEX IF NOT EXISTS tenants_slug_idx ON tenants(slug)")
+            cur.execute("CREATE INDEX IF NOT EXISTS rollups_tenant_idx ON rollups(tenant_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS players_rollup_idx ON players(rollup_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rounds_rollup_idx ON rounds(rollup_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rounds_date_idx ON rounds(date DESC)")
@@ -284,38 +377,125 @@ async def init_db():
 
 
 async def close_db():
-    pass  # No pool to close
+    pass
 
 
 # ---------------------------------------------------------------------------
-# Rollups
+# Tenants
 # ---------------------------------------------------------------------------
 
-def _get_all_rollups():
+def _get_tenant_by_slug(slug: str) -> dict | None:
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT id, name, ig_search_term FROM rollups ORDER BY name")
+            cur.execute(
+                "SELECT id, name, slug FROM tenants WHERE slug = %s",
+                (slug.lower(),)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+async def get_tenant_by_slug(slug: str) -> dict | None:
+    return await _run(_get_tenant_by_slug, slug)
+
+
+def _get_all_tenants() -> list[dict]:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, name, slug, created_at FROM tenants ORDER BY name")
             return [dict(r) for r in cur.fetchall()]
 
 
-async def get_all_rollups() -> list[dict]:
-    return await _run(_get_all_rollups)
+async def get_all_tenants() -> list[dict]:
+    return await _run(_get_all_tenants)
 
 
-def _get_or_create_rollup(name: str, ig_search_term: str) -> int:
+def _create_tenant(name: str, slug: str) -> int:
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO rollups (name, ig_search_term)
+                INSERT INTO tenants (name, slug)
                 VALUES (%s, %s)
-                ON CONFLICT (name) DO UPDATE SET ig_search_term = EXCLUDED.ig_search_term
                 RETURNING id
-            """, (name, ig_search_term))
+            """, (name, slug.lower()))
             return cur.fetchone()[0]
 
 
-async def get_or_create_rollup(name: str, ig_search_term: str) -> int:
-    return await _run(_get_or_create_rollup, name, ig_search_term)
+async def create_tenant(name: str, slug: str) -> int:
+    return await _run(_create_tenant, name, slug)
+
+
+def _validate_rollup_tenant(rollup_id: int, tenant_id: int) -> bool:
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM rollups WHERE id = %s AND tenant_id = %s",
+                (rollup_id, tenant_id)
+            )
+            return cur.fetchone() is not None
+
+
+async def validate_rollup_tenant(rollup_id: int, tenant_id: int) -> bool:
+    return await _run(_validate_rollup_tenant, rollup_id, tenant_id)
+
+
+# ---------------------------------------------------------------------------
+# Rollups (tenant-scoped)
+# ---------------------------------------------------------------------------
+
+def _get_all_rollups(tenant_id: int):
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, name, ig_search_term FROM rollups WHERE tenant_id = %s ORDER BY name",
+                (tenant_id,)
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_all_rollups(tenant_id: int) -> list[dict]:
+    return await _run(_get_all_rollups, tenant_id)
+
+
+def _get_or_create_rollup(tenant_id: int, name: str, ig_search_term: str) -> int:
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE rollups SET ig_search_term = %s
+                WHERE name = %s AND tenant_id = %s
+                RETURNING id
+            """, (ig_search_term, name, tenant_id))
+            row = cur.fetchone()
+            if row:
+                return row[0]
+            cur.execute("""
+                INSERT INTO rollups (name, ig_search_term, tenant_id)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (name, ig_search_term, tenant_id))
+            return cur.fetchone()[0]
+
+
+async def get_or_create_rollup(tenant_id: int, name: str, ig_search_term: str) -> int:
+    return await _run(_get_or_create_rollup, tenant_id, name, ig_search_term)
+
+
+# Admin: all rollups across all tenants
+def _get_all_rollups_admin() -> list[dict]:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT r.id, r.name, r.ig_search_term, r.tenant_id,
+                       t.name AS tenant_name, t.slug AS tenant_slug
+                FROM rollups r
+                JOIN tenants t ON t.id = r.tenant_id
+                ORDER BY t.name, r.name
+            """)
+            return [dict(r) for r in cur.fetchall()]
+
+
+async def get_all_rollups_admin() -> list[dict]:
+    return await _run(_get_all_rollups_admin)
 
 
 # ---------------------------------------------------------------------------
@@ -602,10 +782,8 @@ async def get_all_courses() -> list[dict]:
 
 
 def _save_course(name: str, club: str, tees: list[dict]) -> int:
-    """Insert a new course and its tees, return the course_id."""
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Insert course and always get the id back
             cur.execute("""
                 INSERT INTO courses (name, club)
                 VALUES (%s, %s)
@@ -722,7 +900,6 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "team_scoring_method":      "best2",
                 }
             d = dict(row)
-            # Always use rollups table as source of truth for name/term
             d["display_name"]     = d["rollup_name"]
             d["ig_search_term"]   = d["rollup_term"]
             d["run_days"]         = json.loads(d["run_days"])
@@ -811,7 +988,43 @@ async def save_rollup_settings(rollup_id: int, settings: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# App credentials (legacy singleton)
+# Tenant credentials (per-tenant IG login)
+# ---------------------------------------------------------------------------
+
+def _get_tenant_credentials(tenant_id: int) -> dict:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT ig_username, ig_pin FROM tenant_credentials WHERE tenant_id = %s",
+                (tenant_id,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else {"ig_username": "", "ig_pin": ""}
+
+
+async def get_tenant_credentials(tenant_id: int) -> dict:
+    return await _run(_get_tenant_credentials, tenant_id)
+
+
+def _save_tenant_credentials(tenant_id: int, ig_username: str, ig_pin: str):
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tenant_credentials (tenant_id, ig_username, ig_pin, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (tenant_id) DO UPDATE SET
+                    ig_username = EXCLUDED.ig_username,
+                    ig_pin      = EXCLUDED.ig_pin,
+                    updated_at  = NOW()
+            """, (tenant_id, ig_username, ig_pin))
+
+
+async def save_tenant_credentials(tenant_id: int, ig_username: str, ig_pin: str) -> None:
+    await _run(_save_tenant_credentials, tenant_id, ig_username, ig_pin)
+
+
+# ---------------------------------------------------------------------------
+# Legacy credentials (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
 def _get_credentials() -> dict:
