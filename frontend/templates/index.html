@@ -1284,6 +1284,7 @@ function initPlayingHC() {
   const isWhs = s.scoring_mode === 'whs';
   const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
   const hasTee = isWhs && cr != null && slope && par;
+  const reductionPct = (s.winner_reduction_enabled && s.winner_reduction_pct) ? s.winner_reduction_pct : 0;
   state.players.forEach(p => {
     if (p.playing_hc !== undefined && p.playing_hc !== null) return; // already set (e.g. autosave restore)
     // Mirror server-side priority: use temp next-round index if set, else permanent index
@@ -1295,6 +1296,17 @@ function initPlayingHC() {
       hc = Math.round(whsForCalc);
     } else {
       hc = p.handicap !== null && p.handicap !== undefined ? p.handicap : 0;
+    }
+    // Apply winner ban reduction to course HC (whs_index untouched).
+    // Use stored handicap/winner_ban_original_hc ratio so a second win
+    // during the ban applies a further cut automatically (capped at 2x by backend).
+    if (p.winner_ban_entries > 0 && reductionPct > 0) {
+      if (p.winner_ban_original_hc != null && p.handicap != null && p.winner_ban_original_hc > 0) {
+        const ratio = p.handicap / p.winner_ban_original_hc;
+        hc = Math.max(1, Math.round(hc * ratio));
+      } else {
+        hc = Math.max(1, Math.round(hc * (1 - reductionPct / 100)));
+      }
     }
     p.playing_hc = hc;
   });

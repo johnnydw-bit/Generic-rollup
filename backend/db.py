@@ -823,7 +823,10 @@ def _apply_winner_reduction(rollup_id: int, winner_names: list[str],
                         changes.append({"name": p["name"], "event": "winner_cut",
                                         "old_hc": hc, "new_hc": new_hc, "ban_entries": ban_rounds})
                     else:
-                        # Won again during ban: cut current HC, reset ban
+                        # Won again during ban: cut current HC, reset ban — max 2 total cuts
+                        orig_hc = p["winner_ban_original_hc"] or hc
+                        floor_hc = max(1, round(orig_hc * multiplier * multiplier))
+                        new_hc   = max(new_hc, floor_hc)
                         cur.execute("""
                             UPDATE players SET
                                 handicap = %s, winner_ban_entries = %s, winner_prohibited = TRUE
