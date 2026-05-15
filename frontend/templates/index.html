@@ -2501,6 +2501,7 @@ function confirmRemovePlayer() {
 }
 
 function addWalkupPlayer() {
+  state.walkupFoundPlayer = null;
   document.getElementById('walkupName').value = '';
   document.getElementById('walkupHCRow').style.display = 'none';
   document.getElementById('walkupStatus').textContent = '';
@@ -2524,14 +2525,15 @@ async function lookupWalkupPlayer() {
     const resp = await apiFetch('/api/lookup-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, rollup_id: session.rollupId}) });
     const data = await resp.json();
     if (data.found) {
-      state.walkupFoundHC = data.handicap;
-      document.getElementById('walkupStatus').textContent = `Found — handicap ${data.handicap}`;
+      state.walkupFoundPlayer = data;
+      const whsLabel = data.whs_index != null ? `  WHS ${parseFloat(data.whs_index).toFixed(1)}` : '';
+      document.getElementById('walkupStatus').textContent = `Found — HC ${data.handicap}${whsLabel}`;
       document.getElementById('walkupStatus').style.color = '#3B6D11';
       document.getElementById('walkupHCRow').style.display = 'none';
       document.getElementById('walkupLookupBtn').textContent = 'Add player';
       document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
     } else {
-      state.walkupFoundHC = null;
+      state.walkupFoundPlayer = null;
       document.getElementById('walkupStatus').textContent = 'New player — enter starting handicap';
       document.getElementById('walkupStatus').style.color = '#2D2B5B';
       document.getElementById('walkupHCRow').style.display = 'flex';
@@ -2540,6 +2542,7 @@ async function lookupWalkupPlayer() {
       document.getElementById('walkupLookupBtn').onclick = confirmWalkupPlayer;
     }
   } catch(e) {
+    state.walkupFoundPlayer = null;
     document.getElementById('walkupStatus').textContent = 'Lookup failed — enter handicap manually';
     document.getElementById('walkupStatus').style.color = '#A32D2D';
     document.getElementById('walkupHCRow').style.display = 'flex';
@@ -2551,13 +2554,22 @@ async function lookupWalkupPlayer() {
 async function confirmWalkupPlayer() {
   const name = document.getElementById('walkupName').value.trim();
   if (!name) return;
-  let hc = state.walkupFoundHC;
-  if (hc === null) {
+  let playerData = state.walkupFoundPlayer;
+  let hc, whs_index = null, whs_index_next_round = null, winner_ban_entries = 0, winner_ban_original_hc = null;
+  if (playerData) {
+    hc                   = playerData.handicap;
+    whs_index            = playerData.whs_index ?? null;
+    whs_index_next_round = playerData.whs_index_next_round ?? null;
+    winner_ban_entries   = playerData.winner_ban_entries ?? 0;
+    winner_ban_original_hc = playerData.winner_ban_original_hc ?? null;
+  } else {
     hc = parseInt(document.getElementById('walkupHC').value);
     if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
     await apiFetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, handicap: hc, rollup_id: session.rollupId}) });
   }
-  state.players.push({ name, handicap: hc, score: null, team: null, new_player: false });
+  state.players.push({ name, handicap: hc, whs_index, whs_index_next_round,
+                       winner_ban_entries, winner_ban_original_hc,
+                       score: null, team: null, new_player: false });
   closeOverlay('walkupOverlay');
   state.selectedStructure = null;
   updateTeamStructureUI();

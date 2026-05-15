@@ -845,7 +845,15 @@ async def lookup_player(body: LookupRequest, tenant_id: int = Depends(get_curren
         raise HTTPException(500, f"Could not read player list: {str(e)}")
     for p in all_players:
         if p["name"].strip().lower() == body.name.strip().lower():
-            return {"found": True, "name": p["name"], "handicap": p["handicap"]}
+            return {
+                "found":                  True,
+                "name":                   p["name"],
+                "handicap":               p["handicap"],
+                "whs_index":              p.get("whs_index"),
+                "whs_index_next_round":   p.get("whs_index_next_round"),
+                "winner_ban_entries":     p.get("winner_ban_entries", 0),
+                "winner_ban_original_hc": p.get("winner_ban_original_hc"),
+            }
     return {"found": False, "name": body.name}
 
 
