@@ -1286,11 +1286,13 @@ function initPlayingHC() {
   const hasTee = isWhs && cr != null && slope && par;
   state.players.forEach(p => {
     if (p.playing_hc !== undefined && p.playing_hc !== null) return; // already set (e.g. autosave restore)
+    // Mirror server-side priority: use temp next-round index if set, else permanent index
+    const whsForCalc = p.whs_index_next_round != null ? p.whs_index_next_round : p.whs_index;
     let hc;
-    if (hasTee && p.whs_index != null) {
-      hc = Math.round(p.whs_index * (slope / 113) + (cr - par));
-    } else if (p.whs_index != null) {
-      hc = Math.round(p.whs_index);
+    if (hasTee && whsForCalc != null) {
+      hc = Math.round(whsForCalc * (slope / 113) + (cr - par));
+    } else if (whsForCalc != null) {
+      hc = Math.round(whsForCalc);
     } else {
       hc = p.handicap !== null && p.handicap !== undefined ? p.handicap : 0;
     }
