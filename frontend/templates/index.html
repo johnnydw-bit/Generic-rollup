@@ -2496,6 +2496,7 @@ function confirmRemovePlayer() {
   state.selectedStructure = null;
   updateTeamStructureUI();
   updateUnassignedWarning();
+  renderPrizeBar();
   renderGrid();
 }
 
@@ -2561,6 +2562,7 @@ async function confirmWalkupPlayer() {
   state.selectedStructure = null;
   updateTeamStructureUI();
   updateUnassignedWarning();
+  renderPrizeBar();
   renderGrid();
 }
 
