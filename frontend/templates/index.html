@@ -318,9 +318,9 @@
     <div class="header-logo">
       <img src="/static/MOTHS_APP_LOGO.jpg" alt="{{ tenant_name }}"/>
     </div>
-    <div class="header-title">
+    <div class="header-title" onclick="switchRollup()" style="cursor:pointer;" title="Switch rollup">
       <div class="club" id="s1RollupName">{{ tenant_name }}</div>
-      <div class="society">Rollup Manager</div>
+      <div class="society">⇄ Switch rollup</div>
     </div>
     <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
@@ -989,6 +989,19 @@ function apiFetch(url, options = {}) {
     'X-Session-Token': session.sessionToken,
   };
   return fetch(url, { ...options, headers });
+}
+
+// ═══════════════════════════════════════════
+// Rollup switching
+// ═══════════════════════════════════════════
+async function switchRollup() {
+  await loadRollupOptions();
+  // Pre-select current rollup
+  const sel = document.getElementById('rollupSelect');
+  for (const o of sel.options) {
+    if (parseInt(o.value) === session.rollupId) { sel.value = o.value; break; }
+  }
+  showScreen('screen0');
 }
 
 // ═══════════════════════════════════════════
