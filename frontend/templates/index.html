@@ -397,6 +397,7 @@
       <span class="autosave-label" id="saveLabel">Ready</span>
     </div>
   </div>
+  <div id="prizeBar" style="display:none;padding:6px 10px;background:#fffbea;border-bottom:1px solid #ffe066;font-size:11px;color:#2D2B5B;font-weight:600;letter-spacing:0.02em;"></div>
   <div id="teamConfigBar" style="display:none;padding:8px 10px;background:#f8f8f8;border-bottom:1px solid #ddd;">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
       <span style="font-size:11px;color:#2D2B5B;font-weight:700;">Team size:</span>
@@ -847,6 +848,7 @@
             <th>WHS</th>
             <th>Next Rd</th>
             <th>Rds</th>
+            <th>Prize £</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1383,8 +1385,34 @@ function openScoreEntry() {
     'winners_only_2': 'Winners Only 2',
   };
   document.getElementById('s2MethodLabel').textContent = _methodLabels[_sm] || 'Universal HC';
+  renderPrizeBar();
   renderGrid();
   showScreen('screen2');
+}
+
+function renderPrizeBar() {
+  const bar = document.getElementById('prizeBar');
+  const s = state.rollupSettings || {};
+  const entryFee = parseFloat(s.entry_fee) || 0;
+  const places   = parseInt(s.prize_places) || 0;
+  const pcts     = [s.prize_pct_1st, s.prize_pct_2nd, s.prize_pct_3rd, s.prize_pct_4th];
+  const labels   = ['🥇 1st', '🥈 2nd', '🥉 3rd', '4th'];
+  const playerCount = state.players.filter(p => p.score !== null || true).length;
+
+  if (!entryFee || !places || playerCount === 0) { bar.style.display = 'none'; return; }
+
+  const pot = playerCount * entryFee;
+  const parts = [];
+  for (let i = 0; i < places; i++) {
+    const pct = parseFloat(pcts[i]) || 0;
+    if (pct <= 0) continue;
+    const prize = (pot * pct / 100).toFixed(2).replace(/\.00$/, '');
+    parts.push(`${labels[i]}: £${prize}`);
+  }
+  if (parts.length === 0) { bar.style.display = 'none'; return; }
+
+  bar.textContent = `Prize pot (${playerCount} × £${entryFee}): ${parts.join('  ·  ')}`;
+  bar.style.display = 'block';
 }
 
 
@@ -2301,7 +2329,7 @@ async function loadPlayerManager() {
 function renderPlayerTable() {
   const tbody = document.getElementById('s6TableBody');
   if (s6State.players.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>';
     return;
   }
   tbody.innerHTML = s6State.players.map(p => {
@@ -2315,6 +2343,7 @@ function renderPlayerTable() {
       <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
       <td style="font-size:11px;color:#888;">${nextVal}</td>
       <td style="font-size:11px;color:#888;">${p.round_count}</td>
+      <td style="font-size:11px;color:#2D7A2D;font-weight:700;">${p.total_prize_won > 0 ? '£' + parseFloat(p.total_prize_won).toFixed(2) : '—'}</td>
       <td style="display:flex;gap:3px;padding:3px 4px;">
         <button class="s6-save-btn" onclick="savePlayerHC(${p.id})">HC</button>
         <button class="s6-save-whs-btn" onclick="savePlayerWHS(${p.id})">WHS</button>

@@ -49,6 +49,7 @@ from backend.db import (
     save_course,
     get_prohibited_winners,
     validate_rollup_tenant,
+    credit_prize_money,
     init_db,
     close_db,
 )
@@ -177,7 +178,7 @@ async def root(request: Request):
     <!DOCTYPE html>
     <html><head><meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Rollup Manager</title>
+    <title>Competition Manager</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -213,8 +214,8 @@ async def root(request: Request):
     </style>
     </head><body>
     <div class="box">
-      <h1>Rollup Manager</h1>
-      <p class="sub">Sign in to your club's rollup app</p>
+      <h1>Competition Manager</h1>
+      <p class="sub">Sign in to your club's competition app</p>
 
       <div class="tabs">
         <button class="tab active" onclick="showTab('login')">Sign in</button>
@@ -551,7 +552,7 @@ async def admin_dashboard(
     <!DOCTYPE html>
     <html><head><meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Admin — Rollup Manager</title>
+    <title>Admin — Competition Manager</title>
     <style>
       body {{ font-family: -apple-system, sans-serif; background: #f5f5f0;
                padding: 24px; max-width: 800px; margin: 0 auto; }}
@@ -1022,6 +1023,36 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
         return {"players": results, "team_scores": team_scores, "whs_mode": False}
 
 
+def _compute_prize_map(scored: list[dict], pot: float, pcts: list[float]) -> dict:
+    """
+    Return {name: prize_amount} for each finisher who wins prize money.
+    Ties share the combined prize for the positions they occupy.
+    scored must be sorted by score descending before calling.
+    """
+    if not scored or pot <= 0:
+        return {}
+    sorted_players = sorted(scored, key=lambda p: p["score"], reverse=True)
+    prize_map: dict[str, float] = {}
+    i = 0
+    while i < len(sorted_players) and i < len(pcts):
+        tied_score = sorted_players[i]["score"]
+        # collect all players at this score
+        group = []
+        j = i
+        while j < len(sorted_players) and sorted_players[j]["score"] == tied_score:
+            group.append(sorted_players[j])
+            j += 1
+        # sum up prize money for positions i..j-1
+        total_for_group = sum(
+            pot * (pcts[k] / 100) for k in range(i, min(j, len(pcts)))
+        )
+        share = round(total_for_group / len(group), 2)
+        for p in group:
+            prize_map[p["name"]] = share
+        i = j
+    return prize_map
+
+
 @app.post("/api/save-round")
 async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenant)):
     await _assert_rollup_access(body.rollup_id, tenant_id)
@@ -1088,6 +1119,25 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
                 reduction_pct=int((settings or {}).get("winner_reduction_pct", 25)),
                 ban_rounds=int((settings or {}).get("winner_ban_rounds", 3)),
             )
+
+    # Credit prize money to players' cumulative totals
+    entry_fee    = float((settings or {}).get("entry_fee") or 0)
+    prize_places = int((settings or {}).get("prize_places") or 0)
+    if entry_fee > 0 and prize_places > 0:
+        pcts = [
+            float((settings or {}).get("prize_pct_1st") or 0),
+            float((settings or {}).get("prize_pct_2nd") or 0),
+            float((settings or {}).get("prize_pct_3rd") or 0),
+            float((settings or {}).get("prize_pct_4th") or 0),
+        ][:prize_places]
+        scored_results = [r for r in results if r.get("score") is not None]
+        pot = len(scored_results) * entry_fee
+        prize_map = _compute_prize_map(scored_results, pot, pcts)
+        if prize_map:
+            try:
+                await credit_prize_money(body.rollup_id, prize_map)
+            except Exception:
+                pass  # non-fatal — round is already saved
 
     for r in results:
         r["adj_display"] = format_adjustment(r.get("adjustment"))

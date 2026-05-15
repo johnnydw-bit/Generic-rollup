@@ -162,7 +162,8 @@ def _init_schema():
                     ADD COLUMN IF NOT EXISTS whs_index_next_round NUMERIC(4,1),
                     ADD COLUMN IF NOT EXISTS winner_prohibited     BOOLEAN NOT NULL DEFAULT FALSE,
                     ADD COLUMN IF NOT EXISTS winner_ban_entries    INT NOT NULL DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS winner_ban_original_hc INT
+                    ADD COLUMN IF NOT EXISTS winner_ban_original_hc INT,
+                    ADD COLUMN IF NOT EXISTS total_prize_won      NUMERIC(8,2) NOT NULL DEFAULT 0
             """)
 
             cur.execute("""
@@ -606,7 +607,8 @@ def _get_all_players(rollup_id: int):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, name, handicap, whs_index, whs_index_next_round,
-                       winner_prohibited, winner_ban_entries, winner_ban_original_hc
+                       winner_prohibited, winner_ban_entries, winner_ban_original_hc,
+                       total_prize_won
                 FROM players WHERE rollup_id = %s ORDER BY name
             """, (rollup_id,))
             rows = []
@@ -631,13 +633,14 @@ def _get_all_players_detail(rollup_id: int):
                 SELECT p.id, p.name, p.handicap,
                        p.whs_index, p.whs_index_next_round, p.winner_prohibited,
                        p.winner_ban_entries, p.winner_ban_original_hc,
+                       p.total_prize_won,
                        COUNT(r.id) AS round_count
                 FROM players p
                 LEFT JOIN rounds r ON r.player_id = p.id
                 WHERE p.rollup_id = %s
                 GROUP BY p.id, p.name, p.handicap,
                          p.whs_index, p.whs_index_next_round, p.winner_prohibited,
-                         p.winner_ban_entries, p.winner_ban_original_hc
+                         p.winner_ban_entries, p.winner_ban_original_hc, p.total_prize_won
                 ORDER BY p.name
             """, (rollup_id,))
             rows = []
@@ -653,6 +656,24 @@ def _get_all_players_detail(rollup_id: int):
 
 async def get_all_players_detail(rollup_id: int) -> list[dict]:
     return await _run(_get_all_players_detail, rollup_id)
+
+
+def _credit_prize_money(rollup_id: int, prize_map: dict):
+    """Add prize amounts to total_prize_won for named players in this rollup."""
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            for name, amount in prize_map.items():
+                if amount <= 0:
+                    continue
+                cur.execute("""
+                    UPDATE players
+                    SET total_prize_won = total_prize_won + %s
+                    WHERE rollup_id = %s AND name = %s
+                """, (amount, rollup_id, name))
+
+
+async def credit_prize_money(rollup_id: int, prize_map: dict) -> None:
+    await _run(_credit_prize_money, rollup_id, prize_map)
 
 
 def _add_new_player(rollup_id: int, name: str, handicap: int):
