@@ -93,6 +93,8 @@
     table.xl tbody td.sc { text-align: center; }
     table.xl tbody td.nhc { text-align: center; white-space: normal; font-size: 9px; word-break: break-word; }
     table.xl tbody td.sc input { width: 100%; border: none; background: transparent; font-size: 11px; text-align: center; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 0; outline: none; }
+    table.xl tbody td.hc-edit input { width: 100%; border: none; background: transparent; font-size: 11px; text-align: center; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 0; outline: none; }
+    table.xl tbody td.hc-edit input:focus { background: #fff8e0; border-radius: 3px; }
     table.xl tbody td.remove-col { text-align: center; cursor: pointer; color: #A32D2D; font-size: 14px; font-weight: 700; }
     table.xl tbody td.team-col { text-align: center; }
     table.xl tbody td.team-col select { width: 100%; border: none; background: transparent; font-size: 10px; font-family: Arial, sans-serif; padding: 0; outline: none; }
@@ -1257,6 +1259,7 @@ async function loadPlayers() {
     statusEl.style.display = 'none';
 
     await loadRollupSettings();
+    initPlayingHC();
     processNewPlayerQueue();
   } catch(e) {
     errEl.innerHTML = `<span>Network error — could not reach server.</span><a class="error-retry" onclick="loadPlayers()">Retry</a>`;
@@ -1275,6 +1278,30 @@ async function loadRollupSettings() {
 // ═══════════════════════════════════════════
 // Screen 2 — Score Entry
 // ═══════════════════════════════════════════
+
+function initPlayingHC() {
+  const s = state.rollupSettings || {};
+  const isWhs = s.scoring_mode === 'whs';
+  const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
+  const hasTee = isWhs && cr != null && slope && par;
+  state.players.forEach(p => {
+    if (p.playing_hc !== undefined && p.playing_hc !== null) return; // already set (e.g. autosave restore)
+    let hc;
+    if (hasTee && p.whs_index != null) {
+      hc = Math.round(p.whs_index * (slope / 113) + (cr - par));
+    } else if (p.whs_index != null) {
+      hc = Math.round(p.whs_index);
+    } else {
+      hc = p.handicap !== null && p.handicap !== undefined ? p.handicap : 0;
+    }
+    p.playing_hc = hc;
+  });
+}
+
+function updatePlayingHC(idx, val) {
+  state.players[idx].playing_hc = val === '' ? null : parseInt(val);
+}
+
 function openScoreEntry() {
   document.getElementById('s2DateLabel').textContent = state.roundDate;
   state.gameMode = 'individual';
@@ -1485,10 +1512,11 @@ function renderGrid() {
           ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
          </select></td>`
       : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\'")}')">✕</td>`;
+    const playingHcVal = p.playing_hc !== null && p.playing_hc !== undefined ? p.playing_hc : hcDisplay;
     rows += `<tr class="${rankClass}">
       <td>${p.name}</td>
       <td class="c">${whsDisplay}</td>
-      <td class="c">${hcDisplay}</td>
+      <td class="hc-edit"><input type="number" min="0" max="54" value="${playingHcVal}" inputmode="numeric" onchange="updatePlayingHC(${origIdx}, this.value)" title="Course / playing handicap — edit to override"/></td>
       <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
       <td class="nhc">${newHC}</td>
       ${col6}

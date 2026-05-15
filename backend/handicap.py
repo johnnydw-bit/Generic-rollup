@@ -101,7 +101,7 @@ def calculate_new_handicaps(
     result = []
     for p in players:
         score = p.get("score")
-        hc    = p.get("handicap") or 0
+        hc    = p["playing_hc"] if p.get("playing_hc") is not None else (p.get("handicap") or 0)
         is_winner = (p["name"] == winner_name)
 
         if score is None:
