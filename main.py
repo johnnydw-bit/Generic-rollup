@@ -800,6 +800,7 @@ async def load_players(body: LoadRequest, session: dict = Depends(get_current_se
                 "whs_index":            float(p_data["whs_index"]) if p_data and p_data.get("whs_index") else None,
                 "whs_index_next_round": float(p_data["whs_index_next_round"]) if p_data and p_data.get("whs_index_next_round") else None,
                 "winner_prohibited":    p_data.get("winner_prohibited", False) if p_data else False,
+                "winner_ban_entries":   p_data.get("winner_ban_entries", 0) if p_data else 0,
             })
 
     return {

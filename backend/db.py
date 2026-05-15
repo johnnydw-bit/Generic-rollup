@@ -939,7 +939,8 @@ def _get_round_by_date(date_str: str, rollup_id: int):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 SELECT p.name, r.score, r.new_handicap,
-                       r.whs_mode, r.whs_index_used, r.new_whs_index
+                       r.whs_mode, r.whs_index_used, r.new_whs_index,
+                       p.winner_ban_entries, p.winner_prohibited
                 FROM rounds r
                 JOIN players p ON p.id = r.player_id
                 WHERE r.rollup_id = %s AND r.date = %s
