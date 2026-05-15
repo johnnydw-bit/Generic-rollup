@@ -2572,6 +2572,7 @@ async function confirmWalkupPlayer() {
                        score: null, team: null, new_player: false });
   closeOverlay('walkupOverlay');
   state.selectedStructure = null;
+  initPlayingHC();   // derive course HC (including ban reduction) for the new player
   updateTeamStructureUI();
   updateUnassignedWarning();
   renderPrizeBar();
