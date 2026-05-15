@@ -390,8 +390,7 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:4px;">
-      <button class="toggle-btn" id="s2ModeRollup" onclick="setScoringMode('stableford')">Roll-Up</button>
-      <button class="toggle-btn" id="s2ModeWhs" onclick="setScoringMode('whs')">WHS</button>
+      <span id="s2MethodLabel" style="font-size:10px;color:#2D2B5B;font-weight:700;background:#e8e8f0;border-radius:6px;padding:4px 8px;"></span>
     </div>
     <div class="autosave-right">
       <div class="autosave-dot" id="saveDot"></div>
@@ -591,15 +590,14 @@
       </div>
     </div>
 
-    <!-- Section 4: Handicap Mode -->
+    <!-- Section 3: Handicap Method -->
     <div class="settings-section">
-      <div class="settings-section-title">Handicap Mode</div>
-      <div class="settings-row">
-        <div class="settings-label">Scoring mode</div>
-        <div class="scoring-mode-row">
-          <button class="scoring-mode-btn active" id="modeStableford" onclick="onScoringModeChange('stableford')">Roll-Up</button>
-          <button class="scoring-mode-btn" id="modeWhs" onclick="onScoringModeChange('whs')">WHS Index</button>
-        </div>
+      <div class="settings-section-title">Handicap Method</div>
+      <div class="settings-sublabel" style="padding:0 12px 8px;">One method per competition — determines how handicaps change each round.</div>
+      <div class="scoring-mode-row" style="flex-direction:column;gap:6px;padding:0 12px 8px;">
+        <button class="scoring-mode-btn" id="modeUniversal" onclick="onScoringModeChange('universal')">Universal — all players adjusted by score band</button>
+        <button class="scoring-mode-btn" id="modeWinnersOnly1" onclick="onScoringModeChange('winners_only_1')">Winners Only 1 — top finishers get WHS index % reduction</button>
+        <button class="scoring-mode-btn" id="modeWinnersOnly2" onclick="onScoringModeChange('winners_only_2')">Winners Only 2 — winner gets HC cut &amp; ban</button>
       </div>
     </div>
 
@@ -722,19 +720,9 @@
     </div>
 
     <!-- Section 7: Winner Reduction -->
-    <div class="settings-section">
+    <div class="settings-section" id="winnerReductionSection">
       <div class="settings-section-title">Winner Reduction</div>
-      <div class="settings-row-inline">
-        <div>
-          <div class="settings-label">Enable winner reduction</div>
-          <div class="settings-sublabel">Winner's HC cut by set % and banned from winning for N rounds</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="sWinnerReduction" onchange="toggleWinnerReductionDetail()"/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div id="winnerReductionDetail" style="display:none;">
+      <div id="winnerReductionDetail">
         <div class="settings-row-inline">
           <div>
             <div class="settings-label">Reduction %</div>
@@ -1281,10 +1269,11 @@ async function loadRollupSettings() {
 
 function initPlayingHC() {
   const s = state.rollupSettings || {};
-  const isWhs = s.scoring_mode === 'whs';
+  const method = s.scoring_mode || 'universal';
+  const isWhs = (method === 'winners_only_1');
   const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
   const hasTee = isWhs && cr != null && slope && par;
-  const reductionPct = (s.winner_reduction_enabled && s.winner_reduction_pct) ? s.winner_reduction_pct : 0;
+  const reductionPct = (method === 'winners_only_2' && s.winner_reduction_pct) ? s.winner_reduction_pct : 0;
   state.players.forEach(p => {
     if (p.playing_hc !== undefined && p.playing_hc !== null) return; // already set (e.g. autosave restore)
     // Mirror server-side priority: use temp next-round index if set, else permanent index
@@ -1325,32 +1314,18 @@ function openScoreEntry() {
   document.getElementById('teamScoreboardWrap').style.display = 'none';
   document.getElementById('prohibitedWarning').style.display = 'none';
   state.prohibitedWinner = null;
-  // Sync mode toggle buttons with current settings
-  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
-  document.getElementById('s2ModeRollup').classList.toggle('active', !isWhs);
-  document.getElementById('s2ModeWhs').classList.toggle('active', isWhs);
+  // Set read-only method label based on current settings
+  const _sm = (state.rollupSettings || {}).scoring_mode;
+  const _methodLabels = {
+    'universal':      'Universal HC',
+    'winners_only_1': 'Winners Only 1',
+    'winners_only_2': 'Winners Only 2',
+  };
+  document.getElementById('s2MethodLabel').textContent = _methodLabels[_sm] || 'Universal HC';
   renderGrid();
   showScreen('screen2');
 }
 
-// Switch scoring mode directly from Screen 2 without reloading players
-async function setScoringMode(mode) {
-  if (!state.rollupSettings) return;
-  // Optimistically update local state
-  state.rollupSettings.scoring_mode = mode;
-  document.getElementById('s2ModeRollup').classList.toggle('active', mode === 'stableford');
-  document.getElementById('s2ModeWhs').classList.toggle('active', mode === 'whs');
-  // Persist to server
-  try {
-    const s = state.rollupSettings;
-    await apiFetch('/api/settings', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ ...s, rollup_id: session.rollupId, scoring_mode: mode }),
-    });
-  } catch(e) {}
-  // Recalculate with new mode
-  recalculate();
-}
 
 function setGameMode(mode) {
   state.gameMode = mode;
@@ -1458,11 +1433,12 @@ function updateUnassignedWarning() {
 
 function renderGrid() {
   const isTeam = state.gameMode === 'team';
-  const isWhs = state.rollupSettings && state.rollupSettings.scoring_mode === 'whs';
+  const method = (state.rollupSettings || {}).scoring_mode || 'universal';
+  const isWhs = (method === 'winners_only_1');
   const s = state.rollupSettings || {};
   document.getElementById('col6Head').textContent = isTeam ? 'Team' : 'Remove';
   document.getElementById('colWhsHead').textContent = 'WHS';
-  document.getElementById('colHcHead').textContent = isWhs ? 'Course H/C' : 'Roll-Up H/C';
+  document.getElementById('colHcHead').textContent = 'Course H/C';
   document.getElementById('colAdjHead').textContent = isWhs ? 'WHS Adj' : 'H/C Adj';
   const body = document.getElementById('scoreBody');
   let rows = '';
@@ -1862,14 +1838,11 @@ function populateSettingsForm(s) {
     chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
   });
 
-  // Scoring mode
-  const mode = s.scoring_mode || 'stableford';
-  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
-  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
-  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
-  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
+  // Scoring mode — normalize legacy values on read
+  let mode = s.scoring_mode || 'universal';
+  if (mode === 'stableford') mode = 'universal';
+  else if (mode === 'whs') mode = 'winners_only_1';
+  onScoringModeChange(mode);
 
   // WHS fields
   document.getElementById('sWhsPct1').value = s.whs_pct_1st || 0;
@@ -1882,12 +1855,9 @@ function populateSettingsForm(s) {
   document.getElementById('sGapPenalty1').value = s.winner_gap_penalty1 || 0;
   document.getElementById('sGapPenalty2').value = s.winner_gap_penalty2 || 0;
 
-  // Winner reduction
-  const wrEnabled = s.winner_reduction_enabled || false;
-  document.getElementById('sWinnerReduction').checked = wrEnabled;
+  // Winner reduction inputs (always keep in sync; section visibility controlled by mode)
   document.getElementById('sWinnerReductionPct').value = s.winner_reduction_pct ?? 25;
   document.getElementById('sWinnerBanRounds').value = s.winner_ban_rounds ?? 3;
-  document.getElementById('winnerReductionDetail').style.display = wrEnabled ? 'block' : 'none';
 
   // Adjustment table
   populateAdjTable(s.adjustment_table || []);
@@ -1905,19 +1875,33 @@ function populateSettingsForm(s) {
   document.getElementById('sTeamMethod').value = s.team_scoring_method || 'best2';
 }
 
-function toggleWinnerReductionDetail() {
-  const enabled = document.getElementById('sWinnerReduction').checked;
-  document.getElementById('winnerReductionDetail').style.display = enabled ? 'block' : 'none';
-}
 
 function onScoringModeChange(mode) {
-  document.getElementById('modeStableford').classList.toggle('active', mode === 'stableford');
-  document.getElementById('modeWhs').classList.toggle('active', mode === 'whs');
-  document.getElementById('whsSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('courseTeeSection').style.display = mode === 'whs' ? 'block' : 'none';
-  document.getElementById('adjTableSection').style.display = mode === 'whs' ? 'none' : 'block';
-  document.getElementById('winnerPenaltySection').style.display = mode === 'whs' ? 'none' : 'block';
-  if (mode === 'whs') loadCourseOptions();
+  document.getElementById('modeUniversal').classList.toggle('active', mode === 'universal');
+  document.getElementById('modeWinnersOnly1').classList.toggle('active', mode === 'winners_only_1');
+  document.getElementById('modeWinnersOnly2').classList.toggle('active', mode === 'winners_only_2');
+
+  if (mode === 'universal') {
+    document.getElementById('adjTableSection').style.display = 'block';
+    document.getElementById('winnerPenaltySection').style.display = 'block';
+    document.getElementById('whsSection').style.display = 'none';
+    document.getElementById('courseTeeSection').style.display = 'none';
+    document.getElementById('winnerReductionSection').style.display = 'none';
+  } else if (mode === 'winners_only_1') {
+    document.getElementById('whsSection').style.display = 'block';
+    document.getElementById('courseTeeSection').style.display = 'block';
+    document.getElementById('adjTableSection').style.display = 'none';
+    document.getElementById('winnerPenaltySection').style.display = 'none';
+    document.getElementById('winnerReductionSection').style.display = 'none';
+    loadCourseOptions();
+  } else if (mode === 'winners_only_2') {
+    document.getElementById('winnerReductionSection').style.display = 'block';
+    document.getElementById('winnerReductionDetail').style.display = 'block';
+    document.getElementById('adjTableSection').style.display = 'none';
+    document.getElementById('winnerPenaltySection').style.display = 'none';
+    document.getElementById('whsSection').style.display = 'none';
+    document.getElementById('courseTeeSection').style.display = 'none';
+  }
 }
 
 async function loadCourseOptions(selectedCourseId, selectedTeeId) {
@@ -2131,7 +2115,9 @@ function setDefaultTeamSize(n) {
 }
 
 async function saveSettings() {
-  const mode = document.getElementById('modeWhs').classList.contains('active') ? 'whs' : 'stableford';
+  const mode = document.getElementById('modeWinnersOnly1').classList.contains('active') ? 'winners_only_1'
+             : document.getElementById('modeWinnersOnly2').classList.contains('active') ? 'winners_only_2'
+             : 'universal';
   const runDays = [...document.querySelectorAll('.day-chip.active')].map(c => c.dataset.day);
   const adjTable = state.rollupSettings ? state.rollupSettings.adjustment_table : [];
   const n = currentPrizePlaces;
@@ -2161,7 +2147,6 @@ async function saveSettings() {
     whs_pct_2nd: parseFloat(document.getElementById('sWhsPct2').value) || 0,
     whs_pct_3rd: parseFloat(document.getElementById('sWhsPct3').value) || 0,
     whs_winner_prohibition: document.getElementById('sWhsProhibition').checked,
-    winner_reduction_enabled: document.getElementById('sWinnerReduction').checked,
     winner_reduction_pct: parseInt(document.getElementById('sWinnerReductionPct').value) || 25,
     winner_ban_rounds: parseInt(document.getElementById('sWinnerBanRounds').value) || 3,
     course_id: courseId ? parseInt(courseId) : null,

@@ -998,7 +998,11 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
     except Exception:
         settings = None
 
-    whs_mode = (settings or {}).get("scoring_mode") == "whs"
+    autosave_method = (settings or {}).get("scoring_mode", "universal")
+    if autosave_method == "stableford": autosave_method = "universal"
+    elif autosave_method == "whs": autosave_method = "winners_only_1"
+
+    whs_mode = (autosave_method == "winners_only_1")
 
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
@@ -1026,10 +1030,15 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
     except Exception:
         settings = None
 
-    whs_mode  = (settings or {}).get("scoring_mode") == "whs"
+    method = (settings or {}).get("scoring_mode", "universal")
+    # normalize legacy
+    if method == "stableford": method = "universal"
+    elif method == "whs": method = "winners_only_1"
+
+    whs_mode         = (method == "winners_only_1")
+    winner_reduction = (method == "winners_only_2")
     course_id = (settings or {}).get("course_id")
     tee_id    = (settings or {}).get("tee_id")
-    winner_reduction = (settings or {}).get("winner_reduction_enabled", False)
 
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
@@ -1039,6 +1048,22 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         results = whs_result["players"]
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=True,
+                                     course_id=course_id, tee_id=tee_id)
+        except Exception as e:
+            raise HTTPException(500, f"Failed to save to database: {str(e)}")
+    elif winner_reduction:
+        # winners_only_2: no HC adjustments calculated here; apply_winner_reduction handles the cut
+        results = [
+            {
+                **p,
+                "adjustment": None,
+                "new_handicap": p.get("playing_hc") or p.get("handicap") or 0,
+            }
+            for p in body.players
+            if p.get("score") is not None
+        ]
+        try:
+            await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
                                      course_id=course_id, tee_id=tee_id)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
@@ -1162,7 +1187,6 @@ class RollupSettingsRequest(BaseModel):
     whs_pct_2nd: float = 0.0
     whs_pct_3rd: float = 0.0
     whs_winner_prohibition:   bool = False
-    winner_reduction_enabled: bool = False
     winner_reduction_pct:     int  = 25
     winner_ban_rounds:        int  = 3
     course_id: int | None = None

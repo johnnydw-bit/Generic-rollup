@@ -1065,7 +1065,7 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "ig_search_term":           rollup["ig_search_term"] if rollup else "",
                     "run_days":                 [],
                     "tee_interval_minutes":     8,
-                    "scoring_mode":             "stableford",
+                    "scoring_mode":             "universal",
                     "adjustment_table":         DEFAULT_ADJUSTMENT_TABLE,
                     "winner_bonus_enabled":     True,
                     "winner_gap_penalty1":      0,
@@ -1074,7 +1074,6 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "whs_pct_2nd":              0.0,
                     "whs_pct_3rd":              0.0,
                     "whs_winner_prohibition":   False,
-                    "winner_reduction_enabled": False,
                     "winner_reduction_pct":     25,
                     "winner_ban_rounds":        3,
                     "course_id":                None,
@@ -1103,6 +1102,16 @@ def _get_rollup_settings(rollup_id: int) -> dict:
             d["whs_pct_3rd"]      = float(d["whs_pct_3rd"])
             if d["tee_course_rating"] is not None:
                 d["tee_course_rating"] = float(d["tee_course_rating"])
+            # Backward-compat: map old DB values to new three-mode names
+            raw_mode = d.get("scoring_mode", "stableford")
+            raw_wr   = d.get("winner_reduction_enabled", False)
+            if raw_mode == "stableford" and raw_wr:
+                d["scoring_mode"] = "winners_only_2"
+            elif raw_mode == "stableford":
+                d["scoring_mode"] = "universal"
+            elif raw_mode == "whs":
+                d["scoring_mode"] = "winners_only_1"
+            d.pop("winner_reduction_enabled", None)
             return d
 
 
@@ -1111,6 +1120,29 @@ async def get_rollup_settings(rollup_id: int) -> dict:
 
 
 def _save_rollup_settings(rollup_id: int, s: dict):
+    # Map incoming three-mode names back to legacy DB column values
+    incoming_mode = s.get("scoring_mode", "universal")
+    if incoming_mode == "universal":
+        db_scoring_mode = "stableford"
+        db_winner_reduction_enabled = False
+    elif incoming_mode == "winners_only_1":
+        db_scoring_mode = "whs"
+        db_winner_reduction_enabled = False
+    elif incoming_mode == "winners_only_2":
+        db_scoring_mode = "stableford"
+        db_winner_reduction_enabled = True
+    else:
+        # Legacy pass-through
+        if incoming_mode == "stableford":
+            db_scoring_mode = "stableford"
+            db_winner_reduction_enabled = s.get("winner_reduction_enabled", False)
+        elif incoming_mode == "whs":
+            db_scoring_mode = "whs"
+            db_winner_reduction_enabled = False
+        else:
+            db_scoring_mode = "stableford"
+            db_winner_reduction_enabled = False
+
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -1163,13 +1195,13 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                 s["display_name"], s["ig_search_term"],
                 json.dumps(s["run_days"]),
                 s["tee_interval_minutes"],
-                s.get("scoring_mode", "stableford"),
+                db_scoring_mode,
                 json.dumps(s["adjustment_table"]),
                 s["winner_bonus_enabled"],
                 s["winner_gap_penalty1"], s["winner_gap_penalty2"],
                 s.get("whs_pct_1st", 0), s.get("whs_pct_2nd", 0), s.get("whs_pct_3rd", 0),
                 s.get("whs_winner_prohibition", False),
-                s.get("winner_reduction_enabled", False),
+                db_winner_reduction_enabled,
                 s.get("winner_reduction_pct", 25),
                 s.get("winner_ban_rounds", 3),
                 s.get("course_id"), s.get("tee_id"),
