@@ -1112,7 +1112,7 @@ async function init() {
 
   if (hasValidSession()) {
     updateHeaderNames();
-    setTodayDate();
+    await setNextCompetitionDate();
     await loadAuthStatus();
     showScreen('screen1');
   } else {
@@ -1162,6 +1162,42 @@ function setTodayDate() {
   state.roundDate = s;
 }
 
+async function setNextCompetitionDate() {
+  // Try to use run_days from settings to find the next unplayed competition date.
+  // Falls back to today if run_days is empty or requests fail.
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  try {
+    // Fetch settings and played dates in parallel; use cached settings if already loaded
+    const [settingsData, datesData] = await Promise.all([
+      state.rollupSettings
+        ? Promise.resolve(state.rollupSettings)
+        : apiFetch(`/api/settings?rollup_id=${session.rollupId}`).then(r => r.json()),
+      apiFetch(`/api/round-dates?rollup_id=${session.rollupId}`).then(r => r.json()),
+    ]);
+    if (!state.rollupSettings && settingsData) state.rollupSettings = settingsData;
+    const runDays  = (settingsData.run_days || []);
+    const played   = new Set(datesData.dates || []);
+
+    if (runDays.length > 0) {
+      // Walk up to 14 days ahead to find the next matching unplayed day
+      const today = new Date();
+      for (let i = 0; i <= 14; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const iso     = d.toISOString().split('T')[0];
+        const dayName = DAY_NAMES[d.getDay()];
+        if (runDays.includes(dayName) && !played.has(iso)) {
+          document.getElementById('roundDate').value = iso;
+          state.roundDate = iso;
+          return;
+        }
+      }
+    }
+  } catch(e) {}
+  // Default to today
+  setTodayDate();
+}
+
 async function loadAuthStatus() {
   try {
     const resp = await apiFetch(`/auth/status?rollup_id=${session.rollupId}`);
@@ -1196,7 +1232,7 @@ function saveLogin() {
 
   document.getElementById('loginError').style.display = 'none';
   updateHeaderNames();
-  setTodayDate();
+  await setNextCompetitionDate();
   loadAuthStatus();
   showScreen('screen1');
 }
