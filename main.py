@@ -8,7 +8,7 @@
 import os
 import secrets
 import time
-from fastapi import FastAPI, HTTPException, Query, Header, Depends, Cookie
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, Cookie, Form, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -1200,6 +1200,7 @@ class RollupSettingsRequest(BaseModel):
     tie_handling: str = "tournament"
     preferred_team_size: int = 4
     team_scoring_method: str = "best2"
+    logo_data: str | None = None
 
 
 @app.post("/api/settings")
@@ -1213,6 +1214,30 @@ async def post_settings(body: RollupSettingsRequest, tenant_id: int = Depends(ge
     except Exception as e:
         raise HTTPException(500, f"Could not save settings: {str(e)}")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Logo upload
+# ---------------------------------------------------------------------------
+
+@app.post("/api/upload-logo")
+async def upload_logo(
+    rollup_id: int = Form(...),
+    file: UploadFile = File(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _assert_rollup_access(rollup_id, tenant_id)
+    import base64
+    content = await file.read()
+    if len(content) > 500_000:
+        raise HTTPException(400, "Logo must be under 500 KB")
+    mime = file.content_type or "image/jpeg"
+    data_url = f"data:{mime};base64," + base64.b64encode(content).decode()
+    # Load current settings, update logo_data, save back
+    settings = await get_rollup_settings(rollup_id)
+    settings["logo_data"] = data_url
+    await save_rollup_settings(rollup_id, settings)
+    return {"ok": True, "logo_data": data_url}
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#2D2B5B"/>
-  <title>{{ tenant_name }} Rollup</title>
+  <title>{{ tenant_name }}</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <link rel="apple-touch-icon" href="/static/icon-192.png"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -283,26 +283,26 @@
 <div id="screen0" class="screen active">
   <div class="header">
     <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Rollup Manager"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Competition Manager" id="s0LogoImg"/>
     </div>
     <div class="header-title">
       <div class="club" id="s0TenantName">{{ tenant_name }}</div>
-      <div class="society">Select your rollup</div>
+      <div class="society">Select your competition</div>
     </div>
   </div>
   <div class="s0-body">
     <div class="login-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="logo" id="s0LoginLogoImg"/>
     </div>
     <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Select your rollup to continue</div>
+    <div class="login-subtitle">Select your competition to continue</div>
 
     <div>
-      <div class="login-section">Select Rollup</div>
+      <div class="login-section">Select Competition</div>
       <select class="field-input" id="rollupSelect" onchange="onRollupSelectChange()">
-        <option value="">Choose a rollup…</option>
+        <option value="">Choose a competition…</option>
       </select>
-      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new rollup</button>
+      <button class="add-rollup-btn" onclick="showAddRollup()" style="margin-top:6px;">＋ Add new competition</button>
     </div>
 
     <button class="big-btn btn-navy" onclick="saveLogin()" style="width:100%;margin-top:8px;">
@@ -318,11 +318,11 @@
 <div id="screen1" class="screen">
   <div class="header">
     <div class="header-logo">
-      <img src="/static/MOTHS_APP_LOGO.jpg" alt="{{ tenant_name }}"/>
+      <img src="/static/MOTHS_APP_LOGO.jpg" alt="Competition Manager" id="s1LogoImg"/>
     </div>
-    <div class="header-title" onclick="switchRollup()" style="cursor:pointer;" title="Switch rollup">
+    <div class="header-title" onclick="switchRollup()" style="cursor:pointer;" title="Switch competition">
       <div class="club" id="s1RollupName">{{ tenant_name }}</div>
-      <div class="society">⇄ Switch rollup</div>
+      <div class="society">⇄ Switch competition</div>
     </div>
     <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
@@ -552,12 +552,12 @@
   </div>
   <div class="settings-body">
 
-    <!-- Section 1: Rollup Identity -->
+    <!-- Section 1: Competition Identity -->
     <div class="settings-section">
-      <div class="settings-section-title">Rollup Identity</div>
+      <div class="settings-section-title">Competition Identity</div>
       <div class="settings-row">
-        <div class="settings-label">Rollup name</div>
-        <input class="settings-input" id="sDisplayName" type="text" placeholder="e.g. MOTH's Rollup"/>
+        <div class="settings-label">Competition name</div>
+        <input class="settings-input" id="sDisplayName" type="text" placeholder="e.g. MOTH's Roll-Up"/>
       </div>
       <div class="settings-row">
         <div class="settings-label">IG search term</div>
@@ -578,6 +578,22 @@
       </div>
     </div>
 
+    <!-- Section 1b: Competition Logo -->
+    <div class="settings-section">
+      <div class="settings-section-title">Competition Logo</div>
+      <div class="settings-row" style="align-items:center;gap:12px;flex-direction:row;">
+        <img id="logoPreview" src="/static/MOTHS_APP_LOGO.jpg"
+             style="width:60px;height:60px;border-radius:50%;object-fit:contain;border:2px solid #2D2B5B30;background:#fff;padding:3px;flex-shrink:0;"/>
+        <div style="flex:1;">
+          <div class="settings-label">Upload logo</div>
+          <div class="settings-sublabel">Replaces the default logo in the app header (JPEG or PNG, max 500 KB)</div>
+          <input type="file" id="logoFileInput" accept="image/jpeg,image/png,image/gif,image/webp"
+                 style="margin-top:6px;font-size:12px;width:100%;" onchange="previewAndUploadLogo()"/>
+          <div id="logoUploadStatus" style="font-size:11px;margin-top:4px;color:#3B6D11;display:none;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Section 2: Tee Times -->
     <div class="settings-section">
       <div class="settings-section-title">Tee Times</div>
@@ -592,7 +608,7 @@
 
     <!-- Section 3: Handicap Method -->
     <div class="settings-section">
-      <div class="settings-section-title">Handicap Method</div>
+      <div class="settings-section-title">H/C Adjustment Method</div>
       <div class="settings-sublabel" style="padding:0 12px 8px;">One method per competition — determines how handicaps change each round.</div>
       <div class="scoring-mode-row" style="flex-direction:column;gap:6px;padding:0 12px 8px;">
         <button class="scoring-mode-btn" id="modeUniversal" onclick="onScoringModeChange('universal')">Universal — all players adjusted by score band</button>
@@ -816,7 +832,7 @@
   <div class="s6-body">
     <div class="s6-toolbar">
       <select class="s6-rollup-select" id="s6RollupSelect" onchange="loadPlayerManager()">
-        <option value="">Select rollup…</option>
+        <option value="">Select competition…</option>
       </select>
       <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
       <button class="s6-sync-btn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
@@ -909,11 +925,11 @@
 
 <div class="overlay" id="addRollupOverlay">
   <div class="dialog">
-    <div class="dialog-title">Add Rollup</div>
-    <div class="dialog-body">Enter the rollup details as they appear in Intelligent Golf.</div>
+    <div class="dialog-title">Add Competition</div>
+    <div class="dialog-body">Enter the competition details as they appear in Intelligent Golf.</div>
     <div class="field-group">
-      <div class="field-label">Rollup name</div>
-      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Rollup"/>
+      <div class="field-label">Competition name</div>
+      <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Roll-Up"/>
     </div>
     <div class="field-group">
       <div class="field-label">Search term (from IG contact name)</div>
@@ -1108,7 +1124,7 @@ async function loadRollupOptions() {
     if (!resp.ok) return;
     const data = await resp.json();
     const sel = document.getElementById('rollupSelect');
-    sel.innerHTML = '<option value="">Choose a rollup…</option>';
+    sel.innerHTML = '<option value="">Choose a competition…</option>';
     data.rollups.forEach(r => {
       const opt = document.createElement('option');
       opt.value = r.id;
@@ -1163,7 +1179,7 @@ function saveLogin() {
   const opt = sel.options[sel.selectedIndex];
 
   if (!opt || !opt.value) {
-    document.getElementById('loginError').textContent = 'Please select a rollup.';
+    document.getElementById('loginError').textContent = 'Please select a competition.';
     document.getElementById('loginError').style.display = 'block';
     return;
   }
@@ -1259,8 +1275,53 @@ async function loadPlayers() {
 async function loadRollupSettings() {
   try {
     const resp = await apiFetch(`/api/settings?rollup_id=${session.rollupId}`);
-    if (resp.ok) state.rollupSettings = await resp.json();
+    if (resp.ok) {
+      state.rollupSettings = await resp.json();
+      updateLogoDisplay(state.rollupSettings?.logo_data);
+    }
   } catch(e) {}
+}
+
+function updateLogoDisplay(logoData) {
+  const src = logoData || '/static/MOTHS_APP_LOGO.jpg';
+  ['s0LogoImg','s0LoginLogoImg','s1LogoImg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.src = src;
+  });
+}
+
+async function previewAndUploadLogo() {
+  const input = document.getElementById('logoFileInput');
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('logoUploadStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#888';
+  statusEl.textContent = 'Uploading…';
+
+  // Local preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('logoPreview').src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+
+  try {
+    const form = new FormData();
+    form.append('rollup_id', session.rollupId);
+    form.append('file', file);
+    const resp = await apiFetch('/api/upload-logo', { method: 'POST', body: form });
+    if (!resp.ok) throw new Error();
+    const data = await resp.json();
+    updateLogoDisplay(data.logo_data);
+    if (state.rollupSettings) state.rollupSettings.logo_data = data.logo_data;
+    statusEl.style.color = '#3B6D11';
+    statusEl.textContent = 'Logo uploaded ✓';
+    setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+  } catch(e) {
+    statusEl.style.color = '#A32D2D';
+    statusEl.textContent = 'Upload failed.';
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1830,6 +1891,8 @@ async function loadSettingsForm() {
 }
 
 function populateSettingsForm(s) {
+  document.getElementById('logoPreview').src = s.logo_data || '/static/MOTHS_APP_LOGO.jpg';
+  updateLogoDisplay(s.logo_data);
   document.getElementById('sDisplayName').value = s.display_name || '';
   document.getElementById('sIgTerm').value = s.ig_search_term || '';
   document.getElementById('sTeeInterval').value = s.tee_interval_minutes || 8;
@@ -2203,7 +2266,7 @@ async function showPlayerManager() {
     const resp = await apiFetch('/api/rollups');
     const data = await resp.json();
     const sel = document.getElementById('s6RollupSelect');
-    sel.innerHTML = '<option value="">Select rollup…</option>';
+    sel.innerHTML = '<option value="">Select competition…</option>';
     data.rollups.forEach(r => {
       const opt = document.createElement('option');
       opt.value = r.id;

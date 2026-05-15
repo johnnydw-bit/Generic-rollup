@@ -337,6 +337,10 @@ def _init_schema():
                     ADD COLUMN IF NOT EXISTS tee_id                   INTEGER REFERENCES tees(id)
             """)
 
+            cur.execute("""
+                ALTER TABLE rollup_settings ADD COLUMN IF NOT EXISTS logo_data TEXT
+            """)
+
             # Legacy singleton credentials — kept for backward compatibility
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS app_credentials (
@@ -1090,6 +1094,7 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "tie_handling":             "tournament",
                     "preferred_team_size":      4,
                     "team_scoring_method":      "best2",
+                    "logo_data":                None,
                 }
             d = dict(row)
             d["display_name"]     = d["rollup_name"]
@@ -1156,10 +1161,11 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                     entry_fee, prize_places,
                     prize_pct_1st, prize_pct_2nd, prize_pct_3rd, prize_pct_4th,
                     tie_handling, preferred_team_size, team_scoring_method,
+                    logo_data,
                     updated_at
                 ) VALUES (
                     %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,
-                    %s,%s, %s,%s,%s,%s, %s,%s,%s, NOW()
+                    %s,%s, %s,%s,%s,%s, %s,%s,%s, %s, NOW()
                 )
                 ON CONFLICT (rollup_id) DO UPDATE SET
                     display_name              = EXCLUDED.display_name,
@@ -1189,6 +1195,7 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                     tie_handling              = EXCLUDED.tie_handling,
                     preferred_team_size       = EXCLUDED.preferred_team_size,
                     team_scoring_method       = EXCLUDED.team_scoring_method,
+                    logo_data                 = EXCLUDED.logo_data,
                     updated_at                = NOW()
             """, (
                 rollup_id,
@@ -1209,6 +1216,7 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                 s["prize_pct_1st"], s["prize_pct_2nd"],
                 s["prize_pct_3rd"], s["prize_pct_4th"],
                 s["tie_handling"], s["preferred_team_size"], s["team_scoring_method"],
+                s.get("logo_data"),
             ))
             cur.execute("""
                 UPDATE rollups SET name = %s, ig_search_term = %s WHERE id = %s
