@@ -719,7 +719,38 @@
       </div>
     </div>
 
-    <!-- Section 7: Entry & Prizes -->
+    <!-- Section 7: Winner Reduction -->
+    <div class="settings-section">
+      <div class="settings-section-title">Winner Reduction</div>
+      <div class="settings-row-inline">
+        <div>
+          <div class="settings-label">Enable winner reduction</div>
+          <div class="settings-sublabel">Winner's HC cut by set % and banned from winning for N rounds</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sWinnerReduction" onchange="toggleWinnerReductionDetail()"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="winnerReductionDetail" style="display:none;">
+        <div class="settings-row-inline">
+          <div>
+            <div class="settings-label">Reduction %</div>
+            <div class="settings-sublabel">HC cut applied on each win (e.g. 25 = −25%)</div>
+          </div>
+          <input class="settings-input-sm" id="sWinnerReductionPct" type="number" min="1" max="99" value="25"/>
+        </div>
+        <div class="settings-row-inline">
+          <div>
+            <div class="settings-label">Ban length (rounds)</div>
+            <div class="settings-sublabel">Rounds the player cannot win after being cut</div>
+          </div>
+          <input class="settings-input-sm" id="sWinnerBanRounds" type="number" min="1" max="20" value="3"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 8: Entry & Prizes -->
     <div class="settings-section">
       <div class="settings-section-title">Entry &amp; Prizes</div>
       <div class="settings-row-inline">
@@ -1805,6 +1836,13 @@ function populateSettingsForm(s) {
   document.getElementById('sGapPenalty1').value = s.winner_gap_penalty1 || 0;
   document.getElementById('sGapPenalty2').value = s.winner_gap_penalty2 || 0;
 
+  // Winner reduction
+  const wrEnabled = s.winner_reduction_enabled || false;
+  document.getElementById('sWinnerReduction').checked = wrEnabled;
+  document.getElementById('sWinnerReductionPct').value = s.winner_reduction_pct ?? 25;
+  document.getElementById('sWinnerBanRounds').value = s.winner_ban_rounds ?? 3;
+  document.getElementById('winnerReductionDetail').style.display = wrEnabled ? 'block' : 'none';
+
   // Adjustment table
   populateAdjTable(s.adjustment_table || []);
 
@@ -1819,6 +1857,11 @@ function populateSettingsForm(s) {
   // Team
   setDefaultTeamSize(s.preferred_team_size || 4);
   document.getElementById('sTeamMethod').value = s.team_scoring_method || 'best2';
+}
+
+function toggleWinnerReductionDetail() {
+  const enabled = document.getElementById('sWinnerReduction').checked;
+  document.getElementById('winnerReductionDetail').style.display = enabled ? 'block' : 'none';
 }
 
 function onScoringModeChange(mode) {
@@ -2072,6 +2115,9 @@ async function saveSettings() {
     whs_pct_2nd: parseFloat(document.getElementById('sWhsPct2').value) || 0,
     whs_pct_3rd: parseFloat(document.getElementById('sWhsPct3').value) || 0,
     whs_winner_prohibition: document.getElementById('sWhsProhibition').checked,
+    winner_reduction_enabled: document.getElementById('sWinnerReduction').checked,
+    winner_reduction_pct: parseInt(document.getElementById('sWinnerReductionPct').value) || 25,
+    winner_ban_rounds: parseInt(document.getElementById('sWinnerBanRounds').value) || 3,
     course_id: courseId ? parseInt(courseId) : null,
     tee_id: teeId ? parseInt(teeId) : null,
     entry_fee: parseFloat(document.getElementById('sEntryFee').value) || 0,
@@ -2166,10 +2212,11 @@ function renderPlayerTable() {
   }
   tbody.innerHTML = s6State.players.map(p => {
     const prohibBadge = p.winner_prohibited ? ' <span class="prohibited-badge" title="Winner prohibited">🚫</span>' : '';
+    const banBadge = p.winner_ban_entries > 0 ? ` <span class="prohibited-badge" title="Win ban: ${p.winner_ban_entries} round(s) remaining" style="background:#c47a00;">⛔${p.winner_ban_entries}</span>` : '';
     const whsVal = p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : '—';
     const nextVal = p.whs_index_next_round !== null && p.whs_index_next_round !== undefined ? p.whs_index_next_round.toFixed(1) : '—';
     return `<tr>
-      <td class="left">${p.name}${prohibBadge}</td>
+      <td class="left">${p.name}${prohibBadge}${banBadge}</td>
       <td><input class="s6-hc-input" id="hc_${p.id}" type="number" min="0" max="54" value="${p.handicap}" inputmode="numeric"/></td>
       <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
       <td style="font-size:11px;color:#888;">${nextVal}</td>

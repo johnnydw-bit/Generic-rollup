@@ -160,7 +160,9 @@ def _init_schema():
                 ALTER TABLE players
                     ADD COLUMN IF NOT EXISTS whs_index            NUMERIC(4,1),
                     ADD COLUMN IF NOT EXISTS whs_index_next_round NUMERIC(4,1),
-                    ADD COLUMN IF NOT EXISTS winner_prohibited     BOOLEAN NOT NULL DEFAULT FALSE
+                    ADD COLUMN IF NOT EXISTS winner_prohibited     BOOLEAN NOT NULL DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS winner_ban_entries    INT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS winner_ban_original_hc INT
             """)
 
             cur.execute("""
@@ -323,13 +325,16 @@ def _init_schema():
 
             cur.execute("""
                 ALTER TABLE rollup_settings
-                    ADD COLUMN IF NOT EXISTS scoring_mode           TEXT NOT NULL DEFAULT 'stableford',
-                    ADD COLUMN IF NOT EXISTS whs_pct_1st            NUMERIC(5,2) NOT NULL DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS whs_pct_2nd            NUMERIC(5,2) NOT NULL DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS whs_pct_3rd            NUMERIC(5,2) NOT NULL DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS whs_winner_prohibition BOOLEAN NOT NULL DEFAULT FALSE,
-                    ADD COLUMN IF NOT EXISTS course_id              INTEGER REFERENCES courses(id),
-                    ADD COLUMN IF NOT EXISTS tee_id                 INTEGER REFERENCES tees(id)
+                    ADD COLUMN IF NOT EXISTS scoring_mode             TEXT NOT NULL DEFAULT 'stableford',
+                    ADD COLUMN IF NOT EXISTS whs_pct_1st              NUMERIC(5,2) NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS whs_pct_2nd              NUMERIC(5,2) NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS whs_pct_3rd              NUMERIC(5,2) NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS whs_winner_prohibition   BOOLEAN NOT NULL DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS winner_reduction_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS winner_reduction_pct    INTEGER NOT NULL DEFAULT 25,
+                    ADD COLUMN IF NOT EXISTS winner_ban_rounds        INTEGER NOT NULL DEFAULT 3,
+                    ADD COLUMN IF NOT EXISTS course_id                INTEGER REFERENCES courses(id),
+                    ADD COLUMN IF NOT EXISTS tee_id                   INTEGER REFERENCES tees(id)
             """)
 
             # Legacy singleton credentials — kept for backward compatibility
@@ -596,7 +601,8 @@ def _get_all_players(rollup_id: int):
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT id, name, handicap, whs_index, whs_index_next_round, winner_prohibited
+                SELECT id, name, handicap, whs_index, whs_index_next_round,
+                       winner_prohibited, winner_ban_entries, winner_ban_original_hc
                 FROM players WHERE rollup_id = %s ORDER BY name
             """, (rollup_id,))
             rows = []
@@ -620,12 +626,14 @@ def _get_all_players_detail(rollup_id: int):
             cur.execute("""
                 SELECT p.id, p.name, p.handicap,
                        p.whs_index, p.whs_index_next_round, p.winner_prohibited,
+                       p.winner_ban_entries, p.winner_ban_original_hc,
                        COUNT(r.id) AS round_count
                 FROM players p
                 LEFT JOIN rounds r ON r.player_id = p.id
                 WHERE p.rollup_id = %s
                 GROUP BY p.id, p.name, p.handicap,
-                         p.whs_index, p.whs_index_next_round, p.winner_prohibited
+                         p.whs_index, p.whs_index_next_round, p.winner_prohibited,
+                         p.winner_ban_entries, p.winner_ban_original_hc
                 ORDER BY p.name
             """, (rollup_id,))
             rows = []
@@ -765,6 +773,94 @@ def _get_prohibited_winners(rollup_id: int) -> list[str]:
 
 async def get_prohibited_winners(rollup_id: int) -> list[str]:
     return await _run(_get_prohibited_winners, rollup_id)
+
+
+def _apply_winner_reduction(rollup_id: int, winner_names: list[str],
+                             participant_names: list[str],
+                             reduction_pct: int = 25,
+                             ban_rounds: int = 3) -> list[dict]:
+    """Apply the configurable-cut winner reduction rule after a round is saved.
+
+    Winners: HC reduced by reduction_pct%, ban_entries set/reset to ban_rounds,
+    original HC stored for reinstatement.
+    Banned non-winners: ban_entries decremented; when it hits 0 original HC
+    is reinstated and the ban is cleared.
+
+    Returns a list of dicts describing what changed (for response logging).
+    """
+    lower_winners      = {n.strip().lower() for n in winner_names}
+    lower_participants = {n.strip().lower() for n in participant_names}
+    multiplier         = 1 - reduction_pct / 100
+    changes = []
+
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, name, handicap, winner_ban_entries, winner_ban_original_hc
+                FROM players WHERE rollup_id = %s
+            """, (rollup_id,))
+            players = [dict(r) for r in cur.fetchall()]
+
+        with conn.cursor() as cur:
+            for p in players:
+                name_lower = p["name"].strip().lower()
+                if name_lower not in lower_participants:
+                    continue
+
+                ban = p["winner_ban_entries"]
+                hc  = p["handicap"]
+
+                if name_lower in lower_winners:
+                    new_hc = max(1, round(hc * multiplier))
+                    if ban == 0:
+                        # First win: store original HC, start ban
+                        cur.execute("""
+                            UPDATE players SET
+                                handicap = %s, winner_ban_entries = %s,
+                                winner_ban_original_hc = %s, winner_prohibited = TRUE
+                            WHERE id = %s
+                        """, (new_hc, ban_rounds, hc, p["id"]))
+                        changes.append({"name": p["name"], "event": "winner_cut",
+                                        "old_hc": hc, "new_hc": new_hc, "ban_entries": ban_rounds})
+                    else:
+                        # Won again during ban: cut current HC, reset ban
+                        cur.execute("""
+                            UPDATE players SET
+                                handicap = %s, winner_ban_entries = %s, winner_prohibited = TRUE
+                            WHERE id = %s
+                        """, (new_hc, ban_rounds, p["id"]))
+                        changes.append({"name": p["name"], "event": "repeat_win_cut",
+                                        "old_hc": hc, "new_hc": new_hc, "ban_entries": ban_rounds})
+                else:
+                    if ban > 0:
+                        new_ban = ban - 1
+                        if new_ban == 0:
+                            # Ban expires: reinstate original HC
+                            orig_hc = p["winner_ban_original_hc"] or hc
+                            cur.execute("""
+                                UPDATE players SET
+                                    handicap = %s, winner_ban_entries = 0,
+                                    winner_ban_original_hc = NULL, winner_prohibited = FALSE
+                                WHERE id = %s
+                            """, (orig_hc, p["id"]))
+                            changes.append({"name": p["name"], "event": "ban_expired",
+                                            "reinstated_hc": orig_hc})
+                        else:
+                            cur.execute("""
+                                UPDATE players SET winner_ban_entries = %s WHERE id = %s
+                            """, (new_ban, p["id"]))
+                            changes.append({"name": p["name"], "event": "ban_tick",
+                                            "ban_entries_remaining": new_ban})
+
+    return changes
+
+
+async def apply_winner_reduction(rollup_id: int, winner_names: list[str],
+                                  participant_names: list[str],
+                                  reduction_pct: int = 25,
+                                  ban_rounds: int = 3) -> list[dict]:
+    return await _run(_apply_winner_reduction, rollup_id, winner_names, participant_names,
+                      reduction_pct, ban_rounds)
 
 
 def _get_last_round_date(rollup_id: int):
@@ -974,6 +1070,9 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "whs_pct_2nd":              0.0,
                     "whs_pct_3rd":              0.0,
                     "whs_winner_prohibition":   False,
+                    "winner_reduction_enabled": False,
+                    "winner_reduction_pct":     25,
+                    "winner_ban_rounds":        3,
                     "course_id":                None,
                     "tee_id":                   None,
                     "tee_course_rating":        None,
@@ -1016,41 +1115,45 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                     tee_interval_minutes, scoring_mode, adjustment_table,
                     winner_bonus_enabled, winner_gap_penalty1, winner_gap_penalty2,
                     whs_pct_1st, whs_pct_2nd, whs_pct_3rd, whs_winner_prohibition,
+                    winner_reduction_enabled, winner_reduction_pct, winner_ban_rounds,
                     course_id, tee_id,
                     entry_fee, prize_places,
                     prize_pct_1st, prize_pct_2nd, prize_pct_3rd, prize_pct_4th,
                     tie_handling, preferred_team_size, team_scoring_method,
                     updated_at
                 ) VALUES (
-                    %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s, %s,%s,
+                    %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,
                     %s,%s, %s,%s,%s,%s, %s,%s,%s, NOW()
                 )
                 ON CONFLICT (rollup_id) DO UPDATE SET
-                    display_name            = EXCLUDED.display_name,
-                    ig_search_term          = EXCLUDED.ig_search_term,
-                    run_days                = EXCLUDED.run_days,
-                    tee_interval_minutes    = EXCLUDED.tee_interval_minutes,
-                    scoring_mode            = EXCLUDED.scoring_mode,
-                    adjustment_table        = EXCLUDED.adjustment_table,
-                    winner_bonus_enabled    = EXCLUDED.winner_bonus_enabled,
-                    winner_gap_penalty1     = EXCLUDED.winner_gap_penalty1,
-                    winner_gap_penalty2     = EXCLUDED.winner_gap_penalty2,
-                    whs_pct_1st             = EXCLUDED.whs_pct_1st,
-                    whs_pct_2nd             = EXCLUDED.whs_pct_2nd,
-                    whs_pct_3rd             = EXCLUDED.whs_pct_3rd,
-                    whs_winner_prohibition  = EXCLUDED.whs_winner_prohibition,
-                    course_id               = EXCLUDED.course_id,
-                    tee_id                  = EXCLUDED.tee_id,
-                    entry_fee               = EXCLUDED.entry_fee,
-                    prize_places            = EXCLUDED.prize_places,
-                    prize_pct_1st           = EXCLUDED.prize_pct_1st,
-                    prize_pct_2nd           = EXCLUDED.prize_pct_2nd,
-                    prize_pct_3rd           = EXCLUDED.prize_pct_3rd,
-                    prize_pct_4th           = EXCLUDED.prize_pct_4th,
-                    tie_handling            = EXCLUDED.tie_handling,
-                    preferred_team_size     = EXCLUDED.preferred_team_size,
-                    team_scoring_method     = EXCLUDED.team_scoring_method,
-                    updated_at              = NOW()
+                    display_name              = EXCLUDED.display_name,
+                    ig_search_term            = EXCLUDED.ig_search_term,
+                    run_days                  = EXCLUDED.run_days,
+                    tee_interval_minutes      = EXCLUDED.tee_interval_minutes,
+                    scoring_mode              = EXCLUDED.scoring_mode,
+                    adjustment_table          = EXCLUDED.adjustment_table,
+                    winner_bonus_enabled      = EXCLUDED.winner_bonus_enabled,
+                    winner_gap_penalty1       = EXCLUDED.winner_gap_penalty1,
+                    winner_gap_penalty2       = EXCLUDED.winner_gap_penalty2,
+                    whs_pct_1st               = EXCLUDED.whs_pct_1st,
+                    whs_pct_2nd               = EXCLUDED.whs_pct_2nd,
+                    whs_pct_3rd               = EXCLUDED.whs_pct_3rd,
+                    whs_winner_prohibition    = EXCLUDED.whs_winner_prohibition,
+                    winner_reduction_enabled  = EXCLUDED.winner_reduction_enabled,
+                    winner_reduction_pct      = EXCLUDED.winner_reduction_pct,
+                    winner_ban_rounds         = EXCLUDED.winner_ban_rounds,
+                    course_id                 = EXCLUDED.course_id,
+                    tee_id                    = EXCLUDED.tee_id,
+                    entry_fee                 = EXCLUDED.entry_fee,
+                    prize_places              = EXCLUDED.prize_places,
+                    prize_pct_1st             = EXCLUDED.prize_pct_1st,
+                    prize_pct_2nd             = EXCLUDED.prize_pct_2nd,
+                    prize_pct_3rd             = EXCLUDED.prize_pct_3rd,
+                    prize_pct_4th             = EXCLUDED.prize_pct_4th,
+                    tie_handling              = EXCLUDED.tie_handling,
+                    preferred_team_size       = EXCLUDED.preferred_team_size,
+                    team_scoring_method       = EXCLUDED.team_scoring_method,
+                    updated_at                = NOW()
             """, (
                 rollup_id,
                 s["display_name"], s["ig_search_term"],
@@ -1062,6 +1165,9 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                 s["winner_gap_penalty1"], s["winner_gap_penalty2"],
                 s.get("whs_pct_1st", 0), s.get("whs_pct_2nd", 0), s.get("whs_pct_3rd", 0),
                 s.get("whs_winner_prohibition", False),
+                s.get("winner_reduction_enabled", False),
+                s.get("winner_reduction_pct", 25),
+                s.get("winner_ban_rounds", 3),
                 s.get("course_id"), s.get("tee_id"),
                 s["entry_fee"], s["prize_places"],
                 s["prize_pct_1st"], s["prize_pct_2nd"],

@@ -1024,9 +1024,10 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
     except Exception:
         settings = None
 
-    whs_mode = (settings or {}).get("scoring_mode") == "whs"
+    whs_mode  = (settings or {}).get("scoring_mode") == "whs"
     course_id = (settings or {}).get("course_id")
     tee_id    = (settings or {}).get("tee_id")
+    winner_reduction = (settings or {}).get("winner_reduction_enabled", False)
 
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
@@ -1039,11 +1040,6 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
                                      course_id=course_id, tee_id=tee_id)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
-        for r in results:
-            r["adj_display"] = format_adjustment(r.get("adjustment"))
-        team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
-        return {"ok": True, "players": results, "date": body.date,
-                "team_scores": team_scores, "whs_mode": True}
     else:
         results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
         try:
@@ -1051,11 +1047,27 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
                                      course_id=course_id, tee_id=tee_id)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
-        for r in results:
-            r["adj_display"] = format_adjustment(r.get("adjustment"))
-        team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
-        return {"ok": True, "players": results, "date": body.date,
-                "team_scores": team_scores, "whs_mode": False}
+
+    # Winner reduction: 25% HC cut for winner, ban countdown for others
+    reduction_changes = []
+    if winner_reduction:
+        scored = [r for r in results if r.get("score") is not None]
+        if scored:
+            top_score  = max(r["score"] for r in scored)
+            winners    = [r["name"] for r in scored if r["score"] == top_score]
+            all_names  = [r["name"] for r in scored]
+            reduction_changes = await db.apply_winner_reduction(
+                body.rollup_id, winners, all_names,
+                reduction_pct=int((settings or {}).get("winner_reduction_pct", 25)),
+                ban_rounds=int((settings or {}).get("winner_ban_rounds", 3)),
+            )
+
+    for r in results:
+        r["adj_display"] = format_adjustment(r.get("adjustment"))
+    team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
+    return {"ok": True, "players": results, "date": body.date,
+            "team_scores": team_scores, "whs_mode": whs_mode,
+            "reduction_changes": reduction_changes}
 
 
 # ---------------------------------------------------------------------------
@@ -1147,7 +1159,10 @@ class RollupSettingsRequest(BaseModel):
     whs_pct_1st: float = 0.0
     whs_pct_2nd: float = 0.0
     whs_pct_3rd: float = 0.0
-    whs_winner_prohibition: bool = False
+    whs_winner_prohibition:   bool = False
+    winner_reduction_enabled: bool = False
+    winner_reduction_pct:     int  = 25
+    winner_ban_rounds:        int  = 3
     course_id: int | None = None
     tee_id: int | None = None
     entry_fee: float = 0.00
