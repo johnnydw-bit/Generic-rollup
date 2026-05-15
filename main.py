@@ -543,7 +543,7 @@ async def admin_dashboard(
         f"<td><strong>{t['name']}</strong></td>"
         f"<td><code>{t['slug']}</code></td>"
         f"<td>{str(t['created_at'])[:10]}</td>"
-        f"<td><a href='/{t['slug']}' target='_blank'>Visit →</a></td>"
+        f"<td><a href='/admin/visit/{t['slug']}'>Visit →</a></td>"
         f"</tr>"
         for t in tenants
     )
@@ -595,6 +595,27 @@ async def admin_dashboard(
 async def admin_logout():
     response = RedirectResponse("/admin/login")
     response.delete_cookie("admin_token")
+    return response
+
+
+@app.get("/admin/visit/{slug}")
+async def admin_visit_tenant(slug: str, admin_token: str | None = Cookie(default=None)):
+    """Let an admin open any tenant's SPA without needing user credentials."""
+    if not admin_token or not _validate_admin_session(admin_token):
+        return RedirectResponse("/admin/login")
+    tenant = await db.get_tenant_by_slug(slug)
+    if not tenant:
+        raise HTTPException(404, f"No club found for '{slug}'")
+    token = _create_user_session(
+        user_id=0,
+        tenant_id=tenant["id"],
+        tenant_slug=tenant["slug"],
+        tenant_name=tenant["name"],
+        ig_username=None,
+        ig_pin=None,
+    )
+    response = RedirectResponse(f"/{slug}")
+    response.set_cookie("session_token", token, max_age=3600, httponly=False, samesite="lax")
     return response
 
 

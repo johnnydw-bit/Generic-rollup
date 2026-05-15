@@ -776,6 +776,8 @@
   <div class="settings-save-bar">
     <div id="s5Status" class="status-bar status-neutral" style="display:none;"></div>
     <button class="settings-save-btn" onclick="saveSettings()">Save Settings</button>
+    <button class="settings-save-btn" onclick="logout()"
+            style="background:#A32D2D;margin-top:4px;">Sign Out</button>
   </div>
 </div>
 
@@ -990,6 +992,15 @@ function apiFetch(url, options = {}) {
 }
 
 // ═══════════════════════════════════════════
+// Logout
+// ═══════════════════════════════════════════
+async function logout() {
+  await apiFetch('/api/logout', { method: 'POST' }).catch(() => {});
+  ['session_token','rollup_id','rollup_name','rollup_term'].forEach(k => localStorage.removeItem(k));
+  window.location.href = '/';
+}
+
+// ═══════════════════════════════════════════
 // Screen management
 // ═══════════════════════════════════════════
 function showScreen(id) {
@@ -1015,8 +1026,15 @@ function hasValidSession() {
 // ═══════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════
+function _getCookie(name) {
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 async function init() {
-  session.sessionToken = localStorage.getItem('session_token') || '';
+  // localStorage first; cookie is set by admin /admin/visit/{slug} redirect
+  session.sessionToken = localStorage.getItem('session_token') || _getCookie('session_token') || '';
+  if (session.sessionToken) localStorage.setItem('session_token', session.sessionToken);
   if (!session.sessionToken) {
     window.location.href = '/';
     return;
