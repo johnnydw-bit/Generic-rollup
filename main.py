@@ -163,29 +163,6 @@ async def root(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Club app — served at /{slug}
-# ---------------------------------------------------------------------------
-
-@app.get("/{slug}", response_class=HTMLResponse)
-async def club_app(slug: str, request: Request):
-    """Serve the SPA for a specific club slug. Returns 404 if slug unknown."""
-    # Skip reserved paths that FastAPI would otherwise catch with this wildcard
-    reserved = {"static", "api", "admin", "sw.js", "favicon.ico"}
-    if slug in reserved:
-        raise HTTPException(404)
-
-    tenant = await db.get_tenant_by_slug(slug)
-    if not tenant:
-        raise HTTPException(404, f"No club found for '{slug}'")
-
-    return templates.TemplateResponse("index.html", {
-        "request":     request,
-        "tenant_slug": slug,
-        "tenant_name": tenant["name"],
-    })
-
-
-# ---------------------------------------------------------------------------
 # Tenant auth dependency  (slug → tenant_id)
 # ---------------------------------------------------------------------------
 
@@ -1057,3 +1034,21 @@ async def debug_screenshot(step: int):
     if not path or not os.path.exists(path):
         return {"error": f"Screenshot {step} not found"}
     return FileResponse(path, media_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# Club app — /{slug} must be LAST so it doesn't shadow /admin, /api, etc.
+# ---------------------------------------------------------------------------
+
+@app.get("/{slug}", response_class=HTMLResponse)
+async def club_app(slug: str, request: Request):
+    """Serve the SPA for a specific club slug. Returns 404 if slug unknown."""
+    tenant = await db.get_tenant_by_slug(slug)
+    if not tenant:
+        raise HTTPException(404, f"No club found for '{slug}'")
+
+    return templates.TemplateResponse("index.html", {
+        "request":     request,
+        "tenant_slug": slug,
+        "tenant_name": tenant["name"],
+    })
