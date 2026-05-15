@@ -93,6 +93,27 @@ def _init_schema():
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
+            # ig_tenant: TRUE = members log in with IG credentials (used for scraping)
+            #            FALSE = members use custom username/password
+            cur.execute("""
+                ALTER TABLE tenants
+                    ADD COLUMN IF NOT EXISTS ig_tenant BOOLEAN NOT NULL DEFAULT TRUE
+            """)
+
+            # One row per club member. IG users: ig_pin stored plaintext (required for
+            # screen-scraping IG on their behalf). Non-IG users: password_hash only.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id            SERIAL PRIMARY KEY,
+                    tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                    username      TEXT NOT NULL,
+                    password_hash TEXT,
+                    ig_pin        TEXT,
+                    display_name  TEXT,
+                    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE(tenant_id, username)
+                )
+            """)
 
             # Per-tenant IG credentials (replaces the old app_credentials singleton)
             cur.execute("""
@@ -363,6 +384,7 @@ def _init_schema():
 
             # ── Indexes ──────────────────────────────────────────────────
             cur.execute("CREATE INDEX IF NOT EXISTS tenants_slug_idx ON tenants(slug)")
+            cur.execute("CREATE INDEX IF NOT EXISTS users_tenant_idx ON users(tenant_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rollups_tenant_idx ON rollups(tenant_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS players_rollup_idx ON players(rollup_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS rounds_rollup_idx ON rounds(rollup_id)")
@@ -388,7 +410,7 @@ def _get_tenant_by_slug(slug: str) -> dict | None:
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT id, name, slug FROM tenants WHERE slug = %s",
+                "SELECT id, name, slug, ig_tenant FROM tenants WHERE slug = %s",
                 (slug.lower(),)
             )
             row = cur.fetchone()
@@ -402,7 +424,7 @@ async def get_tenant_by_slug(slug: str) -> dict | None:
 def _get_all_tenants() -> list[dict]:
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT id, name, slug, created_at FROM tenants ORDER BY name")
+            cur.execute("SELECT id, name, slug, ig_tenant, created_at FROM tenants ORDER BY name")
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -410,19 +432,87 @@ async def get_all_tenants() -> list[dict]:
     return await _run(_get_all_tenants)
 
 
-def _create_tenant(name: str, slug: str) -> int:
+def _create_tenant(name: str, slug: str, ig_tenant: bool = True) -> int:
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO tenants (name, slug)
-                VALUES (%s, %s)
+                INSERT INTO tenants (name, slug, ig_tenant)
+                VALUES (%s, %s, %s)
                 RETURNING id
-            """, (name, slug.lower()))
+            """, (name, slug.lower(), ig_tenant))
             return cur.fetchone()[0]
 
 
-async def create_tenant(name: str, slug: str) -> int:
-    return await _run(_create_tenant, name, slug)
+async def create_tenant(name: str, slug: str, ig_tenant: bool = True) -> int:
+    return await _run(_create_tenant, name, slug, ig_tenant)
+
+
+# ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+
+def _create_user(tenant_id: int, username: str,
+                 password_hash: str | None = None,
+                 ig_pin: str | None = None,
+                 display_name: str | None = None) -> int:
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO users (tenant_id, username, password_hash, ig_pin, display_name)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+            """, (tenant_id, username, password_hash, ig_pin, display_name))
+            return cur.fetchone()[0]
+
+
+async def create_user(tenant_id: int, username: str,
+                      password_hash: str | None = None,
+                      ig_pin: str | None = None,
+                      display_name: str | None = None) -> int:
+    return await _run(_create_user, tenant_id, username, password_hash, ig_pin, display_name)
+
+
+def _get_user_by_username(tenant_id: int, username: str) -> dict | None:
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, tenant_id, username, password_hash, ig_pin, display_name "
+                "FROM users WHERE tenant_id = %s AND lower(username) = lower(%s)",
+                (tenant_id, username)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+async def get_user_by_username(tenant_id: int, username: str) -> dict | None:
+    return await _run(_get_user_by_username, tenant_id, username)
+
+
+def _authenticate_user(tenant_id: int, username: str, credential: str) -> dict | None:
+    """Returns user dict if credentials valid, None otherwise.
+    IG users: credential is the IG PIN (plaintext comparison).
+    Non-IG users: credential is password (PBKDF2 hash verification)."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, tenant_id, username, password_hash, ig_pin, display_name "
+                "FROM users WHERE tenant_id = %s AND lower(username) = lower(%s)",
+                (tenant_id, username)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            user = dict(row)
+            if user["ig_pin"] is not None:
+                # IG user — compare PIN directly
+                return user if user["ig_pin"] == credential else None
+            if user["password_hash"] is not None:
+                return user if _verify_password(user["password_hash"], credential) else None
+            return None
+
+
+async def authenticate_user(tenant_id: int, username: str, credential: str) -> dict | None:
+    return await _run(_authenticate_user, tenant_id, username, credential)
 
 
 def _validate_rollup_tenant(rollup_id: int, tenant_id: int) -> bool:

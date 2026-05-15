@@ -293,21 +293,7 @@
       <img src="/static/MOTHS_APP_LOGO.jpg" alt="logo"/>
     </div>
     <div class="login-title">Welcome</div>
-    <div class="login-subtitle">Sign in with your Intelligent Golf credentials</div>
-
-    <div>
-      <div class="login-section">Intelligent Golf Login</div>
-      <div class="field-group" style="margin-bottom:10px;">
-        <div class="field-label">Member ID</div>
-        <input class="field-input" id="igUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-      </div>
-      <div class="field-group">
-        <div class="field-label">PIN</div>
-        <input class="field-input" id="igPin" type="password" placeholder="Your IG PIN" autocomplete="current-password" inputmode="numeric"/>
-      </div>
-    </div>
-
-    <hr class="login-divider"/>
+    <div class="login-subtitle">Select your rollup to continue</div>
 
     <div>
       <div class="login-section">Select Rollup</div>
@@ -591,21 +577,7 @@
       </div>
     </div>
 
-    <!-- Section 2: IG Credentials -->
-    <div class="settings-section">
-      <div class="settings-section-title">Intelligent Golf Credentials</div>
-      <div class="settings-row">
-        <div class="settings-label">Member ID</div>
-        <input class="settings-input" id="sIgUsername" type="text" placeholder="Your IG member ID" autocomplete="username"/>
-      </div>
-      <div class="settings-row">
-        <div class="settings-label">PIN</div>
-        <div class="settings-sublabel">Stored in this browser only — never sent to our servers</div>
-        <input class="settings-input" id="sIgPin" type="password" placeholder="Leave blank to keep current PIN" autocomplete="current-password" inputmode="numeric"/>
-      </div>
-    </div>
-
-    <!-- Section 3: Tee Times -->
+    <!-- Section 2: Tee Times -->
     <div class="settings-section">
       <div class="settings-section-title">Tee Times</div>
       <div class="settings-row-inline">
@@ -996,24 +968,23 @@ let state = {
 };
 
 let session = {
-  // Tenant (club) — set from server-injected constants
-  tenantSlug: TENANT_SLUG,
-  tenantName: TENANT_NAME,
-  // Rollup / IG
-  rollupId: null,
+  // Auth
+  sessionToken: '',
+  tenantSlug:   TENANT_SLUG,
+  tenantName:   TENANT_NAME,
+  // Rollup
+  rollupId:   null,
   rollupName: '',
   rollupTerm: '',
-  igUsername: '',
-  igPin: '',
 };
 
 // ═══════════════════════════════════════════
-// API fetch helper — injects X-Tenant-Slug on every call
+// API fetch helper — injects X-Session-Token on every call
 // ═══════════════════════════════════════════
 function apiFetch(url, options = {}) {
   const headers = {
     ...(options.headers || {}),
-    'X-Tenant-Slug': session.tenantSlug,
+    'X-Session-Token': session.sessionToken,
   };
   return fetch(url, { ...options, headers });
 }
@@ -1038,18 +1009,31 @@ function goBack() {
 }
 
 function hasValidSession() {
-  return !!(session.tenantSlug && session.rollupId && session.rollupName);
+  return !!(session.sessionToken && session.rollupId && session.rollupName);
 }
 
 // ═══════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════
 async function init() {
-  // Tenant slug/name come from server-injected constants — no login needed
+  session.sessionToken = localStorage.getItem('session_token') || '';
+  if (!session.sessionToken) {
+    window.location.href = '/';
+    return;
+  }
+
+  // Verify session is still valid
+  try {
+    const check = await apiFetch('/api/rollups');
+    if (check.status === 401) {
+      localStorage.removeItem('session_token');
+      window.location.href = '/';
+      return;
+    }
+  } catch(e) {}
+
   document.getElementById('s0TenantName').textContent = session.tenantName;
 
-  session.igUsername = localStorage.getItem('ig_username') || '';
-  session.igPin      = localStorage.getItem('ig_pin')      || '';
   session.rollupId   = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
   session.rollupName = localStorage.getItem('rollup_name') || '';
   session.rollupTerm = localStorage.getItem('rollup_term') || '';
@@ -1123,31 +1107,20 @@ async function loadAuthStatus() {
 // Login / Screen 0
 // ═══════════════════════════════════════════
 function saveLogin() {
-  const username = document.getElementById('igUsername').value.trim();
-  const pin = document.getElementById('igPin').value.trim();
   const sel = document.getElementById('rollupSelect');
   const opt = sel.options[sel.selectedIndex];
 
-  if (!username || !pin) {
-    document.getElementById('loginError').textContent = 'Please enter your Member ID and PIN.';
-    document.getElementById('loginError').style.display = 'block';
-    return;
-  }
   if (!opt || !opt.value) {
     document.getElementById('loginError').textContent = 'Please select a rollup.';
     document.getElementById('loginError').style.display = 'block';
     return;
   }
 
-  session.igUsername = username;
-  session.igPin = pin;
-  session.rollupId = parseInt(opt.value);
+  session.rollupId   = parseInt(opt.value);
   session.rollupName = opt.textContent;
   session.rollupTerm = opt.dataset.term || '';
 
-  localStorage.setItem('ig_username', username);
-  localStorage.setItem('ig_pin', pin);
-  localStorage.setItem('rollup_id', session.rollupId);
+  localStorage.setItem('rollup_id',   session.rollupId);
   localStorage.setItem('rollup_name', session.rollupName);
   localStorage.setItem('rollup_term', session.rollupTerm);
 
@@ -1204,8 +1177,7 @@ async function loadPlayers() {
     const resp = await apiFetch('/api/load-players', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        date, ig_username: session.igUsername, ig_pin: session.igPin,
-        rollup_id: session.rollupId, ig_search_term: session.rollupTerm,
+        date, rollup_id: session.rollupId, ig_search_term: session.rollupTerm,
       }),
     });
     if (!resp.ok) {
@@ -1777,9 +1749,6 @@ function populateSettingsForm(s) {
   document.getElementById('sDisplayName').value = s.display_name || '';
   document.getElementById('sIgTerm').value = s.ig_search_term || '';
   document.getElementById('sTeeInterval').value = s.tee_interval_minutes || 8;
-  document.getElementById('sIgUsername').value = session.igUsername || '';
-  // Don't pre-fill PIN
-
   // Run days
   document.querySelectorAll('.day-chip').forEach(chip => {
     chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
@@ -2045,9 +2014,6 @@ async function saveSettings() {
   const mode = document.getElementById('modeWhs').classList.contains('active') ? 'whs' : 'stableford';
   const runDays = [...document.querySelectorAll('.day-chip.active')].map(c => c.dataset.day);
   const adjTable = state.rollupSettings ? state.rollupSettings.adjustment_table : [];
-  const igUsername = document.getElementById('sIgUsername').value.trim();
-  const igPin = document.getElementById('sIgPin').value.trim();
-
   const n = currentPrizePlaces;
   let pcts = [0, 0, 0, 0];
   for (let i = 1; i <= n; i++) {
@@ -2101,16 +2067,7 @@ async function saveSettings() {
       statusEl.textContent = err.detail || 'Save failed.';
       return;
     }
-    // Save credentials to localStorage and DB
-    if (igUsername) {
-      localStorage.setItem('ig_username', igUsername);
-      session.igUsername = igUsername;
-    }
-    if (igPin) {
-      localStorage.setItem('ig_pin', igPin);
-      session.igPin = igPin;
-    }
-    // Update rollup name in session if changed
+    // Update rollup name/term in session if changed
     session.rollupName = payload.display_name || session.rollupName;
     session.rollupTerm = payload.ig_search_term || session.rollupTerm;
     localStorage.setItem('rollup_name', session.rollupName);
@@ -2282,21 +2239,11 @@ async function confirmAddPlayer() {
 
 async function syncWhsIndices() {
   if (!s6State.rollupId) { alert('Please select a rollup first.'); return; }
-  const igUsername = localStorage.getItem('ig_username') || session.igUsername || '';
-  const igPin = localStorage.getItem('ig_pin') || session.igPin || '';
-  if (!igUsername || !igPin) {
-    alert('IG credentials not set. Please sign in first.');
-    return;
-  }
   setS6Status('Syncing WHS indices from IG…', 'neutral');
   try {
     const resp = await apiFetch('/api/scrape-whs-indices', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        ig_username: igUsername,
-        ig_pin: igPin,
-        rollup_id: s6State.rollupId,
-      }),
+      body: JSON.stringify({ rollup_id: s6State.rollupId }),
     });
     const data = await resp.json();
     if (!resp.ok) { setS6Status(data.detail || 'Sync failed', 'danger'); return; }

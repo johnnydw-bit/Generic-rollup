@@ -81,6 +81,46 @@ templates = Jinja2Templates(directory="frontend/templates")
 _admin_sessions: dict[str, dict] = {}  # token -> {github_username, expires_at}
 _ADMIN_SESSION_TTL = 86_400  # 24 hours
 
+# ---------------------------------------------------------------------------
+# User sessions  (in-memory; 30-day TTL)
+# ---------------------------------------------------------------------------
+
+_user_sessions: dict[str, dict] = {}
+_USER_SESSION_TTL = 30 * 86_400
+
+
+def _create_user_session(user_id: int, tenant_id: int, tenant_slug: str,
+                         tenant_name: str, ig_username: str | None,
+                         ig_pin: str | None) -> str:
+    token = secrets.token_urlsafe(32)
+    _user_sessions[token] = {
+        "user_id":     user_id,
+        "tenant_id":   tenant_id,
+        "tenant_slug": tenant_slug,
+        "tenant_name": tenant_name,
+        "ig_username": ig_username,
+        "ig_pin":      ig_pin,
+        "expires_at":  time.time() + _USER_SESSION_TTL,
+    }
+    return token
+
+
+def _validate_user_session(token: str) -> dict | None:
+    s = _user_sessions.get(token)
+    if not s:
+        return None
+    if time.time() > s["expires_at"]:
+        _user_sessions.pop(token, None)
+        return None
+    return s
+
+
+def _hash_password(password: str) -> str:
+    import hashlib, binascii
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 200_000)
+    return binascii.hexlify(salt).decode() + ":" + binascii.hexlify(dk).decode()
+
 
 def _create_admin_session(github_username: str) -> str:
     token = secrets.token_urlsafe(32)
@@ -133,54 +173,258 @@ async def service_worker():
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Serve a simple landing page at / pointing users to their club URL."""
     return HTMLResponse("""
     <!DOCTYPE html>
     <html><head><meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Rollup Manager</title>
     <style>
-      body { font-family: -apple-system, sans-serif; background: #2D2B5B;
-             display: flex; align-items: center; justify-content: center;
-             min-height: 100vh; margin: 0; }
-      .box { background: #fff; border-radius: 16px; padding: 32px 28px;
-             max-width: 360px; width: 90%; text-align: center; }
-      h1 { color: #2D2B5B; font-size: 22px; margin-bottom: 8px; }
-      p  { color: #666; font-size: 14px; line-height: 1.5; }
-      a  { color: #2D2B5B; font-weight: 600; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+             background: #2D2B5B; display: flex; align-items: center;
+             justify-content: center; min-height: 100vh; padding: 20px; }
+      .box { background: #fff; border-radius: 16px; padding: 28px 24px;
+             max-width: 380px; width: 100%; }
+      h1 { color: #2D2B5B; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+      .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+      .tabs { display: flex; border-radius: 8px; overflow: hidden;
+              border: 1.5px solid #2D2B5B; margin-bottom: 20px; }
+      .tab { flex: 1; padding: 9px; font-size: 13px; font-weight: 600;
+             border: none; cursor: pointer; font-family: inherit;
+             background: #fff; color: #2D2B5B; }
+      .tab.active { background: #2D2B5B; color: #FFD700; }
+      .label { font-size: 10px; font-weight: 700; color: #2D2B5B; text-transform: uppercase;
+               letter-spacing: 0.06em; margin-bottom: 4px; }
+      input { width: 100%; padding: 10px 12px; border-radius: 8px;
+              border: 1.5px solid #2D2B5B40; font-size: 15px; margin-bottom: 12px;
+              font-family: inherit; }
+      input:focus { outline: none; border-color: #2D2B5B; }
+      button.go { width: 100%; padding: 13px; background: #2D2B5B; color: #FFD700;
+                  border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+                  cursor: pointer; font-family: inherit; margin-top: 4px; }
+      .err { color: #A32D2D; font-size: 12px; text-align: center; margin-top: 8px;
+             display: none; }
+      .hint { color: #888; font-size: 11px; margin-top: -8px; margin-bottom: 12px; }
+      .club-name { font-size: 13px; font-weight: 700; color: #2D2B5B; text-align: center;
+                   margin-bottom: 12px; min-height: 18px; }
+      .admin-link { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;
+                    text-align: center; font-size: 12px; color: #aaa; }
+      .admin-link a { color: #2D2B5B; font-weight: 600; text-decoration: none; }
     </style>
     </head><body>
     <div class="box">
       <h1>Rollup Manager</h1>
-      <p>Please use your club&#8217;s link to access the app.<br/>
-      Contact your club admin if you don&#8217;t have the URL.</p>
-      <p style="margin-top:20px;font-size:12px;">
-        <a href="/admin">Admin login</a>
-      </p>
+      <p class="sub">Sign in to your club's rollup app</p>
+
+      <div class="tabs">
+        <button class="tab active" onclick="showTab('login')">Sign in</button>
+        <button class="tab" onclick="showTab('register')">Register</button>
+      </div>
+
+      <!-- Sign in -->
+      <div id="loginForm">
+        <div class="label">Club slug</div>
+        <input id="li_slug" placeholder="e.g. bramley" autocapitalize="none"
+               oninput="onSlugInput('li_slug','li_clubname','li_credlabel','li_credplaceholder')"/>
+        <div class="club-name" id="li_clubname"></div>
+        <div class="label" id="li_credlabel">Member ID</div>
+        <input id="li_user" placeholder="Your member ID" autocomplete="username"/>
+        <div class="label">PIN / Password</div>
+        <input id="li_pass" type="password" placeholder="PIN or password" autocomplete="current-password"/>
+        <button class="go" onclick="doLogin()">Sign in</button>
+        <div class="err" id="li_err"></div>
+      </div>
+
+      <!-- Register -->
+      <div id="registerForm" style="display:none">
+        <div class="label">Club slug</div>
+        <input id="re_slug" placeholder="e.g. bramley" autocapitalize="none"
+               oninput="onSlugInput('re_slug','re_clubname','re_credlabel','re_credplaceholder')"/>
+        <div class="club-name" id="re_clubname"></div>
+        <div class="label" id="re_credlabel">Member ID / Username</div>
+        <input id="re_user" placeholder="Your member ID or chosen username" autocomplete="username"/>
+        <div class="label">PIN / Password</div>
+        <input id="re_pass" type="password" placeholder="PIN or password" autocomplete="new-password"/>
+        <div class="hint" id="re_hint">For Intelligent Golf clubs: use your IG member ID and PIN</div>
+        <button class="go" onclick="doRegister()">Create account</button>
+        <div class="err" id="re_err"></div>
+      </div>
+
+      <div class="admin-link"><a href="/admin/login">Admin login</a></div>
     </div>
+    <script>
+    function showTab(t) {
+      document.getElementById('loginForm').style.display    = t==='login'    ? '' : 'none';
+      document.getElementById('registerForm').style.display = t==='register' ? '' : 'none';
+      document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active', (t==='login'?i===0:i===1)));
+    }
+    let _slugCache = {};
+    async function onSlugInput(slugId, nameId, labelId) {
+      const slug = document.getElementById(slugId).value.trim().toLowerCase();
+      const nameEl = document.getElementById(nameId);
+      const labelEl = document.getElementById(labelId);
+      if (!slug) { nameEl.textContent=''; return; }
+      if (_slugCache[slug] !== undefined) { applyTenantInfo(_slugCache[slug], nameEl, labelEl); return; }
+      try {
+        const r = await fetch('/api/tenant-info?slug='+encodeURIComponent(slug));
+        if (r.ok) {
+          const d = await r.json();
+          _slugCache[slug] = d;
+          applyTenantInfo(d, nameEl, labelEl);
+        } else {
+          _slugCache[slug] = null;
+          nameEl.textContent = 'Club not found';
+          nameEl.style.color = '#A32D2D';
+        }
+      } catch(e) {}
+    }
+    function applyTenantInfo(d, nameEl, labelEl) {
+      if (!d) return;
+      nameEl.textContent = d.name;
+      nameEl.style.color = '#2D2B5B';
+      labelEl.textContent = d.ig_tenant ? 'IG Member ID' : 'Username';
+    }
+    async function doLogin() {
+      const slug = document.getElementById('li_slug').value.trim().toLowerCase();
+      const user = document.getElementById('li_user').value.trim();
+      const pass = document.getElementById('li_pass').value;
+      const err  = document.getElementById('li_err');
+      err.style.display = 'none';
+      if (!slug || !user || !pass) { err.textContent='All fields required.'; err.style.display='block'; return; }
+      try {
+        const r = await fetch('/api/login', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({slug, username:user, credential:pass})});
+        const d = await r.json();
+        if (!r.ok) { err.textContent = d.detail||'Sign in failed.'; err.style.display='block'; return; }
+        localStorage.setItem('session_token', d.session_token);
+        localStorage.setItem('tenant_slug', d.tenant_slug);
+        window.location.href = '/'+d.tenant_slug;
+      } catch(e) { err.textContent='Network error.'; err.style.display='block'; }
+    }
+    async function doRegister() {
+      const slug = document.getElementById('re_slug').value.trim().toLowerCase();
+      const user = document.getElementById('re_user').value.trim();
+      const pass = document.getElementById('re_pass').value;
+      const err  = document.getElementById('re_err');
+      err.style.display = 'none';
+      if (!slug || !user || !pass) { err.textContent='All fields required.'; err.style.display='block'; return; }
+      try {
+        const r = await fetch('/api/register', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({slug, username:user, credential:pass})});
+        const d = await r.json();
+        if (!r.ok) { err.textContent = d.detail||'Registration failed.'; err.style.display='block'; return; }
+        localStorage.setItem('session_token', d.session_token);
+        localStorage.setItem('tenant_slug', d.tenant_slug);
+        window.location.href = '/'+d.tenant_slug;
+      } catch(e) { err.textContent='Network error.'; err.style.display='block'; }
+    }
+    </script>
     </body></html>
     """)
 
 
 # ---------------------------------------------------------------------------
-# Tenant auth dependency  (slug → tenant_id)
+# User auth dependency + tenant-info / login / register / logout endpoints
 # ---------------------------------------------------------------------------
 
-async def get_current_tenant(
-    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
-) -> int:
-    """Resolve X-Tenant-Slug header to a tenant_id. 404 if slug unknown."""
-    if not x_tenant_slug:
-        raise HTTPException(400, "X-Tenant-Slug header is required")
-    tenant = await db.get_tenant_by_slug(x_tenant_slug)
-    if not tenant:
-        raise HTTPException(404, f"Club '{x_tenant_slug}' not found")
-    return tenant["id"]
+async def get_current_session(
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+    session_token:   str | None = Cookie(default=None),
+) -> dict:
+    token = x_session_token or session_token
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    s = _validate_user_session(token)
+    if not s:
+        raise HTTPException(401, "Session expired — please sign in again")
+    return s
+
+
+async def get_current_tenant(session: dict = Depends(get_current_session)) -> int:
+    return session["tenant_id"]
 
 
 async def _assert_rollup_access(rollup_id: int, tenant_id: int):
     if not await validate_rollup_tenant(rollup_id, tenant_id):
         raise HTTPException(403, "Access denied to this rollup")
+
+
+@app.get("/api/tenant-info")
+async def tenant_info(slug: str = Query(...)):
+    """Public endpoint — returns club name and auth type for the login form."""
+    tenant = await db.get_tenant_by_slug(slug)
+    if not tenant:
+        raise HTTPException(404, f"No club found for '{slug}'")
+    return {"name": tenant["name"], "ig_tenant": tenant["ig_tenant"]}
+
+
+class LoginRequest(BaseModel):
+    slug:       str
+    username:   str
+    credential: str  # IG PIN or password
+
+
+class RegisterRequest(BaseModel):
+    slug:       str
+    username:   str
+    credential: str
+    display_name: str = ""
+
+
+@app.post("/api/login")
+async def login(body: LoginRequest):
+    tenant = await db.get_tenant_by_slug(body.slug.lower())
+    if not tenant:
+        raise HTTPException(404, "Club not found")
+    user = await db.authenticate_user(tenant["id"], body.username, body.credential)
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+    ig_username = user["username"] if tenant["ig_tenant"] else None
+    ig_pin      = user["ig_pin"]   if tenant["ig_tenant"] else None
+    token = _create_user_session(user["id"], tenant["id"], tenant["slug"],
+                                 tenant["name"], ig_username, ig_pin)
+    return {"session_token": token, "tenant_slug": tenant["slug"],
+            "tenant_name": tenant["name"]}
+
+
+@app.post("/api/register")
+async def register(body: RegisterRequest):
+    tenant = await db.get_tenant_by_slug(body.slug.lower())
+    if not tenant:
+        raise HTTPException(404, "Club not found")
+    existing = await db.get_user_by_username(tenant["id"], body.username)
+    if existing:
+        raise HTTPException(409, "That username is already registered for this club")
+    if len(body.credential) < 4:
+        raise HTTPException(400, "PIN/password must be at least 4 characters")
+    if tenant["ig_tenant"]:
+        user_id = await db.create_user(tenant["id"], body.username,
+                                       ig_pin=body.credential,
+                                       display_name=body.display_name or None)
+        ig_username, ig_pin = body.username, body.credential
+    else:
+        ph = _hash_password(body.credential)
+        user_id = await db.create_user(tenant["id"], body.username,
+                                       password_hash=ph,
+                                       display_name=body.display_name or None)
+        ig_username, ig_pin = None, None
+    token = _create_user_session(user_id, tenant["id"], tenant["slug"],
+                                 tenant["name"], ig_username, ig_pin)
+    return {"session_token": token, "tenant_slug": tenant["slug"],
+            "tenant_name": tenant["name"]}
+
+
+@app.post("/api/logout")
+async def logout(
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+    session_token:   str | None = Cookie(default=None),
+):
+    token = x_session_token or session_token
+    if token:
+        _user_sessions.pop(token, None)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -292,16 +536,17 @@ async def admin_dashboard(
         return RedirectResponse("/admin/login")
 
     tenants = await db.get_all_tenants()
+    base = os.getenv("APP_BASE_URL", "").rstrip("/")
     rows = "".join(
         f"<tr>"
         f"<td>{t['id']}</td>"
         f"<td><strong>{t['name']}</strong></td>"
         f"<td><code>{t['slug']}</code></td>"
         f"<td>{str(t['created_at'])[:10]}</td>"
+        f"<td><a href='/{t['slug']}' target='_blank'>Visit →</a></td>"
         f"</tr>"
         for t in tenants
     )
-    base = os.getenv("APP_BASE_URL", "").rstrip("/")
     return HTMLResponse(f"""
     <!DOCTYPE html>
     <html><head><meta charset="UTF-8"/>
@@ -319,7 +564,7 @@ async def admin_dashboard(
       input {{ padding: 8px 10px; border: 1.5px solid #ccc; border-radius: 6px; font-size: 13px; }}
       button {{ padding: 8px 16px; background: #2D2B5B; color: #FFD700; border: none;
                 border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }}
-      a {{ color: #2D2B5B; }}
+      a {{ color: #2D2B5B; font-weight: 600; }}
     </style>
     </head><body>
     <h1>Admin Panel</h1>
@@ -327,7 +572,7 @@ async def admin_dashboard(
 
     <h2>Clubs / Tenants</h2>
     <table>
-      <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Created</th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Created</th><th></th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
 
@@ -335,9 +580,13 @@ async def admin_dashboard(
     <form method="post" action="/admin/tenants">
       <input name="name" placeholder="Club name" required/>
       <input name="slug" placeholder="slug (e.g. bramley)" required/>
-      <button type="submit">Create</button>
+      <label style="font-size:13px;display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <input type="checkbox" name="ig_tenant" value="1" checked style="width:auto;margin:0;"/>
+        Intelligent Golf club (members use IG credentials)
+      </label>
+      <button type="submit" style="margin-top:10px;">Create</button>
     </form>
-    {"<p>Club URL format: <code>" + base + "/&lt;slug&gt;</code></p>" if base else ""}
+    {"<p style='margin-top:8px;font-size:12px;color:#888;'>Club URL: <code>" + base + "/&lt;slug&gt;</code></p>" if base else ""}
     </body></html>
     """)
 
@@ -358,12 +607,13 @@ async def admin_create_tenant_form(
     if not admin_token or not _validate_admin_session(admin_token):
         return RedirectResponse("/admin/login")
     form = await request.form()
-    name = (form.get("name") or "").strip()
-    slug = (form.get("slug") or "").strip().lower().replace(" ", "-")
+    name      = (form.get("name") or "").strip()
+    slug      = (form.get("slug") or "").strip().lower().replace(" ", "-")
+    ig_tenant = form.get("ig_tenant") == "1"
     if not name or not slug:
         return RedirectResponse("/admin")
     try:
-        await db.create_tenant(name, slug)
+        await db.create_tenant(name, slug, ig_tenant)
     except Exception:
         pass  # slug conflict — ignore for now
     return RedirectResponse("/admin", status_code=303)
@@ -456,19 +706,23 @@ async def auth_status(
 
 class LoadRequest(BaseModel):
     date: str
-    ig_username: str
-    ig_pin: str
     rollup_id: int
     ig_search_term: str
 
 
 @app.post("/api/load-players")
-async def load_players(body: LoadRequest, tenant_id: int = Depends(get_current_tenant)):
+async def load_players(body: LoadRequest, session: dict = Depends(get_current_session)):
+    tenant_id = session["tenant_id"]
     await _assert_rollup_access(body.rollup_id, tenant_id)
+
+    ig_username = session.get("ig_username") or ""
+    ig_pin      = session.get("ig_pin")      or ""
+    if not ig_username or not ig_pin:
+        raise HTTPException(400, "IG credentials not available in session — please sign in with IG credentials")
 
     try:
         scrape_result = await scrape_players(
-            body.ig_username, body.ig_pin, body.date, body.ig_search_term,
+            ig_username, ig_pin, body.date, body.ig_search_term,
         )
     except Exception as e:
         raise HTTPException(502, str(e))
@@ -644,17 +898,20 @@ async def delete_player(body: DeletePlayerRequest, tenant_id: int = Depends(get_
 
 
 class SyncWhsRequest(BaseModel):
-    ig_username: str
-    ig_pin: str
     rollup_id: int
 
 
 @app.post("/api/scrape-whs-indices")
-async def scrape_whs_indices_endpoint(body: SyncWhsRequest, tenant_id: int = Depends(get_current_tenant)):
+async def scrape_whs_indices_endpoint(body: SyncWhsRequest, session: dict = Depends(get_current_session)):
+    tenant_id   = session["tenant_id"]
+    ig_username = session.get("ig_username") or ""
+    ig_pin      = session.get("ig_pin")      or ""
+    if not ig_username or not ig_pin:
+        raise HTTPException(400, "IG credentials not in session")
     await _assert_rollup_access(body.rollup_id, tenant_id)
     from backend.scraper import scrape_whs_indices
     try:
-        result = await scrape_whs_indices(body.ig_username, body.ig_pin)
+        result = await scrape_whs_indices(ig_username, ig_pin)
     except Exception as e:
         raise HTTPException(502, f"Could not scrape handicap list: {str(e)}")
 
@@ -985,13 +1242,8 @@ async def save_course_endpoint(body: SaveCourseRequest):
 # Debug
 # ---------------------------------------------------------------------------
 
-class DebugHcapRequest(BaseModel):
-    ig_username: str
-    ig_pin: str
-
-
 @app.post("/api/debug-hcap")
-async def debug_hcap(body: DebugHcapRequest):
+async def debug_hcap(session: dict = Depends(get_current_session)):
     from bs4 import BeautifulSoup
     BASE_URL    = "https://www.bramleygolfclub.co.uk"
     LOGIN_URL   = f"{BASE_URL}/login.php"
@@ -1010,7 +1262,7 @@ async def debug_hcap(body: DebugHcapRequest):
             return {"error": "No CSRF token found on login page"}
         resp = await client.post(LOGIN_URL, data={
             "task": "login", "topmenu": "1",
-            "memberid": body.ig_username, "pin": body.ig_pin,
+            "memberid": session.get("ig_username",""), "pin": session.get("ig_pin",""),
             "cachemid": "1", "_csrf_token": csrf.get("value", ""), "Submit": "Login",
         })
         if str(resp.url).endswith("login.php"):
