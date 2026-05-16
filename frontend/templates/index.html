@@ -388,6 +388,10 @@
         <button class="toggle-btn active" id="indBtn" onclick="setGameMode('individual')">Individual</button>
         <button class="toggle-btn" id="teamBtn" onclick="setGameMode('team')">Team</button>
       </div>
+      <div class="toggle-row" style="margin-top:4px;">
+        <button class="toggle-btn active" id="fmtSfBtn" onclick="setRoundFormat('stableford')">Stableford</button>
+        <button class="toggle-btn" id="fmtMdBtn" onclick="setRoundFormat('medal')">Medal</button>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:4px;">
       <span id="s2MethodLabel" style="font-size:10px;color:#2D2B5B;font-weight:700;background:#e8e8f0;border-radius:6px;padding:4px 8px;"></span>
@@ -874,8 +878,8 @@
           <tr>
             <th class="left">Player</th>
             <th>HC</th>
-            <th>WHS</th>
-            <th>Next Rd</th>
+            <th id="s6WhsHead">WHS</th>
+            <th id="s6NextHead">Next Rd</th>
             <th>Rds</th>
             <th>Prize £</th>
             <th>Actions</th>
@@ -1052,6 +1056,7 @@ let state = {
   rollupSettings: null,
   prohibitedWinner: null,
   competitionFormat: 'stableford',
+  roundFormat: 'stableford',
   teePar: null,
 };
 
@@ -1509,16 +1514,17 @@ function openScoreEntry() {
   document.getElementById('teamScoreboardWrap').style.display = 'none';
   document.getElementById('prohibitedWarning').style.display = 'none';
   state.prohibitedWinner = null;
+  // Default round format from competition setting; user can override per round
+  setRoundFormat(state.competitionFormat || 'stableford');
+
   // Set read-only method label based on current settings
   const _sm  = (state.rollupSettings || {}).scoring_mode;
-  const _fmt = state.competitionFormat || 'stableford';
   const _methodLabels = {
     'universal':      'Universal HC',
     'winners_only_1': 'Winners Only 1',
     'winners_only_2': 'Winners Only 2',
   };
-  const _fmtLabel = _fmt === 'medal' ? ' · Medal' : '';
-  document.getElementById('s2MethodLabel').textContent = (_methodLabels[_sm] || 'Universal HC') + _fmtLabel;
+  document.getElementById('s2MethodLabel').textContent = _methodLabels[_sm] || 'Universal HC';
   renderPrizeBar();
   renderGrid();
   showScreen('screen2');
@@ -1556,6 +1562,14 @@ function setGameMode(mode) {
   document.getElementById('teamBtn').classList.toggle('active', mode === 'team');
   document.getElementById('teamConfigBar').style.display = mode === 'team' ? 'block' : 'none';
   if (mode === 'team') updateTeamStructureUI();
+  renderGrid();
+  recalculate();
+}
+
+function setRoundFormat(fmt) {
+  state.roundFormat = fmt;
+  document.getElementById('fmtSfBtn').classList.toggle('active', fmt !== 'medal');
+  document.getElementById('fmtMdBtn').classList.toggle('active', fmt === 'medal');
   renderGrid();
   recalculate();
 }
@@ -1658,7 +1672,7 @@ function renderGrid() {
   const isTeam  = state.gameMode === 'team';
   const method  = (state.rollupSettings || {}).scoring_mode || 'universal';
   const isWhs   = (method === 'winners_only_1');
-  const isMedal = (state.competitionFormat || (state.rollupSettings || {}).competition_format || 'stableford') === 'medal';
+  const isMedal = (state.roundFormat || 'stableford') === 'medal';
   const s = state.rollupSettings || {};
 
   document.getElementById('col6Head').textContent    = isTeam ? 'Team' : 'Remove';
@@ -1777,6 +1791,7 @@ async function recalculate() {
         date: state.roundDate, players: state.players,
         team_mode: state.gameMode === 'team',
         rollup_id: session.rollupId,
+        competition_format: state.roundFormat,
       }),
     });
     const data = await resp.json();
@@ -1784,7 +1799,6 @@ async function recalculate() {
       const r = data.players.find(x => x.name === p.name);
       return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, adjustment: r.adjustment, position: r.position, winner: r.winner, net_score: r.net_score} : p;
     });
-    if (data.competition_format) state.competitionFormat = data.competition_format;
     if (data.tee_par !== undefined) state.teePar = data.tee_par;
     state.teamScores = data.team_scores || [];
     state.prohibitedWinner = data.prohibited_winner || null;
@@ -1835,6 +1849,7 @@ async function saveRound() {
         date: state.roundDate, players: state.players,
         team_mode: state.gameMode === 'team',
         rollup_id: session.rollupId,
+        competition_format: state.roundFormat,
       }),
     });
     if (!resp.ok) {
@@ -1909,7 +1924,10 @@ async function loadRoundByIdx(idx) {
 }
 
 function renderResults(players, date) {
-  const isMedal = (state.competitionFormat || (state.rollupSettings || {}).competition_format || 'stableford') === 'medal';
+  // Use the format stored with the round — set per player when saved.
+  // Fall back to stableford for pre-feature historical rounds (null format).
+  const firstWithFormat = players.find(p => p.competition_format);
+  const isMedal = (firstWithFormat?.competition_format || 'stableford') === 'medal';
   const teePar  = state.teePar || (state.rollupSettings || {}).tee_par || null;
 
   // Sort: medal = lowest net first; stableford = highest score first
@@ -2562,25 +2580,31 @@ async function loadPlayerManager() {
 
 function renderPlayerTable() {
   const tbody = document.getElementById('s6TableBody');
+  const isWhs = ((state.rollupSettings || {}).scoring_mode === 'winners_only_1');
+  document.getElementById('s6WhsHead').style.display  = isWhs ? '' : 'none';
+  document.getElementById('s6NextHead').style.display = isWhs ? '' : 'none';
+
   if (s6State.players.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${isWhs ? 7 : 5}" style="text-align:center;color:#aaa;padding:20px;">No players yet</td></tr>`;
     return;
   }
   tbody.innerHTML = s6State.players.map(p => {
     const prohibBadge = p.winner_prohibited ? ' <span class="prohibited-badge" title="Winner prohibited">🚫</span>' : '';
     const banBadge = p.winner_ban_entries > 0 ? ` <span class="prohibited-badge" title="Win ban: ${p.winner_ban_entries} round(s) remaining" style="background:#c47a00;">⛔${p.winner_ban_entries}</span>` : '';
-    const whsVal = p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : '—';
     const nextVal = p.whs_index_next_round !== null && p.whs_index_next_round !== undefined ? p.whs_index_next_round.toFixed(1) : '—';
+    const whsCells = isWhs ? `
+      <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
+      <td style="font-size:11px;color:#888;">${nextVal}</td>` : '';
+    const whsBtn = isWhs ? `<button class="s6-save-whs-btn" onclick="savePlayerWHS(${p.id})">WHS</button>` : '';
     return `<tr>
       <td class="left">${p.name}${prohibBadge}${banBadge}</td>
       <td><input class="s6-hc-input" id="hc_${p.id}" type="number" min="0" max="54" value="${p.handicap}" inputmode="numeric"/></td>
-      <td><input class="s6-hc-input" id="whs_${p.id}" type="number" min="0" max="54" step="0.1" value="${p.whs_index !== null && p.whs_index !== undefined ? p.whs_index.toFixed(1) : ''}" placeholder="—" inputmode="decimal" style="width:52px;"/></td>
-      <td style="font-size:11px;color:#888;">${nextVal}</td>
+      ${whsCells}
       <td style="font-size:11px;color:#888;">${p.round_count}</td>
       <td style="font-size:11px;color:#2D7A2D;font-weight:700;">${p.total_prize_won > 0 ? '£' + parseFloat(p.total_prize_won).toFixed(2) : '—'}</td>
       <td style="display:flex;gap:3px;padding:3px 4px;">
         <button class="s6-save-btn" onclick="savePlayerHC(${p.id})">HC</button>
-        <button class="s6-save-whs-btn" onclick="savePlayerWHS(${p.id})">WHS</button>
+        ${whsBtn}
         <button class="s6-del-btn" onclick="promptDeletePlayer(${p.id}, '${p.name.replace(/'/g,"\\'")}')">✕</button>
       </td>
     </tr>`;

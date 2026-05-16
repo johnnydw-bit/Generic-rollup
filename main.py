@@ -1288,6 +1288,7 @@ class ScoreUpdate(BaseModel):
     players: list[dict]
     team_mode: bool = False
     rollup_id: int = 1
+    competition_format: str = "stableford"
 
 
 @app.post("/api/autosave")
@@ -1305,7 +1306,10 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
     whs_mode         = (autosave_method == "winners_only_1")
     winner_reduction = (autosave_method == "winners_only_2")
 
-    competition_format = (settings or {}).get("competition_format", "stableford")
+    # Per-round format overrides the competition default
+    round_format = body.competition_format
+    if settings:
+        settings = {**settings, "competition_format": round_format}
     tee_par = (settings or {}).get("tee_par")
 
     if whs_mode:
@@ -1318,7 +1322,7 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
         return {"players": results, "team_scores": team_scores, "whs_mode": True,
                 "prohibited_winner": whs_result.get("prohibited_winner"),
                 "error": whs_result.get("error"),
-                "competition_format": competition_format, "tee_par": tee_par}
+                "competition_format": round_format, "tee_par": tee_par}
     elif winner_reduction:
         results = [
             {**p, "adjustment": None, "new_handicap": p.get("playing_hc") or p.get("handicap") or 0,
@@ -1330,14 +1334,14 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
         ]
         team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
         return {"players": results, "team_scores": team_scores, "whs_mode": False,
-                "competition_format": competition_format, "tee_par": tee_par}
+                "competition_format": round_format, "tee_par": tee_par}
     else:
         results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
         for r in results:
             r["adj_display"] = format_adjustment(r.get("adjustment"))
         team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
         return {"players": results, "team_scores": team_scores, "whs_mode": False,
-                "competition_format": competition_format, "tee_par": tee_par}
+                "competition_format": round_format, "tee_par": tee_par}
 
 
 def _compute_prize_map(scored: list[dict], pot: float, pcts: list[float]) -> dict:
@@ -1388,6 +1392,11 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
     course_id = (settings or {}).get("course_id")
     tee_id    = (settings or {}).get("tee_id")
 
+    # Per-round format overrides the competition default
+    round_format = body.competition_format
+    if settings:
+        settings = {**settings, "competition_format": round_format}
+
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
         whs_result = calculate_whs_handicaps(body.players, settings=settings, prohibited_names=prohibited)
@@ -1396,11 +1405,11 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         results = whs_result["players"]
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=True,
-                                     course_id=course_id, tee_id=tee_id)
+                                     course_id=course_id, tee_id=tee_id,
+                                     competition_format=round_format)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
     elif winner_reduction:
-        # winners_only_2: no HC adjustments calculated here; apply_winner_reduction handles the cut
         results = [
             {
                 **p,
@@ -1412,14 +1421,16 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         ]
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
-                                     course_id=course_id, tee_id=tee_id)
+                                     course_id=course_id, tee_id=tee_id,
+                                     competition_format=round_format)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
     else:
         results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
-                                     course_id=course_id, tee_id=tee_id)
+                                     course_id=course_id, tee_id=tee_id,
+                                     competition_format=round_format)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
 
@@ -1459,12 +1470,11 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
     for r in results:
         r["adj_display"] = format_adjustment(r.get("adjustment"))
     team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
-    competition_format = (settings or {}).get("competition_format", "stableford")
     tee_par = (settings or {}).get("tee_par")
     return {"ok": True, "players": results, "date": body.date,
             "team_scores": team_scores, "whs_mode": whs_mode,
             "reduction_changes": reduction_changes,
-            "competition_format": competition_format, "tee_par": tee_par}
+            "competition_format": round_format, "tee_par": tee_par}
 
 
 # ---------------------------------------------------------------------------

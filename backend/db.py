@@ -208,12 +208,13 @@ def _init_schema():
 
             cur.execute("""
                 ALTER TABLE rounds
-                    ADD COLUMN IF NOT EXISTS whs_mode       BOOLEAN NOT NULL DEFAULT FALSE,
-                    ADD COLUMN IF NOT EXISTS whs_index_used NUMERIC(4,1),
-                    ADD COLUMN IF NOT EXISTS new_whs_index  NUMERIC(4,1),
-                    ADD COLUMN IF NOT EXISTS course_id      INTEGER REFERENCES courses(id),
-                    ADD COLUMN IF NOT EXISTS tee_id         INTEGER REFERENCES tees(id),
-                    ADD COLUMN IF NOT EXISTS playing_hc     INTEGER
+                    ADD COLUMN IF NOT EXISTS whs_mode          BOOLEAN NOT NULL DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS whs_index_used    NUMERIC(4,1),
+                    ADD COLUMN IF NOT EXISTS new_whs_index     NUMERIC(4,1),
+                    ADD COLUMN IF NOT EXISTS course_id         INTEGER REFERENCES courses(id),
+                    ADD COLUMN IF NOT EXISTS tee_id            INTEGER REFERENCES tees(id),
+                    ADD COLUMN IF NOT EXISTS playing_hc        INTEGER,
+                    ADD COLUMN IF NOT EXISTS competition_format TEXT NOT NULL DEFAULT 'stableford'
             """)
 
             # ── Course / Tee tables ──────────────────────────────────────
@@ -788,7 +789,8 @@ async def remove_player(player_id: int, rollup_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
-                        whs_mode: bool = False, course_id=None, tee_id=None):
+                        whs_mode: bool = False, course_id=None, tee_id=None,
+                        competition_format: str = "stableford"):
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -815,12 +817,12 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                     cur.execute("""
                         INSERT INTO rounds (player_id, rollup_id, date, score,
                             new_handicap, whs_mode, whs_index_used, new_whs_index,
-                            course_id, tee_id)
-                        VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s)
+                            course_id, tee_id, competition_format)
+                        VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                     """, (player_id, rollup_id, date_str, r["score"],
                           r["new_handicap"], r.get("whs_index_used"), new_whs,
-                          course_id, tee_id))
+                          course_id, tee_id, competition_format))
                 else:
                     cur.execute(
                         "UPDATE players SET handicap = %s WHERE id = %s",
@@ -829,16 +831,18 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                     playing_hc = r.get("playing_hc") if r.get("playing_hc") is not None else r.get("handicap")
                     cur.execute("""
                         INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
-                            playing_hc, course_id, tee_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            playing_hc, course_id, tee_id, competition_format)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                     """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"],
-                           playing_hc, course_id, tee_id))
+                           playing_hc, course_id, tee_id, competition_format))
 
 
 async def save_round_results(results: list[dict], date_str: str, rollup_id: int,
-                              whs_mode: bool = False, course_id=None, tee_id=None) -> None:
-    await _run(_save_round_results, results, date_str, rollup_id, whs_mode, course_id, tee_id)
+                              whs_mode: bool = False, course_id=None, tee_id=None,
+                              competition_format: str = "stableford") -> None:
+    await _run(_save_round_results, results, date_str, rollup_id, whs_mode, course_id, tee_id,
+               competition_format)
 
 
 def _get_prohibited_winners(rollup_id: int) -> list[str]:
@@ -972,7 +976,7 @@ def _get_last_round_results(rollup_id: int):
             if not row or not row["last_date"]:
                 return []
             cur.execute("""
-                SELECT p.name, r.score, r.new_handicap, r.playing_hc
+                SELECT p.name, r.score, r.new_handicap, r.playing_hc, r.competition_format
                 FROM rounds r
                 JOIN players p ON p.id = r.player_id
                 WHERE r.rollup_id = %s AND r.date = %s
@@ -1081,6 +1085,7 @@ def _get_round_by_date(date_str: str, rollup_id: int):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 SELECT p.name, r.score, r.new_handicap, r.playing_hc,
+                       r.competition_format,
                        r.whs_mode, r.whs_index_used, r.new_whs_index,
                        p.winner_ban_entries, p.winner_prohibited
                 FROM rounds r
