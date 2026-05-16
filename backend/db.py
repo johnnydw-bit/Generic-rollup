@@ -993,7 +993,8 @@ def _get_player_history(name: str, rollup_id: int):
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT r.date, r.score, r.new_handicap,
+                SELECT r.date, r.score, r.new_handicap, r.playing_hc,
+                       r.competition_format,
                        r.whs_mode, r.whs_index_used, r.new_whs_index
                 FROM rounds r
                 JOIN players p ON p.id = r.player_id

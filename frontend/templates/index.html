@@ -523,8 +523,9 @@
           <thead><tr>
             <th class="left">Date</th>
             <th>Score</th>
-            <th>HC After</th>
-            <th>Change</th>
+            <th id="phNetHead" style="display:none;">Net</th>
+            <th>HC</th>
+            <th>Chg</th>
           </tr></thead>
           <tbody id="phTableBody"></tbody>
         </table>
@@ -1997,21 +1998,31 @@ function renderHistory(name, rounds) {
   document.getElementById('phEmpty').style.display = 'none';
   document.getElementById('phContent').style.display = 'block';
 
-  const scores = rounds.map(r => r.score);
-  const hcs = rounds.map(r => r.new_handicap);
-  const avgScore = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
-  const bestScore = scores.length ? Math.max(...scores) : '—';
-  const currentHC = hcs.length ? hcs[0] : '—';
+  const sfRounds = rounds.filter(r => (r.competition_format || 'stableford') !== 'medal');
+  const mdRounds = rounds.filter(r => r.competition_format === 'medal');
+  const hasMedal = mdRounds.length > 0;
+  const hasSf    = sfRounds.length > 0;
+  const currentHC = rounds.length ? rounds[0].new_handicap : '—';
 
-  document.getElementById('phStats').innerHTML = `
+  // Stats — format-aware
+  const sfBest = hasSf ? Math.max(...sfRounds.map(r => r.score)) : null;
+  const mdNets = mdRounds.filter(r => r.playing_hc != null).map(r => r.score - r.playing_hc);
+  const mdBestNet = mdNets.length ? Math.min(...mdNets) : null;
+
+  let statsHtml = `
     <div class="stat-card"><div class="stat-val">${rounds.length}</div><div class="stat-lbl">Rounds</div></div>
-    <div class="stat-card"><div class="stat-val">${avgScore}</div><div class="stat-lbl">Avg Score</div></div>
-    <div class="stat-card"><div class="stat-val">${bestScore}</div><div class="stat-lbl">Best Score</div></div>
-  `;
+    <div class="stat-card"><div class="stat-val">${currentHC}</div><div class="stat-lbl">Current HC</div></div>`;
+  if (sfBest !== null) statsHtml += `<div class="stat-card"><div class="stat-val">${sfBest}</div><div class="stat-lbl">Best SF</div></div>`;
+  if (mdBestNet !== null) statsHtml += `<div class="stat-card"><div class="stat-val">${mdBestNet}</div><div class="stat-lbl">Best Net</div></div>`;
+  document.getElementById('phStats').innerHTML = statsHtml;
 
-  const labels = [...rounds].reverse().map(r => r.date.substring(5));
-  const scoreData = [...rounds].reverse().map(r => r.score);
-  const hcData = [...rounds].reverse().map(r => r.new_handicap);
+  // Chart — two score series (stableford navy, medal orange) share left axis;
+  // null entries with spanGaps:false keep the lines from bridging between formats.
+  const chronological = [...rounds].reverse();
+  const labels = chronological.map(r => r.date.substring(5));
+  const sfData = chronological.map(r => (r.competition_format || 'stableford') !== 'medal' ? r.score : null);
+  const mdData = chronological.map(r => r.competition_format === 'medal' ? r.score : null);
+  const hcData = chronological.map(r => r.new_handicap);
 
   if (state.historyChart) { state.historyChart.destroy(); state.historyChart = null; }
   const ctx = document.getElementById('historyChart').getContext('2d');
@@ -2020,30 +2031,79 @@ function renderHistory(name, rounds) {
     data: {
       labels,
       datasets: [
-        { label: 'Score', data: scoreData, borderColor: '#2D2B5B', backgroundColor: '#2D2B5B20', tension: 0.3, yAxisID: 'y' },
-        { label: 'Handicap', data: hcData, borderColor: '#FFD700', backgroundColor: '#FFD70020', tension: 0.3, borderDash: [4,2], yAxisID: 'y1' },
+        {
+          label: 'Stableford (pts)',
+          data: sfData,
+          spanGaps: false,
+          borderColor: '#2D2B5B',
+          backgroundColor: '#2D2B5B',
+          pointBackgroundColor: '#2D2B5B',
+          tension: 0.3,
+          yAxisID: 'y',
+          hidden: !hasSf,
+        },
+        {
+          label: 'Medal (gross)',
+          data: mdData,
+          spanGaps: false,
+          borderColor: '#E87722',
+          backgroundColor: '#E87722',
+          pointBackgroundColor: '#E87722',
+          pointStyle: 'triangle',
+          tension: 0.3,
+          yAxisID: 'y',
+          hidden: !hasMedal,
+        },
+        {
+          label: 'Handicap',
+          data: hcData,
+          borderColor: '#FFD700',
+          backgroundColor: '#FFD70020',
+          tension: 0.3,
+          borderDash: [4, 2],
+          yAxisID: 'y1',
+        },
       ]
     },
     options: {
-      responsive: true, interaction: { mode: 'index', intersect: false },
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { boxWidth: 12, font: { size: 10 }, filter: item => !item.hidden },
+        },
+      },
       scales: {
-        y: { position: 'left', title: { display: true, text: 'Score' } },
+        y:  { position: 'left',  title: { display: true, text: 'Points / Gross' } },
         y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'HC' } },
       }
     }
   });
 
+  // Table — Net column visible only when medal rounds are present
+  document.getElementById('phNetHead').style.display = hasMedal ? '' : 'none';
+
   const tbody = document.getElementById('phTableBody');
   tbody.innerHTML = rounds.map((r, i) => {
-    const prev = rounds[i+1];
-    const hcDiff = prev ? r.new_handicap - prev.new_handicap : 0;
+    const prev = rounds[i + 1];
+    const hcDiff = (prev && r.new_handicap != null && prev.new_handicap != null)
+                 ? r.new_handicap - prev.new_handicap : 0;
     const diffClass = hcDiff < 0 ? 'down' : hcDiff > 0 ? 'up' : '';
-    const diffStr = hcDiff !== 0 ? (hcDiff > 0 ? `+${hcDiff}` : hcDiff) : '—';
+    const diffStr   = hcDiff !== 0 ? (hcDiff > 0 ? `+${hcDiff}` : hcDiff) : '—';
+    const isMedal = r.competition_format === 'medal';
+    const fmtBadge = isMedal
+      ? '<span style="font-size:9px;background:#E87722;color:#fff;border-radius:3px;padding:1px 4px;margin-left:3px;vertical-align:middle;">MDL</span>'
+      : '<span style="font-size:9px;background:#2D2B5B;color:#FFD700;border-radius:3px;padding:1px 4px;margin-left:3px;vertical-align:middle;">SF</span>';
+    const net = (isMedal && r.playing_hc != null) ? r.score - r.playing_hc : null;
+    const netCell = hasMedal ? `<td class="c">${net !== null ? net : '—'}</td>` : '';
     return `<tr>
-      <td class="left">${r.date}</td>
-      <td>${r.score}</td>
-      <td>${r.new_handicap}</td>
-      <td class="hc-change ${diffClass}">${diffStr}</td>
+      <td class="left">${r.date}${fmtBadge}</td>
+      <td class="c">${r.score !== null ? r.score : 'NR'}</td>
+      ${netCell}
+      <td class="c">${r.new_handicap !== null ? r.new_handicap : '—'}</td>
+      <td class="c hc-change ${diffClass}">${diffStr}</td>
     </tr>`;
   }).join('');
 }
