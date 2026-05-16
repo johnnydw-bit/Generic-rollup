@@ -2,7 +2,7 @@
 
 **Version:** May 2026  
 **Repository:** `johnnydw-bit/Generic-rollup`  
-**Live URL:** `https://moths-rollup.onrender.com`
+**Live URL:** `https://competition-manager.onrender.com`
 
 ---
 
@@ -49,7 +49,7 @@ The app is **multi-tenant**: each golf club has a unique URL slug (e.g. `/bramle
 
 ### Render Configuration
 
-- **Service name:** `moths-rollup`
+- **Service name:** `competition-manager`
 - **Python version:** Set via `PYTHON_VERSION=3.11.9` environment variable
 - **Start command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
 - **Environment variables required:**
@@ -326,7 +326,7 @@ When team mode is enabled:
 
 ## API Endpoints
 
-Base URL: `https://moths-rollup.onrender.com`
+Base URL: `https://competition-manager.onrender.com`
 
 All endpoints (except auth) require a valid session cookie. Tenant is derived from the session; users can only access rollups belonging to their own tenant.
 

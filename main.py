@@ -564,7 +564,7 @@ async def setup_club(body: SetupClubRequest):
 #   GITHUB_CLIENT_ID      — GitHub OAuth App client ID
 #   GITHUB_CLIENT_SECRET  — GitHub OAuth App client secret
 #   ADMIN_GITHUB_USERNAME — GitHub username allowed admin access
-#   APP_BASE_URL          — e.g. https://moths-rollup.onrender.com (no trailing slash)
+#   APP_BASE_URL          — e.g. https://competition-manager.onrender.com (no trailing slash)
 
 def _admin_callback_url() -> str:
     base = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
