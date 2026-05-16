@@ -1354,7 +1354,7 @@ def _save_rollup_settings(rollup_id: int, s: dict):
             """, (
                 rollup_id,
                 s["display_name"], s["ig_search_term"],
-                json.dumps(s["run_days"]),
+                json.dumps(s.get("run_days", [])),
                 s["tee_interval_minutes"],
                 db_scoring_mode,
                 json.dumps(s["adjustment_table"]),

@@ -1556,7 +1556,6 @@ class RollupSettingsRequest(BaseModel):
     rollup_id: int
     display_name: str
     ig_search_term: str
-    run_days: list[str]
     tee_interval_minutes: int = 8
     scoring_mode: str = "stableford"
     competition_format: str = "stableford"

@@ -187,9 +187,6 @@
     .settings-input:focus { outline: none; border-color: #2D2B5B; background: #fff; }
     .settings-input-sm { width: 80px; padding: 7px 10px; border-radius: 8px; border: 1px solid #2D2B5B30; font-size: 14px; background: #f9f9f9; color: #000; text-align: center; font-family: inherit; }
     .settings-input-sm:focus { outline: none; border-color: #2D2B5B; background: #fff; }
-    .day-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .day-chip { padding: 5px 10px; border-radius: 20px; border: 1.5px solid #2D2B5B40; background: #fff; color: #2D2B5B; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .day-chip.active { background: #2D2B5B; color: #FFD700; border-color: #2D2B5B; }
     .adj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .adj-table th { font-size: 10px; font-weight: 600; color: #888; padding: 4px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
     .adj-table td { padding: 5px 6px; border-bottom: 1px solid #f5f5f5; text-align: center; }
@@ -570,18 +567,6 @@
         <div class="settings-label">IG search term</div>
         <div class="settings-sublabel">Matches the contact name in Intelligent Golf bookings</div>
         <input class="settings-input" id="sIgTerm" type="text" placeholder="e.g. MOTH"/>
-      </div>
-      <div class="settings-row" id="sRunDaysRow">
-        <div class="settings-label">Runs on</div>
-        <div class="day-chips" id="runDaysChips">
-          <button class="day-chip" data-day="Mon" onclick="toggleDay(this)">Mon</button>
-          <button class="day-chip" data-day="Tue" onclick="toggleDay(this)">Tue</button>
-          <button class="day-chip" data-day="Wed" onclick="toggleDay(this)">Wed</button>
-          <button class="day-chip" data-day="Thu" onclick="toggleDay(this)">Thu</button>
-          <button class="day-chip" data-day="Fri" onclick="toggleDay(this)">Fri</button>
-          <button class="day-chip" data-day="Sat" onclick="toggleDay(this)">Sat</button>
-          <button class="day-chip" data-day="Sun" onclick="toggleDay(this)">Sun</button>
-        </div>
       </div>
     </div>
 
@@ -1179,7 +1164,7 @@ async function init() {
   if (hasValidSession()) {
     updateHeaderNames();
     applyIgTenantUI();
-    await setNextCompetitionDate();
+    setTodayDate();
     await loadAuthStatus();
     showScreen('screen1');
   } else {
@@ -1232,9 +1217,7 @@ function applyIgTenantUI() {
   if (!ig) setTodayDate();
   // Settings rows irrelevant to non-IG
   const igTermRow = document.getElementById('sIgTermRow');
-  const runDaysRow = document.getElementById('sRunDaysRow');
   if (igTermRow) igTermRow.style.display = ig ? '' : 'none';
-  if (runDaysRow) runDaysRow.style.display = ig ? '' : 'none';
 }
 
 function setTodayDate() {
@@ -1244,41 +1227,6 @@ function setTodayDate() {
   state.roundDate = s;
 }
 
-async function setNextCompetitionDate() {
-  // Try to use run_days from settings to find the next unplayed competition date.
-  // Falls back to today if run_days is empty or requests fail.
-  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  try {
-    // Fetch settings and played dates in parallel; use cached settings if already loaded
-    const [settingsData, datesData] = await Promise.all([
-      state.rollupSettings
-        ? Promise.resolve(state.rollupSettings)
-        : apiFetch(`/api/settings?rollup_id=${session.rollupId}`).then(r => r.json()),
-      apiFetch(`/api/round-dates?rollup_id=${session.rollupId}`).then(r => r.json()),
-    ]);
-    if (!state.rollupSettings && settingsData) state.rollupSettings = settingsData;
-    const runDays  = (settingsData.run_days || []);
-    const played   = new Set(datesData.dates || []);
-
-    if (runDays.length > 0) {
-      // Walk up to 14 days ahead to find the next matching unplayed day
-      const today = new Date();
-      for (let i = 0; i <= 14; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        const iso     = d.toISOString().split('T')[0];
-        const dayName = DAY_NAMES[d.getDay()];
-        if (runDays.includes(dayName) && !played.has(iso)) {
-          document.getElementById('roundDate').value = iso;
-          state.roundDate = iso;
-          return;
-        }
-      }
-    }
-  } catch(e) {}
-  // Default to today
-  setTodayDate();
-}
 
 async function loadAuthStatus() {
   try {
@@ -1315,7 +1263,7 @@ async function saveLogin() {
   document.getElementById('loginError').style.display = 'none';
   updateHeaderNames();
   applyIgTenantUI();
-  await setNextCompetitionDate();
+  setTodayDate();
   loadAuthStatus();
   showScreen('screen1');
 }
@@ -1924,43 +1872,52 @@ async function loadRoundByIdx(idx) {
 }
 
 function renderResults(players, date) {
-  // Use the format stored with the round — set per player when saved.
-  // Fall back to stableford for pre-feature historical rounds (null format).
-  const firstWithFormat = players.find(p => p.competition_format);
-  const isMedal = (firstWithFormat?.competition_format || 'stableford') === 'medal';
-  const teePar  = state.teePar || (state.rollupSettings || {}).tee_par || null;
+  // Read the format stored with this round (per player when saved).
+  // Old rounds without competition_format default to stableford.
+  const firstScored = players.find(p => p.score !== null && p.score !== undefined);
+  const isMedal = (firstScored?.competition_format || 'stableford') === 'medal';
 
-  // Sort: medal = lowest net first; stableford = highest score first
+  // Medal: net = gross - playing_hc (both stored per player).
+  // Stableford: sort highest score first, no net column.
   const withNet = players.map(p => ({
     ...p,
-    _net: (isMedal && p.playing_hc != null) ? (p.score - p.playing_hc)
-          : (!isMedal && teePar != null)    ? (teePar + 36 - p.score)
+    _net: (isMedal && p.playing_hc != null && p.score != null)
+          ? (p.score - p.playing_hc)
           : null,
   }));
-  const sorted = [...withNet].sort((a,b) =>
+
+  // Scored players sorted by result; unscored (NR/DNS) pushed to bottom
+  const scored   = withNet.filter(p => p.score !== null && p.score !== undefined);
+  const unscored = withNet.filter(p => p.score === null || p.score === undefined);
+  scored.sort((a, b) =>
     isMedal ? (a._net ?? 999) - (b._net ?? 999) : b.score - a.score
   );
+  const sorted = [...scored, ...unscored];
 
-  // Update column headers
+  // Column headers
   document.getElementById('resScoreHead').textContent = isMedal ? 'Gross' : 'Points';
   const resNetHead = document.getElementById('resNetHead');
-  resNetHead.style.display = (isMedal || teePar) ? '' : 'none';
-  resNetHead.textContent = isMedal ? 'Net' : 'Net Score';
+  resNetHead.style.display = isMedal ? '' : 'none';
+  resNetHead.textContent = 'Net';
 
   const body = document.getElementById('resultsBody');
   body.innerHTML = sorted.map((p, i) => {
-    const rowClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-    const medal = i === 0 ? '<span class="medal g">1</span>' : i === 1 ? '<span class="medal s">2</span>' : i === 2 ? '<span class="medal b">3</span>' : '';
+    const scoredIdx = scored.indexOf(p);
+    const rowClass = scoredIdx === 0 ? 'gold' : scoredIdx === 1 ? 'silver' : scoredIdx === 2 ? 'bronze' : '';
+    const medalBadge = scoredIdx === 0 ? '<span class="medal g">1</span>'
+                     : scoredIdx === 1 ? '<span class="medal s">2</span>'
+                     : scoredIdx === 2 ? '<span class="medal b">3</span>' : '';
     const resBanBadge = p.winner_ban_entries > 0
       ? ` <span style="font-size:9px;background:#c47a00;color:#fff;border-radius:3px;padding:1px 3px;" title="Win ban: ${p.winner_ban_entries} round(s) remaining">⛔${p.winner_ban_entries}</span>`
       : '';
-    const netCell = (isMedal || teePar)
+    const scoreDisplay = p.score !== null && p.score !== undefined ? p.score : 'NR';
+    const netCell = isMedal
       ? `<td class="c">${p._net !== null ? p._net : '—'}</td>` : '';
     return `<tr class="${rowClass}" onclick="showPlayerHistoryFor('${p.name.replace(/'/g,"\\'")}')">
-      <td>${medal} ${p.name}${resBanBadge}</td>
-      <td class="c">${p.score}</td>
+      <td>${medalBadge} ${p.name}${resBanBadge}</td>
+      <td class="c">${scoreDisplay}</td>
       ${netCell}
-      <td class="c">${p.new_handicap !== null ? p.new_handicap : '—'}</td>
+      <td class="c">${p.new_handicap !== null && p.new_handicap !== undefined ? p.new_handicap : '—'}</td>
       <td class="c hc-change">—</td>
     </tr>`;
   }).join('');
@@ -2120,11 +2077,6 @@ function populateSettingsForm(s) {
   document.getElementById('sDisplayName').value = s.display_name || '';
   document.getElementById('sIgTerm').value = s.ig_search_term || '';
   document.getElementById('sTeeInterval').value = s.tee_interval_minutes || 8;
-  // Run days
-  document.querySelectorAll('.day-chip').forEach(chip => {
-    chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
-  });
-
   // Competition format (must be set before scoring mode so updateSettingsSections sees it)
   onFormatChange(s.competition_format || 'stableford');
 
@@ -2386,7 +2338,6 @@ function updateMedalAdjRow(idx, field, val) {
     ? (val === '' ? null : parseInt(val)) : parseInt(val);
 }
 
-function toggleDay(el) { el.classList.toggle('active'); }
 
 let currentPrizePlaces = 3;
 let currentPrizePcts = { pct_1st: 60, pct_2nd: 30, pct_3rd: 10, pct_4th: 0 };
@@ -2443,7 +2394,6 @@ async function saveSettings() {
   const mode = document.getElementById('modeWinnersOnly1').classList.contains('active') ? 'winners_only_1'
              : document.getElementById('modeWinnersOnly2').classList.contains('active') ? 'winners_only_2'
              : 'universal';
-  const runDays = [...document.querySelectorAll('.day-chip.active')].map(c => c.dataset.day);
   const adjTable = state.rollupSettings ? state.rollupSettings.adjustment_table : [];
   const n = currentPrizePlaces;
   let pcts = [0, 0, 0, 0];
@@ -2462,7 +2412,6 @@ async function saveSettings() {
     rollup_id: session.rollupId,
     display_name: document.getElementById('sDisplayName').value.trim(),
     ig_search_term: document.getElementById('sIgTerm').value.trim().toUpperCase(),
-    run_days: runDays,
     tee_interval_minutes: parseInt(document.getElementById('sTeeInterval').value) || 8,
     scoring_mode: mode,
     competition_format: getCurrentFormat(),
