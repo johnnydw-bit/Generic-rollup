@@ -327,7 +327,7 @@
     <button class="settings-btn" onclick="showSettings()" title="Settings">⚙️</button>
   </div>
   <div class="s1-body">
-    <div class="field-group">
+    <div class="field-group" id="s1DateGroup">
       <div class="field-label">Round date</div>
       <input class="field-input" id="roundDate" type="date"/>
     </div>
@@ -560,12 +560,12 @@
         <div class="settings-label">Competition name</div>
         <input class="settings-input" id="sDisplayName" type="text" placeholder="e.g. MOTH's Roll-Up"/>
       </div>
-      <div class="settings-row">
+      <div class="settings-row" id="sIgTermRow">
         <div class="settings-label">IG search term</div>
         <div class="settings-sublabel">Matches the contact name in Intelligent Golf bookings</div>
         <input class="settings-input" id="sIgTerm" type="text" placeholder="e.g. MOTH"/>
       </div>
-      <div class="settings-row">
+      <div class="settings-row" id="sRunDaysRow">
         <div class="settings-label">Runs on</div>
         <div class="day-chips" id="runDaysChips">
           <button class="day-chip" data-day="Mon" onclick="toggleDay(this)">Mon</button>
@@ -1192,6 +1192,14 @@ function applyIgTenantUI() {
   document.getElementById('loadPlayersSub').textContent = ig ? 'From Intelligent Golf' : 'All registered players';
   const syncBtn = document.getElementById('syncWhsBtn');
   if (syncBtn) syncBtn.style.display = ig ? '' : 'none';
+  // Date picker only needed for IG (used to find the booking page); non-IG always uses today
+  document.getElementById('s1DateGroup').style.display = ig ? '' : 'none';
+  if (!ig) setTodayDate();
+  // Settings rows irrelevant to non-IG
+  const igTermRow = document.getElementById('sIgTermRow');
+  const runDaysRow = document.getElementById('sRunDaysRow');
+  if (igTermRow) igTermRow.style.display = ig ? '' : 'none';
+  if (runDaysRow) runDaysRow.style.display = ig ? '' : 'none';
 }
 
 function setTodayDate() {
@@ -1994,6 +2002,7 @@ function renderHistory(name, rounds) {
 // ═══════════════════════════════════════════
 async function showSettings() {
   document.getElementById('s5RollupName').textContent = session.rollupName;
+  applyIgTenantUI();
   showScreen('screen5');
   await loadSettingsForm();
 }
