@@ -213,9 +213,8 @@ async def root(request: Request):
       .hint { color: #888; font-size: 11px; margin-top: -8px; margin-bottom: 12px; }
       .club-name { font-size: 13px; font-weight: 700; color: #2D2B5B; text-align: center;
                    margin-bottom: 12px; min-height: 18px; }
-      .admin-link { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;
-                    text-align: center; font-size: 12px; color: #aaa; }
-      .admin-link a { color: #2D2B5B; font-weight: 600; text-decoration: none; }
+      .admin-link { margin-top: 24px; text-align: center; }
+      .admin-link a { color: transparent; font-size: 10px; text-decoration: none; user-select: none; }
     </style>
     </head><body>
     <div class="box">
@@ -280,7 +279,7 @@ async def root(request: Request):
         <div class="err" id="re_err"></div>
       </div>
 
-      <div class="admin-link"><a href="/admin/login">Admin login</a></div>
+      <div class="admin-link"><a href="/admin/login">.</a></div>
     </div>
     <script>
     function showTab(t) {
@@ -746,7 +745,7 @@ async def admin_dashboard(
 
 @app.get("/admin/logout")
 async def admin_logout():
-    response = RedirectResponse("/admin/login")
+    response = RedirectResponse("/")
     response.delete_cookie("admin_token")
     return response
 
