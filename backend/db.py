@@ -990,6 +990,65 @@ async def get_player_history(name: str, rollup_id: int) -> list[dict]:
     return await _run(_get_player_history, name, rollup_id)
 
 
+def _dump_tenant_history(tenant_id: int) -> dict:
+    """Return all rounds and players for every rollup under a tenant."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, name FROM rollups WHERE tenant_id = %s ORDER BY name",
+                (tenant_id,)
+            )
+            rollups = [dict(r) for r in cur.fetchall()]
+
+            rounds_rows = []
+            for rollup in rollups:
+                cur.execute("""
+                    SELECT ro.date, p.name AS player,
+                           %s AS rollup,
+                           ro.score, ro.new_handicap,
+                           ro.whs_mode, ro.whs_index_used, ro.new_whs_index,
+                           ro.recorded_at
+                    FROM rounds ro
+                    JOIN players p ON p.id = ro.player_id
+                    WHERE ro.rollup_id = %s
+                    ORDER BY ro.date DESC, p.name
+                """, (rollup["name"], rollup["id"]))
+                rounds_rows.extend([dict(r) for r in cur.fetchall()])
+
+            cur.execute("""
+                SELECT p.name, p.handicap, p.whs_index, p.total_prize_won,
+                       rol.name AS rollup
+                FROM players p
+                JOIN rollups rol ON rol.id = p.rollup_id
+                WHERE rol.tenant_id = %s
+                ORDER BY rol.name, p.name
+            """, (tenant_id,))
+            player_rows = [dict(r) for r in cur.fetchall()]
+
+            return {"rounds": rounds_rows, "players": player_rows}
+
+
+async def dump_tenant_history(tenant_id: int) -> dict:
+    return await _run(_dump_tenant_history, tenant_id)
+
+
+def _delete_tenant_history(tenant_id: int) -> int:
+    """Delete all rounds for every rollup under a tenant. Returns count deleted."""
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM rounds
+                WHERE rollup_id IN (
+                    SELECT id FROM rollups WHERE tenant_id = %s
+                )
+            """, (tenant_id,))
+            return cur.rowcount
+
+
+async def delete_tenant_history(tenant_id: int) -> int:
+    return await _run(_delete_tenant_history, tenant_id)
+
+
 def _get_round_dates(rollup_id: int):
     with _get_conn() as conn:
         with conn.cursor() as cur:

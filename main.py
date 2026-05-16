@@ -5,11 +5,14 @@
 #   - Admin login via GitHub OAuth (GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET env vars)
 #   - Admin cross-tenant visibility via /api/admin/* endpoints
 
+import csv
+import io
 import os
 import secrets
 import time
+import zipfile
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, Cookie, Form, UploadFile, File
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -667,6 +670,7 @@ async def admin_dashboard(
 
     tenants = await db.get_all_tenants()
     base = os.getenv("APP_BASE_URL", "").rstrip("/")
+    deleted_msg = ""
     rows = "".join(
         f"<tr>"
         f"<td>{t['id']}</td>"
@@ -674,6 +678,14 @@ async def admin_dashboard(
         f"<td><code>{t['slug']}</code></td>"
         f"<td>{str(t['created_at'])[:10]}</td>"
         f"<td><a href='/admin/visit/{t['slug']}'>Visit →</a></td>"
+        f"<td><a href='/admin/dump/{t['id']}'>📥 Dump</a></td>"
+        f"<td>"
+        f"<form method='post' action='/admin/delete-history/{t[\"id\"]}' "
+        f"onsubmit=\"return confirm('Delete ALL round history for {t[\"name\"]}? This cannot be undone.')\">"
+        f"<button type='submit' style='background:#A32D2D;color:#fff;border:none;border-radius:4px;"
+        f"padding:4px 10px;font-size:12px;cursor:pointer;'>🗑 Delete history</button>"
+        f"</form>"
+        f"</td>"
         f"</tr>"
         for t in tenants
     )
@@ -702,7 +714,7 @@ async def admin_dashboard(
 
     <h2>Clubs / Tenants</h2>
     <table>
-      <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Created</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Created</th><th></th><th></th><th></th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
 
@@ -748,6 +760,59 @@ async def admin_visit_tenant(slug: str, admin_token: str | None = Cookie(default
     response = RedirectResponse(f"/{slug}")
     response.set_cookie("session_token", token, max_age=3600, httponly=False, samesite="lax")
     return response
+
+
+@app.get("/admin/dump/{tenant_id}")
+async def admin_dump_tenant(tenant_id: int, admin_token: str | None = Cookie(default=None)):
+    """Download a ZIP containing rounds.csv and players.csv for the tenant."""
+    if not admin_token or not _validate_admin_session(admin_token):
+        return RedirectResponse("/admin/login")
+    tenants = await db.get_all_tenants()
+    tenant = next((t for t in tenants if t["id"] == tenant_id), None)
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    data = await db.dump_tenant_history(tenant_id)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # rounds.csv
+        rounds_buf = io.StringIO()
+        writer = csv.DictWriter(rounds_buf, fieldnames=[
+            "date", "rollup", "player", "score", "new_handicap",
+            "whs_mode", "whs_index_used", "new_whs_index", "recorded_at",
+        ])
+        writer.writeheader()
+        for row in data["rounds"]:
+            writer.writerow({k: row.get(k, "") for k in writer.fieldnames})
+        zf.writestr("rounds.csv", rounds_buf.getvalue())
+
+        # players.csv
+        players_buf = io.StringIO()
+        writer2 = csv.DictWriter(players_buf, fieldnames=[
+            "rollup", "name", "handicap", "whs_index", "total_prize_won",
+        ])
+        writer2.writeheader()
+        for row in data["players"]:
+            writer2.writerow({k: row.get(k, "") for k in writer2.fieldnames})
+        zf.writestr("players.csv", players_buf.getvalue())
+
+    buf.seek(0)
+    filename = f"{tenant['slug']}_history.zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/admin/delete-history/{tenant_id}")
+async def admin_delete_tenant_history(tenant_id: int, admin_token: str | None = Cookie(default=None)):
+    """Delete all round records for the tenant."""
+    if not admin_token or not _validate_admin_session(admin_token):
+        raise HTTPException(401, "Not authenticated")
+    deleted = await db.delete_tenant_history(tenant_id)
+    return RedirectResponse(f"/admin?deleted={deleted}", status_code=303)
 
 
 # Admin: create tenant (form POST from dashboard)
