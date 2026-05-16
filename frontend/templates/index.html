@@ -1308,6 +1308,13 @@ async function confirmAddRollup() {
       if (parseInt(sel.options[i].value) === data.id) { sel.selectedIndex = i; break; }
     }
     onRollupSelectChange();
+    // Persist selection and go straight to settings for new competition setup
+    localStorage.setItem('rollup_id',   session.rollupId);
+    localStorage.setItem('rollup_name', session.rollupName);
+    localStorage.setItem('rollup_term', session.rollupTerm);
+    updateHeaderNames();
+    applyIgTenantUI();
+    await showSettings();
   } catch(e) { alert('Failed to add rollup.'); }
 }
 
