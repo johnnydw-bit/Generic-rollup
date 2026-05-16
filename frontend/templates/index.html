@@ -337,10 +337,10 @@
     </div>
     <div id="s1Status" class="status-bar status-neutral" style="display:none;"></div>
     <div class="btn-pair">
-      <button class="big-btn btn-navy" onclick="loadPlayers()">
+      <button class="big-btn btn-navy" onclick="loadPlayers()" id="loadPlayersBtn">
         <span class="bi">🏌️</span>
         <span class="bl">Load Players</span>
-        <span class="bs">From Intelligent Golf</span>
+        <span class="bs" id="loadPlayersSub">From Intelligent Golf</span>
       </button>
       <button class="big-btn btn-outline" onclick="showResultsScreen()">
         <span class="bi">📋</span>
@@ -836,7 +836,7 @@
         <option value="">Select competition…</option>
       </select>
       <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
-      <button class="s6-sync-btn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
+      <button class="s6-sync-btn" id="syncWhsBtn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
     </div>
     <div class="s6-status status-bar status-neutral" id="s6Status"></div>
     <div class="s6-table-wrap">
@@ -1013,6 +1013,7 @@ let session = {
   sessionToken: '',
   tenantSlug:   TENANT_SLUG,
   tenantName:   TENANT_NAME,
+  igTenant:     true,   // false for non-IG clubs; set from localStorage on init
   // Rollup
   rollupId:   null,
   rollupName: '',
@@ -1048,7 +1049,7 @@ async function switchRollup() {
 // ═══════════════════════════════════════════
 async function logout() {
   await apiFetch('/api/logout', { method: 'POST' }).catch(() => {});
-  ['session_token','rollup_id','rollup_name','rollup_term'].forEach(k => localStorage.removeItem(k));
+  ['session_token','rollup_id','rollup_name','rollup_term','ig_tenant'].forEach(k => localStorage.removeItem(k));
   window.location.href = '/';
 }
 
@@ -1107,11 +1108,13 @@ async function init() {
   session.rollupId   = localStorage.getItem('rollup_id') ? parseInt(localStorage.getItem('rollup_id')) : null;
   session.rollupName = localStorage.getItem('rollup_name') || '';
   session.rollupTerm = localStorage.getItem('rollup_term') || '';
+  session.igTenant   = localStorage.getItem('ig_tenant') !== '0';
 
   await loadRollupOptions();
 
   if (hasValidSession()) {
     updateHeaderNames();
+    applyIgTenantUI();
     await setNextCompetitionDate();
     await loadAuthStatus();
     showScreen('screen1');
@@ -1153,6 +1156,13 @@ function updateHeaderNames() {
     const el = document.getElementById(id);
     if (el) el.textContent = session.rollupName || session.tenantName;
   });
+}
+
+function applyIgTenantUI() {
+  const ig = session.igTenant;
+  document.getElementById('loadPlayersSub').textContent = ig ? 'From Intelligent Golf' : 'All registered players';
+  const syncBtn = document.getElementById('syncWhsBtn');
+  if (syncBtn) syncBtn.style.display = ig ? '' : 'none';
 }
 
 function setTodayDate() {
@@ -1232,6 +1242,7 @@ async function saveLogin() {
 
   document.getElementById('loginError').style.display = 'none';
   updateHeaderNames();
+  applyIgTenantUI();
   await setNextCompetitionDate();
   loadAuthStatus();
   showScreen('screen1');

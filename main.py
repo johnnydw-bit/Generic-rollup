@@ -92,7 +92,7 @@ _USER_SESSION_TTL = 30 * 86_400
 
 def _create_user_session(user_id: int, tenant_id: int, tenant_slug: str,
                          tenant_name: str, ig_username: str | None,
-                         ig_pin: str | None) -> str:
+                         ig_pin: str | None, ig_tenant: bool = True) -> str:
     token = secrets.token_urlsafe(32)
     _user_sessions[token] = {
         "user_id":     user_id,
@@ -101,6 +101,7 @@ def _create_user_session(user_id: int, tenant_id: int, tenant_slug: str,
         "tenant_name": tenant_name,
         "ig_username": ig_username,
         "ig_pin":      ig_pin,
+        "ig_tenant":   ig_tenant,
         "expires_at":  time.time() + _USER_SESSION_TTL,
     }
     return token
@@ -300,6 +301,7 @@ async def root(request: Request):
         if (!r.ok) { err.textContent = d.detail||'Sign in failed.'; err.style.display='block'; return; }
         localStorage.setItem('session_token', d.session_token);
         localStorage.setItem('tenant_slug', d.tenant_slug);
+        localStorage.setItem('ig_tenant', d.ig_tenant ? '1' : '0');
         window.location.href = '/'+d.tenant_slug;
       } catch(e) { err.textContent='Network error.'; err.style.display='block'; }
     }
@@ -318,6 +320,7 @@ async def root(request: Request):
         if (!r.ok) { err.textContent = d.detail||'Registration failed.'; err.style.display='block'; return; }
         localStorage.setItem('session_token', d.session_token);
         localStorage.setItem('tenant_slug', d.tenant_slug);
+        localStorage.setItem('ig_tenant', d.ig_tenant ? '1' : '0');
         window.location.href = '/'+d.tenant_slug;
       } catch(e) { err.textContent='Network error.'; err.style.display='block'; }
     }
@@ -385,9 +388,10 @@ async def login(body: LoginRequest):
     ig_username = user["username"] if tenant["ig_tenant"] else None
     ig_pin      = user["ig_pin"]   if tenant["ig_tenant"] else None
     token = _create_user_session(user["id"], tenant["id"], tenant["slug"],
-                                 tenant["name"], ig_username, ig_pin)
+                                 tenant["name"], ig_username, ig_pin,
+                                 ig_tenant=tenant["ig_tenant"])
     return {"session_token": token, "tenant_slug": tenant["slug"],
-            "tenant_name": tenant["name"]}
+            "tenant_name": tenant["name"], "ig_tenant": tenant["ig_tenant"]}
 
 
 @app.post("/api/register")
@@ -412,9 +416,10 @@ async def register(body: RegisterRequest):
                                        display_name=body.display_name or None)
         ig_username, ig_pin = None, None
     token = _create_user_session(user_id, tenant["id"], tenant["slug"],
-                                 tenant["name"], ig_username, ig_pin)
+                                 tenant["name"], ig_username, ig_pin,
+                                 ig_tenant=tenant["ig_tenant"])
     return {"session_token": token, "tenant_slug": tenant["slug"],
-            "tenant_name": tenant["name"]}
+            "tenant_name": tenant["name"], "ig_tenant": tenant["ig_tenant"]}
 
 
 @app.post("/api/logout")
@@ -614,6 +619,7 @@ async def admin_visit_tenant(slug: str, admin_token: str | None = Cookie(default
         tenant_name=tenant["name"],
         ig_username=None,
         ig_pin=None,
+        ig_tenant=tenant.get("ig_tenant", False),
     )
     response = RedirectResponse(f"/{slug}")
     response.set_cookie("session_token", token, max_age=3600, httponly=False, samesite="lax")
@@ -739,9 +745,38 @@ async def load_players(body: LoadRequest, session: dict = Depends(get_current_se
 
     ig_username = session.get("ig_username") or ""
     ig_pin      = session.get("ig_pin")      or ""
-    if not ig_username or not ig_pin:
-        raise HTTPException(400, "IG credentials not available in session — please sign in with IG credentials")
+    is_ig       = session.get("ig_tenant", True) and ig_username and ig_pin
 
+    try:
+        all_players = await get_all_players(body.rollup_id)
+    except Exception as e:
+        raise HTTPException(500, f"Could not read player list from database: {str(e)}")
+
+    if not is_ig:
+        # Non-IG competition: return all registered players sorted by name
+        players = [
+            {
+                "name":                  p["name"],
+                "handicap":              p["handicap"],
+                "score":                 None,
+                "team":                  None,
+                "new_player":            False,
+                "whs_index":             float(p["whs_index"]) if p.get("whs_index") else None,
+                "whs_index_next_round":  float(p["whs_index_next_round"]) if p.get("whs_index_next_round") else None,
+                "winner_prohibited":     p.get("winner_prohibited", False),
+                "winner_ban_entries":    p.get("winner_ban_entries", 0),
+                "winner_ban_original_hc": p.get("winner_ban_original_hc"),
+            }
+            for p in all_players
+        ]
+        if not players:
+            raise HTTPException(404, "No players registered for this competition yet. Add players via the Players tab.")
+        return {
+            "date": body.date, "players": players,
+            "new_players": [], "tee_times": [], "tee_start": "",
+        }
+
+    # IG competition: scrape sign-ups
     try:
         scrape_result = await scrape_players(
             ig_username, ig_pin, body.date, body.ig_search_term,
@@ -757,11 +792,6 @@ async def load_players(body: LoadRequest, session: dict = Depends(get_current_se
 
     if not names:
         raise HTTPException(404, "No players found for this date.")
-
-    try:
-        all_players = await get_all_players(body.rollup_id)
-    except Exception as e:
-        raise HTTPException(500, f"Could not read player list from database: {str(e)}")
 
     for p in all_players:
         name  = p["name"].strip()
@@ -793,16 +823,16 @@ async def load_players(body: LoadRequest, session: dict = Depends(get_current_se
             })
         else:
             players.append({
-                "name":                 name,
-                "handicap":             hc,
-                "score":                None,
-                "team":                 None,
-                "new_player":           False,
-                "whs_index":            float(p_data["whs_index"]) if p_data and p_data.get("whs_index") else None,
-                "whs_index_next_round": float(p_data["whs_index_next_round"]) if p_data and p_data.get("whs_index_next_round") else None,
-                "winner_prohibited":       p_data.get("winner_prohibited", False) if p_data else False,
-                "winner_ban_entries":      p_data.get("winner_ban_entries", 0) if p_data else 0,
-                "winner_ban_original_hc":  p_data.get("winner_ban_original_hc") if p_data else None,
+                "name":                  name,
+                "handicap":              hc,
+                "score":                 None,
+                "team":                  None,
+                "new_player":            False,
+                "whs_index":             float(p_data["whs_index"]) if p_data and p_data.get("whs_index") else None,
+                "whs_index_next_round":  float(p_data["whs_index_next_round"]) if p_data and p_data.get("whs_index_next_round") else None,
+                "winner_prohibited":     p_data.get("winner_prohibited", False) if p_data else False,
+                "winner_ban_entries":    p_data.get("winner_ban_entries", 0) if p_data else 0,
+                "winner_ban_original_hc": p_data.get("winner_ban_original_hc") if p_data else None,
             })
 
     return {
