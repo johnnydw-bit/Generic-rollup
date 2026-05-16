@@ -226,8 +226,8 @@ async def root(request: Request):
 
       <!-- Sign in -->
       <div id="loginForm">
-        <div class="label">Club slug</div>
-        <input id="li_slug" placeholder="e.g. bramley" autocapitalize="none"
+        <div class="label">Club/Society identifier</div>
+        <input id="li_slug" placeholder="e.g. bramley-golf" autocapitalize="none"
                oninput="onSlugInput('li_slug','li_clubname')"/>
         <div class="club-name" id="li_clubname"></div>
         <div class="label" id="li_credlabel">Member ID</div>
@@ -240,20 +240,40 @@ async def root(request: Request):
 
       <!-- Register -->
       <div id="registerForm" style="display:none">
-        <div class="label">Club slug</div>
-        <input id="re_slug" placeholder="e.g. bramley" autocapitalize="none"
+        <div class="label">Club/Society identifier</div>
+        <input id="re_slug" placeholder="e.g. bramley-golf" autocapitalize="none"
                oninput="onSlugInput('re_slug','re_clubname')"/>
         <div class="club-name" id="re_clubname"></div>
-        <div class="label" id="re_userLabel">Member ID</div>
-        <input id="re_user" placeholder="Your member ID" autocomplete="username"/>
-        <div id="re_displayNameRow" style="display:none">
-          <div class="label">Display name</div>
-          <input id="re_displayName" placeholder="Your full name" autocomplete="name"/>
+
+        <!-- Existing club fields -->
+        <div id="re_existingFields">
+          <div class="label" id="re_userLabel">Member ID</div>
+          <input id="re_user" placeholder="Your member ID" autocomplete="username"/>
+          <div id="re_displayNameRow" style="display:none">
+            <div class="label">Display name</div>
+            <input id="re_displayName" placeholder="Your full name" autocomplete="name"/>
+          </div>
+          <div class="label" id="re_passLabel">PIN / Password</div>
+          <input id="re_pass" type="password" placeholder="PIN or password" autocomplete="new-password"/>
+          <div class="hint" id="re_hint">Enter your Intelligent Golf member ID and PIN</div>
+          <button class="go" onclick="doRegister()">Create account</button>
         </div>
-        <div class="label" id="re_passLabel">PIN / Password</div>
-        <input id="re_pass" type="password" placeholder="PIN or password" autocomplete="new-password"/>
-        <div class="hint" id="re_hint">Enter your Intelligent Golf member ID and PIN</div>
-        <button class="go" onclick="doRegister()">Create account</button>
+
+        <!-- New club fields (shown when identifier not found) -->
+        <div id="re_newClubFields" style="display:none">
+          <div class="hint" style="margin-bottom:8px;">A short unique ID for your club/society — letters, numbers and hyphens only</div>
+          <div class="label">Club/Society name</div>
+          <input id="re_clubname_input" placeholder="e.g. Bramley Golf Society" autocomplete="organization"/>
+          <div class="label">Your username</div>
+          <input id="re_new_user" placeholder="Choose a username" autocomplete="username"/>
+          <div class="label">Your name</div>
+          <input id="re_new_display" placeholder="Your full name" autocomplete="name"/>
+          <div class="label">Password</div>
+          <input id="re_new_pass" type="password" placeholder="Min 4 characters" autocomplete="new-password"/>
+          <div class="hint">You will be the first member of this club/society.</div>
+          <button class="go" onclick="doSetupClub()">Create club &amp; account</button>
+        </div>
+
         <div class="err" id="re_err"></div>
       </div>
 
@@ -279,25 +299,38 @@ async def root(request: Request):
           applyTenantInfo(d, nameEl);
         } else {
           _slugCache[slug] = null;
-          nameEl.textContent = 'Club not found';
-          nameEl.style.color = '#A32D2D';
+          applyTenantInfo(null, nameEl);
         }
       } catch(e) {}
     }
     function applyTenantInfo(d, nameEl) {
-      if (!d) return;
-      nameEl.textContent = d.name;
-      nameEl.style.color = '#2D2B5B';
+      const existing   = document.getElementById('re_existingFields');
+      const newClub    = document.getElementById('re_newClubFields');
+      const liLabel    = document.getElementById('li_credlabel');
+
+      if (!d) {
+        // Identifier not found — offer to create a new club (register tab only)
+        if (nameEl) { nameEl.textContent = 'Not found — fill in details below to create your club/society'; nameEl.style.color = '#c47a00'; }
+        if (existing) existing.style.display = 'none';
+        if (newClub)  newClub.style.display  = '';
+        const slugVal = document.getElementById('re_slug')?.value.trim().toLowerCase() || '';
+        const inp = document.getElementById('re_slug_for_new');
+        if (inp) inp.value = slugVal;
+        return;
+      }
+
+      if (nameEl) { nameEl.textContent = d.name; nameEl.style.color = '#2D2B5B'; }
+      if (existing) existing.style.display = '';
+      if (newClub)  newClub.style.display  = 'none';
+
       const ig = d.ig_tenant;
-      // Login form fields (may not exist on register form)
-      const liLabel = document.getElementById('li_credlabel');
       if (liLabel) liLabel.textContent = ig ? 'IG Member ID' : 'Username';
-      // Register form fields (may not exist on login form)
-      const reUserLabel    = document.getElementById('re_userLabel');
-      const reUser         = document.getElementById('re_user');
-      const rePassLabel    = document.getElementById('re_passLabel');
-      const reHint         = document.getElementById('re_hint');
-      const reDisplayRow   = document.getElementById('re_displayNameRow');
+
+      const reUserLabel  = document.getElementById('re_userLabel');
+      const reUser       = document.getElementById('re_user');
+      const rePassLabel  = document.getElementById('re_passLabel');
+      const reHint       = document.getElementById('re_hint');
+      const reDisplayRow = document.getElementById('re_displayNameRow');
       if (reUserLabel)  reUserLabel.textContent  = ig ? 'IG Member ID' : 'Username';
       if (reUser)       reUser.placeholder        = ig ? 'Your IG member ID' : 'Choose a username';
       if (rePassLabel)  rePassLabel.textContent   = ig ? 'PIN' : 'Password';
@@ -305,6 +338,30 @@ async def root(request: Request):
         ? 'Enter your Intelligent Golf member ID and PIN'
         : 'Choose a username and a password (min 4 characters)';
       if (reDisplayRow) reDisplayRow.style.display = ig ? 'none' : '';
+    }
+    async function doSetupClub() {
+      const slug        = document.getElementById('re_slug').value.trim().toLowerCase();
+      const clubName    = document.getElementById('re_clubname_input').value.trim();
+      const user        = document.getElementById('re_new_user').value.trim();
+      const displayName = document.getElementById('re_new_display').value.trim();
+      const pass        = document.getElementById('re_new_pass').value;
+      const err         = document.getElementById('re_err');
+      err.style.display = 'none';
+      if (!slug || !clubName || !user || !pass) {
+        err.textContent = 'All fields are required.'; err.style.display = 'block'; return;
+      }
+      try {
+        const r = await fetch('/api/setup-club', { method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({slug, club_name: clubName, username: user,
+                                credential: pass, display_name: displayName}) });
+        const d = await r.json();
+        if (!r.ok) { err.textContent = d.detail || 'Setup failed.'; err.style.display = 'block'; return; }
+        localStorage.setItem('session_token', d.session_token);
+        localStorage.setItem('tenant_slug',   d.tenant_slug);
+        localStorage.setItem('ig_tenant',     '0');
+        window.location.href = '/' + d.tenant_slug;
+      } catch(e) { err.textContent = 'Network error.'; err.style.display = 'block'; }
     }
     async function doLogin() {
       const slug = document.getElementById('li_slug').value.trim().toLowerCase();
@@ -392,9 +449,17 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    slug:       str
-    username:   str
-    credential: str
+    slug:         str
+    username:     str
+    credential:   str
+    display_name: str = ""
+
+
+class SetupClubRequest(BaseModel):
+    slug:         str
+    club_name:    str
+    username:     str
+    credential:   str
     display_name: str = ""
 
 
@@ -452,6 +517,44 @@ async def logout(
     if token:
         _user_sessions.pop(token, None)
     return {"ok": True}
+
+
+@app.post("/api/setup-club")
+async def setup_club(body: SetupClubRequest):
+    """
+    Create a new non-IG club and its first user account in one step.
+    Only succeeds if the slug does not already exist.
+    """
+    slug = body.slug.strip().lower()
+    if not slug or not slug.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(400, "Slug must contain only letters, numbers, hyphens or underscores")
+    existing = await db.get_tenant_by_slug(slug)
+    if existing:
+        raise HTTPException(409, f"A club with slug '{slug}' already exists — please sign in or register instead")
+    club_name = body.club_name.strip()
+    if not club_name:
+        raise HTTPException(400, "Club name is required")
+    if len(body.credential) < 4:
+        raise HTTPException(400, "Password must be at least 4 characters")
+    try:
+        tenant_id = await db.create_tenant(club_name, slug, ig_tenant=False)
+    except Exception as e:
+        raise HTTPException(500, f"Could not create club: {str(e)}")
+    ph = _hash_password(body.credential)
+    try:
+        user_id = await db.create_user(
+            tenant_id, body.username,
+            password_hash=ph,
+            display_name=body.display_name or None,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Could not create user: {str(e)}")
+    token = _create_user_session(
+        user_id, tenant_id, slug, club_name,
+        ig_username=None, ig_pin=None, ig_tenant=False,
+    )
+    return {"session_token": token, "tenant_slug": slug,
+            "tenant_name": club_name, "ig_tenant": False}
 
 
 # ---------------------------------------------------------------------------
