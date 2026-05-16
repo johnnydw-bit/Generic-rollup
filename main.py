@@ -647,7 +647,9 @@ async def admin_callback(code: str, state: str | None = None):
     if not github_username:
         raise HTTPException(400, "Could not retrieve GitHub username")
 
-    if allowed_user and github_username.lower() != allowed_user.lower():
+    if not allowed_user:
+        raise HTTPException(503, "Admin access not configured (ADMIN_GITHUB_USERNAME missing)")
+    if github_username.lower() != allowed_user.lower():
         raise HTTPException(403, f"GitHub user '{github_username}' is not the configured admin")
 
     session_token = _create_admin_session(github_username)
