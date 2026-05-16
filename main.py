@@ -228,7 +228,7 @@ async def root(request: Request):
       <div id="loginForm">
         <div class="label">Club slug</div>
         <input id="li_slug" placeholder="e.g. bramley" autocapitalize="none"
-               oninput="onSlugInput('li_slug','li_clubname','li_credlabel','li_credplaceholder')"/>
+               oninput="onSlugInput('li_slug','li_clubname')"/>
         <div class="club-name" id="li_clubname"></div>
         <div class="label" id="li_credlabel">Member ID</div>
         <input id="li_user" placeholder="Your member ID" autocomplete="username"/>
@@ -242,13 +242,17 @@ async def root(request: Request):
       <div id="registerForm" style="display:none">
         <div class="label">Club slug</div>
         <input id="re_slug" placeholder="e.g. bramley" autocapitalize="none"
-               oninput="onSlugInput('re_slug','re_clubname','re_credlabel','re_credplaceholder')"/>
+               oninput="onSlugInput('re_slug','re_clubname')"/>
         <div class="club-name" id="re_clubname"></div>
-        <div class="label" id="re_credlabel">Member ID / Username</div>
-        <input id="re_user" placeholder="Your member ID or chosen username" autocomplete="username"/>
-        <div class="label">PIN / Password</div>
+        <div class="label" id="re_userLabel">Member ID</div>
+        <input id="re_user" placeholder="Your member ID" autocomplete="username"/>
+        <div id="re_displayNameRow" style="display:none">
+          <div class="label">Display name</div>
+          <input id="re_displayName" placeholder="Your full name" autocomplete="name"/>
+        </div>
+        <div class="label" id="re_passLabel">PIN / Password</div>
         <input id="re_pass" type="password" placeholder="PIN or password" autocomplete="new-password"/>
-        <div class="hint" id="re_hint">For Intelligent Golf clubs: use your IG member ID and PIN</div>
+        <div class="hint" id="re_hint">Enter your Intelligent Golf member ID and PIN</div>
         <button class="go" onclick="doRegister()">Create account</button>
         <div class="err" id="re_err"></div>
       </div>
@@ -262,18 +266,17 @@ async def root(request: Request):
       document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active', (t==='login'?i===0:i===1)));
     }
     let _slugCache = {};
-    async function onSlugInput(slugId, nameId, labelId) {
-      const slug = document.getElementById(slugId).value.trim().toLowerCase();
+    async function onSlugInput(slugId, nameId) {
+      const slug   = document.getElementById(slugId).value.trim().toLowerCase();
       const nameEl = document.getElementById(nameId);
-      const labelEl = document.getElementById(labelId);
-      if (!slug) { nameEl.textContent=''; return; }
-      if (_slugCache[slug] !== undefined) { applyTenantInfo(_slugCache[slug], nameEl, labelEl); return; }
+      if (!slug) { nameEl.textContent = ''; return; }
+      if (_slugCache[slug] !== undefined) { applyTenantInfo(_slugCache[slug], nameEl); return; }
       try {
         const r = await fetch('/api/tenant-info?slug='+encodeURIComponent(slug));
         if (r.ok) {
           const d = await r.json();
           _slugCache[slug] = d;
-          applyTenantInfo(d, nameEl, labelEl);
+          applyTenantInfo(d, nameEl);
         } else {
           _slugCache[slug] = null;
           nameEl.textContent = 'Club not found';
@@ -281,11 +284,27 @@ async def root(request: Request):
         }
       } catch(e) {}
     }
-    function applyTenantInfo(d, nameEl, labelEl) {
+    function applyTenantInfo(d, nameEl) {
       if (!d) return;
       nameEl.textContent = d.name;
       nameEl.style.color = '#2D2B5B';
-      labelEl.textContent = d.ig_tenant ? 'IG Member ID' : 'Username';
+      const ig = d.ig_tenant;
+      // Login form fields (may not exist on register form)
+      const liLabel = document.getElementById('li_credlabel');
+      if (liLabel) liLabel.textContent = ig ? 'IG Member ID' : 'Username';
+      // Register form fields (may not exist on login form)
+      const reUserLabel    = document.getElementById('re_userLabel');
+      const reUser         = document.getElementById('re_user');
+      const rePassLabel    = document.getElementById('re_passLabel');
+      const reHint         = document.getElementById('re_hint');
+      const reDisplayRow   = document.getElementById('re_displayNameRow');
+      if (reUserLabel)  reUserLabel.textContent  = ig ? 'IG Member ID' : 'Username';
+      if (reUser)       reUser.placeholder        = ig ? 'Your IG member ID' : 'Choose a username';
+      if (rePassLabel)  rePassLabel.textContent   = ig ? 'PIN' : 'Password';
+      if (reHint)       reHint.textContent        = ig
+        ? 'Enter your Intelligent Golf member ID and PIN'
+        : 'Choose a username and a password (min 4 characters)';
+      if (reDisplayRow) reDisplayRow.style.display = ig ? 'none' : '';
     }
     async function doLogin() {
       const slug = document.getElementById('li_slug').value.trim().toLowerCase();
@@ -307,16 +326,17 @@ async def root(request: Request):
       } catch(e) { err.textContent='Network error.'; err.style.display='block'; }
     }
     async function doRegister() {
-      const slug = document.getElementById('re_slug').value.trim().toLowerCase();
-      const user = document.getElementById('re_user').value.trim();
-      const pass = document.getElementById('re_pass').value;
-      const err  = document.getElementById('re_err');
+      const slug        = document.getElementById('re_slug').value.trim().toLowerCase();
+      const user        = document.getElementById('re_user').value.trim();
+      const pass        = document.getElementById('re_pass').value;
+      const displayName = (document.getElementById('re_displayName')?.value || '').trim();
+      const err         = document.getElementById('re_err');
       err.style.display = 'none';
       if (!slug || !user || !pass) { err.textContent='All fields required.'; err.style.display='block'; return; }
       try {
         const r = await fetch('/api/register', {method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({slug, username:user, credential:pass})});
+          body: JSON.stringify({slug, username:user, credential:pass, display_name:displayName})});
         const d = await r.json();
         if (!r.ok) { err.textContent = d.detail||'Registration failed.'; err.style.display='block'; return; }
         localStorage.setItem('session_token', d.session_token);
