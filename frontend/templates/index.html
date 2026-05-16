@@ -1789,6 +1789,7 @@ async function saveRound() {
     const data = await resp.json();
     state.players = data.players;
     state.allRoundDates = [];
+    state.allPlayers = [];   // invalidate cache so history includes any new walk-ups
     await showResultsScreen();
   } catch(e) {
     alert('Network error — could not save round.');
@@ -2580,6 +2581,7 @@ async function confirmAddPlayer() {
     });
     if (!resp.ok) throw new Error();
     closeOverlay('addPlayerOverlay');
+    state.allPlayers = [];   // invalidate cache so history picks up the new player
     await loadPlayerManager();
   } catch(e) { setS6Status('Add failed', 'danger'); }
 }
@@ -2718,6 +2720,7 @@ async function confirmWalkupPlayer() {
                        score: null, team: null, new_player: false });
   closeOverlay('walkupOverlay');
   state.selectedStructure = null;
+  state.allPlayers = [];   // invalidate cache so history picks up the new player
   initPlayingHC();   // derive course HC (including ban reduction) for the new player
   updateTeamStructureUI();
   updateUnassignedWarning();
