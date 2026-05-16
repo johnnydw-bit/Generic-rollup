@@ -1011,7 +1011,8 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
     if autosave_method == "stableford": autosave_method = "universal"
     elif autosave_method == "whs": autosave_method = "winners_only_1"
 
-    whs_mode = (autosave_method == "winners_only_1")
+    whs_mode         = (autosave_method == "winners_only_1")
+    winner_reduction = (autosave_method == "winners_only_2")
 
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
@@ -1023,6 +1024,17 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
         return {"players": results, "team_scores": team_scores, "whs_mode": True,
                 "prohibited_winner": whs_result.get("prohibited_winner"),
                 "error": whs_result.get("error")}
+    elif winner_reduction:
+        results = [
+            {**p, "adjustment": None, "new_handicap": p.get("playing_hc") or p.get("handicap") or 0,
+             "adj_display": ""}
+            for p in body.players if p.get("score") is not None
+        ] + [
+            {**p, "adjustment": None, "new_handicap": None, "adj_display": ""}
+            for p in body.players if p.get("score") is None
+        ]
+        team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
+        return {"players": results, "team_scores": team_scores, "whs_mode": False}
     else:
         results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
         for r in results:
