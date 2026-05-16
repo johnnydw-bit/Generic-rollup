@@ -212,7 +212,8 @@ def _init_schema():
                     ADD COLUMN IF NOT EXISTS whs_index_used NUMERIC(4,1),
                     ADD COLUMN IF NOT EXISTS new_whs_index  NUMERIC(4,1),
                     ADD COLUMN IF NOT EXISTS course_id      INTEGER REFERENCES courses(id),
-                    ADD COLUMN IF NOT EXISTS tee_id         INTEGER REFERENCES tees(id)
+                    ADD COLUMN IF NOT EXISTS tee_id         INTEGER REFERENCES tees(id),
+                    ADD COLUMN IF NOT EXISTS playing_hc     INTEGER
             """)
 
             # ── Course / Tee tables ──────────────────────────────────────
@@ -340,6 +341,17 @@ def _init_schema():
 
             cur.execute("""
                 ALTER TABLE rollup_settings ADD COLUMN IF NOT EXISTS logo_data TEXT
+            """)
+            cur.execute("""
+                ALTER TABLE rollup_settings
+                    ADD COLUMN IF NOT EXISTS competition_format TEXT NOT NULL DEFAULT 'stableford',
+                    ADD COLUMN IF NOT EXISTS medal_adjustment_table TEXT NOT NULL DEFAULT '[
+                        {"max_score": 68, "adjustment": -2},
+                        {"max_score": 71, "adjustment": -1},
+                        {"max_score": 74, "adjustment": 0},
+                        {"max_score": 80, "adjustment": 1},
+                        {"max_score": null, "adjustment": 2}
+                    ]'
             """)
 
             # Legacy singleton credentials — kept for backward compatibility
@@ -814,13 +826,14 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                         "UPDATE players SET handicap = %s WHERE id = %s",
                         (r["new_handicap"], player_id)
                     )
+                    playing_hc = r.get("playing_hc") if r.get("playing_hc") is not None else r.get("handicap")
                     cur.execute("""
                         INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
-                            course_id, tee_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            playing_hc, course_id, tee_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                     """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"],
-                           course_id, tee_id))
+                           playing_hc, course_id, tee_id))
 
 
 async def save_round_results(results: list[dict], date_str: str, rollup_id: int,
@@ -959,7 +972,7 @@ def _get_last_round_results(rollup_id: int):
             if not row or not row["last_date"]:
                 return []
             cur.execute("""
-                SELECT p.name, r.score, r.new_handicap
+                SELECT p.name, r.score, r.new_handicap, r.playing_hc
                 FROM rounds r
                 JOIN players p ON p.id = r.player_id
                 WHERE r.rollup_id = %s AND r.date = %s
@@ -1067,7 +1080,7 @@ def _get_round_by_date(date_str: str, rollup_id: int):
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT p.name, r.score, r.new_handicap,
+                SELECT p.name, r.score, r.new_handicap, r.playing_hc,
                        r.whs_mode, r.whs_index_used, r.new_whs_index,
                        p.winner_ban_entries, p.winner_prohibited
                 FROM rounds r
@@ -1164,6 +1177,14 @@ DEFAULT_ADJUSTMENT_TABLE = [
     {"max_score": None, "adjustment": -2},
 ]
 
+DEFAULT_MEDAL_ADJUSTMENT_TABLE = [
+    {"max_score": 68,   "adjustment": -2},
+    {"max_score": 71,   "adjustment": -1},
+    {"max_score": 74,   "adjustment": 0},
+    {"max_score": 80,   "adjustment": 1},
+    {"max_score": None, "adjustment": 2},
+]
+
 
 def _get_rollup_settings(rollup_id: int) -> dict:
     with _get_conn() as conn:
@@ -1217,12 +1238,16 @@ def _get_rollup_settings(rollup_id: int) -> dict:
                     "preferred_team_size":      4,
                     "team_scoring_method":      "best2",
                     "logo_data":                None,
+                    "competition_format":       "stableford",
+                    "medal_adjustment_table":   DEFAULT_MEDAL_ADJUSTMENT_TABLE,
                 }
             d = dict(row)
             d["display_name"]     = d["rollup_name"]
             d["ig_search_term"]   = d["rollup_term"]
-            d["run_days"]         = json.loads(d["run_days"])
-            d["adjustment_table"] = json.loads(d["adjustment_table"])
+            d["run_days"]               = json.loads(d["run_days"])
+            d["adjustment_table"]       = json.loads(d["adjustment_table"])
+            d["medal_adjustment_table"] = json.loads(d.get("medal_adjustment_table") or json.dumps(DEFAULT_MEDAL_ADJUSTMENT_TABLE))
+            d["competition_format"]     = d.get("competition_format") or "stableford"
             d["entry_fee"]        = float(d["entry_fee"])
             d["whs_pct_1st"]      = float(d["whs_pct_1st"])
             d["whs_pct_2nd"]      = float(d["whs_pct_2nd"])
@@ -1283,11 +1308,11 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                     entry_fee, prize_places,
                     prize_pct_1st, prize_pct_2nd, prize_pct_3rd, prize_pct_4th,
                     tie_handling, preferred_team_size, team_scoring_method,
-                    logo_data,
+                    logo_data, competition_format, medal_adjustment_table,
                     updated_at
                 ) VALUES (
                     %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,
-                    %s,%s, %s,%s,%s,%s, %s,%s,%s, %s, NOW()
+                    %s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,%s, NOW()
                 )
                 ON CONFLICT (rollup_id) DO UPDATE SET
                     display_name              = EXCLUDED.display_name,
@@ -1318,6 +1343,8 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                     preferred_team_size       = EXCLUDED.preferred_team_size,
                     team_scoring_method       = EXCLUDED.team_scoring_method,
                     logo_data                 = EXCLUDED.logo_data,
+                    competition_format        = EXCLUDED.competition_format,
+                    medal_adjustment_table    = EXCLUDED.medal_adjustment_table,
                     updated_at                = NOW()
             """, (
                 rollup_id,
@@ -1339,6 +1366,8 @@ def _save_rollup_settings(rollup_id: int, s: dict):
                 s["prize_pct_3rd"], s["prize_pct_4th"],
                 s["tie_handling"], s["preferred_team_size"], s["team_scoring_method"],
                 s.get("logo_data"),
+                s.get("competition_format", "stableford"),
+                json.dumps(s.get("medal_adjustment_table", DEFAULT_MEDAL_ADJUSTMENT_TABLE)),
             ))
             cur.execute("""
                 UPDATE rollups SET name = %s, ig_search_term = %s WHERE id = %s

@@ -421,7 +421,8 @@
           <th class="left">Player</th>
           <th id="colWhsHead">WHS</th>
           <th id="colHcHead">Course H/C</th>
-          <th>Score</th>
+          <th id="colScoreHead">Score</th>
+          <th id="colNetHead" style="display:none;">Net</th>
           <th id="colAdjHead">H/C Adj</th>
           <th id="col6Head">Remove</th>
         </tr>
@@ -456,7 +457,8 @@
       <thead>
         <tr>
           <th class="left">Player</th>
-          <th>Score</th>
+          <th id="resScoreHead">Score</th>
+          <th id="resNetHead" style="display:none;">Net</th>
           <th>HC After</th>
           <th>Change</th>
         </tr>
@@ -595,6 +597,16 @@
       </div>
     </div>
 
+    <!-- Section 1c: Competition Format -->
+    <div class="settings-section">
+      <div class="settings-section-title">Competition Format</div>
+      <div class="settings-sublabel" style="padding:0 12px 8px;">How scores are entered and how the winner is determined.</div>
+      <div class="scoring-mode-row" style="flex-direction:row;gap:8px;padding:0 12px 8px;">
+        <button class="scoring-mode-btn" id="fmtStableford" style="flex:1;" onclick="onFormatChange('stableford')">Stableford</button>
+        <button class="scoring-mode-btn" id="fmtMedal" style="flex:1;" onclick="onFormatChange('medal')">Medal (Stroke Play)</button>
+      </div>
+    </div>
+
     <!-- Section 2: Tee Times -->
     <div class="settings-section">
       <div class="settings-section-title">Tee Times</div>
@@ -696,13 +708,29 @@
     <!-- Section 5: Handicap Adjustment Table (Stableford only) -->
     <div class="settings-section" id="adjTableSection">
       <div class="settings-section-title">Handicap Adjustment Table</div>
+      <div class="settings-sublabel" style="padding:0 12px 4px;">Based on Stableford points scored.</div>
       <div class="settings-row">
         <table class="adj-table" id="adjTable">
           <thead><tr>
-            <th>Score ≤</th>
+            <th>Points ≤</th>
             <th>Adjustment</th>
           </tr></thead>
           <tbody id="adjTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 5b: Medal Adjustment Table (Medal only) -->
+    <div class="settings-section" id="medalAdjTableSection" style="display:none;">
+      <div class="settings-section-title">Medal Handicap Adjustment Table</div>
+      <div class="settings-sublabel" style="padding:0 12px 4px;">Based on net strokes (gross − playing handicap). Lower net = better score.</div>
+      <div class="settings-row">
+        <table class="adj-table" id="medalAdjTable">
+          <thead><tr>
+            <th>Net strokes ≤</th>
+            <th>Adjustment</th>
+          </tr></thead>
+          <tbody id="medalAdjTableBody"></tbody>
         </table>
       </div>
     </div>
@@ -1023,6 +1051,8 @@ let state = {
   historyChart: null,
   rollupSettings: null,
   prohibitedWinner: null,
+  competitionFormat: 'stableford',
+  teePar: null,
 };
 
 let session = {
@@ -1377,8 +1407,11 @@ async function loadRollupSettings() {
   try {
     const resp = await apiFetch(`/api/settings?rollup_id=${session.rollupId}`);
     if (resp.ok) {
-      state.rollupSettings = await resp.json();
-      updateLogoDisplay(state.rollupSettings?.logo_data);
+      const s = await resp.json();
+      state.rollupSettings = s;
+      state.competitionFormat = s.competition_format || 'stableford';
+      state.teePar = s.tee_par || null;
+      updateLogoDisplay(s.logo_data);
     }
   } catch(e) {}
 }
@@ -1477,13 +1510,15 @@ function openScoreEntry() {
   document.getElementById('prohibitedWarning').style.display = 'none';
   state.prohibitedWinner = null;
   // Set read-only method label based on current settings
-  const _sm = (state.rollupSettings || {}).scoring_mode;
+  const _sm  = (state.rollupSettings || {}).scoring_mode;
+  const _fmt = state.competitionFormat || 'stableford';
   const _methodLabels = {
     'universal':      'Universal HC',
     'winners_only_1': 'Winners Only 1',
     'winners_only_2': 'Winners Only 2',
   };
-  document.getElementById('s2MethodLabel').textContent = _methodLabels[_sm] || 'Universal HC';
+  const _fmtLabel = _fmt === 'medal' ? ' · Medal' : '';
+  document.getElementById('s2MethodLabel').textContent = (_methodLabels[_sm] || 'Universal HC') + _fmtLabel;
   renderPrizeBar();
   renderGrid();
   showScreen('screen2');
@@ -1620,14 +1655,19 @@ function updateUnassignedWarning() {
 }
 
 function renderGrid() {
-  const isTeam = state.gameMode === 'team';
-  const method = (state.rollupSettings || {}).scoring_mode || 'universal';
-  const isWhs = (method === 'winners_only_1');
+  const isTeam  = state.gameMode === 'team';
+  const method  = (state.rollupSettings || {}).scoring_mode || 'universal';
+  const isWhs   = (method === 'winners_only_1');
+  const isMedal = (state.competitionFormat || (state.rollupSettings || {}).competition_format || 'stableford') === 'medal';
   const s = state.rollupSettings || {};
-  document.getElementById('col6Head').textContent = isTeam ? 'Team' : 'Remove';
-  document.getElementById('colWhsHead').textContent = 'WHS';
-  document.getElementById('colHcHead').textContent = 'Course H/C';
-  document.getElementById('colAdjHead').textContent = isWhs ? 'WHS Adj' : 'H/C Adj';
+
+  document.getElementById('col6Head').textContent    = isTeam ? 'Team' : 'Remove';
+  document.getElementById('colWhsHead').textContent  = 'WHS';
+  document.getElementById('colHcHead').textContent   = 'Course H/C';
+  document.getElementById('colScoreHead').textContent = isMedal ? 'Gross' : 'Points';
+  document.getElementById('colNetHead').style.display = isMedal ? '' : 'none';
+  document.getElementById('colAdjHead').textContent  = isWhs ? 'WHS Adj' : 'H/C Adj';
+
   const body = document.getElementById('scoreBody');
   let rows = '';
   const sorted = isTeam
@@ -1638,65 +1678,79 @@ function renderGrid() {
   const cr = s.tee_course_rating, slope = s.tee_slope, par = s.tee_par;
   const hasTee = isWhs && cr !== null && cr !== undefined && slope && par;
 
+  // For medal rank highlighting: rank by net score ascending (lower = better)
+  const _scored = sorted.filter(x => x.score !== null);
+  const _medalNets = isMedal
+    ? [...new Set(_scored.map(x => x.net_score !== undefined && x.net_score !== null ? x.net_score : (x.score - (x.playing_hc ?? x.handicap ?? 0))))].sort((a,b) => a - b)
+    : [];
+  const _sfScores = !isMedal
+    ? [...new Set(_scored.map(x => x.score))].sort((a,b) => b - a)
+    : [];
+
   let lastTeam = null;
   sorted.forEach((p, i) => {
     const origIdx = state.players.indexOf(p);
     if (isTeam && p.team !== lastTeam) {
       lastTeam = p.team;
       const tc = p.team ? `team-${p.team}` : '';
-      rows += `<tr class="team-header ${tc}"><td colspan="6">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
+      rows += `<tr class="team-header ${tc}"><td colspan="${isMedal ? 7 : 6}">${p.team ? `Team ${p.team}` : 'Unassigned'}</td></tr>`;
     }
-    const _scored = sorted.filter(x => x.score !== null);
-    const _scores = [...new Set(_scored.map(x => x.score))].sort((a,b) => b - a);
-    const rankClass = (!isTeam && p.score !== null)
-      ? (p.score === _scores[0] ? 'rank-gold'
-       : p.score === _scores[1] ? 'rank-silver'
-       : p.score === _scores[2] ? 'rank-bronze' : '')
-      : '';
 
-    // WHS index column — always shows raw WHS index
-    const whsDisplay = (p.whs_index !== null && p.whs_index !== undefined)
-      ? p.whs_index.toFixed(1) : '—';
+    let rankClass = '';
+    if (!isTeam && p.score !== null) {
+      if (isMedal) {
+        const net = p.net_score !== undefined && p.net_score !== null ? p.net_score : (p.score - (p.playing_hc ?? p.handicap ?? 0));
+        rankClass = net === _medalNets[0] ? 'rank-gold' : net === _medalNets[1] ? 'rank-silver' : net === _medalNets[2] ? 'rank-bronze' : '';
+      } else {
+        rankClass = p.score === _sfScores[0] ? 'rank-gold' : p.score === _sfScores[1] ? 'rank-silver' : p.score === _sfScores[2] ? 'rank-bronze' : '';
+      }
+    }
 
-    // Course H/C column
+    const whsDisplay = (p.whs_index !== null && p.whs_index !== undefined) ? p.whs_index.toFixed(1) : '—';
+
     let hcDisplay;
     if (isWhs) {
-      if (hasTee && p.whs_index !== null && p.whs_index !== undefined) {
-        hcDisplay = Math.round(p.whs_index * (slope / 113) + (cr - par));
-      } else {
-        hcDisplay = hasTee ? '?' : '—';
-      }
+      hcDisplay = (hasTee && p.whs_index !== null && p.whs_index !== undefined)
+        ? Math.round(p.whs_index * (slope / 113) + (cr - par)) : (hasTee ? '?' : '—');
     } else {
       hcDisplay = p.handicap !== null ? p.handicap : '?';
     }
 
-    // Col 5: H/C Adj
-    // Roll-Up: new integer HC + adjustment e.g. "24 (-1)"
-    // WHS: show position % reduction e.g. "-15%" for top finishers, blank otherwise
     let newHC = '';
     if (isWhs) {
-      const adj = p.adjustment; // raw string e.g. "-15% -> 12.1" or "-"
+      const adj = p.adjustment;
       if (p.score !== null && p.score !== undefined && adj && adj !== '-') {
-        // Extract just the % part e.g. "-15% -> 12.1" → "-15%"
         newHC = adj.split('->')[0].trim();
       }
     } else {
       newHC = p.new_handicap !== undefined && p.new_handicap !== null
         ? `${p.new_handicap}${p.adj_display ? ' ' + p.adj_display : ''}` : '';
     }
+
     const col6 = isTeam
-      ? `<td class="team-col${p.team ? ' team-col' : ''}" ><select onchange="setPlayerTeam(${origIdx}, this.value)">
+      ? `<td class="team-col"><select onchange="setPlayerTeam(${origIdx}, this.value)">
           <option value="">—</option>
           ${[1,2,3,4,5,6].map(t=>`<option value="${t}"${p.team===t?' selected':''}>${t}</option>`).join('')}
          </select></td>`
-      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\'")}')">✕</td>`;
+      : `<td class="remove-col" onclick="promptRemovePlayer('${p.name.replace(/'/g,"\\'")}')">✕</td>`;
+
     const playingHcVal = p.playing_hc !== null && p.playing_hc !== undefined ? p.playing_hc : hcDisplay;
-    const gridBanBadge = p.winner_ban_entries > 0 ? ` <span style="font-size:9px;background:#c47a00;color:#fff;border-radius:3px;padding:1px 3px;" title="Win ban: ${p.winner_ban_entries} round(s) remaining">⛔${p.winner_ban_entries}</span>` : '';
+    const gridBanBadge = p.winner_ban_entries > 0
+      ? ` <span style="font-size:9px;background:#c47a00;color:#fff;border-radius:3px;padding:1px 3px;" title="Win ban: ${p.winner_ban_entries} round(s) remaining">⛔${p.winner_ban_entries}</span>` : '';
+
+    // Medal net column
+    let netCell = '';
+    if (isMedal) {
+      const net = p.score !== null ? (p.net_score !== undefined && p.net_score !== null ? p.net_score : (p.score - (p.playing_hc ?? p.handicap ?? 0))) : '—';
+      netCell = `<td class="c">${net}</td>`;
+    }
+
     rows += `<tr class="${rankClass}">
       <td>${p.name}${gridBanBadge}</td>
       <td class="c">${whsDisplay}</td>
       <td class="hc-edit"><input type="number" min="0" max="54" value="${playingHcVal}" inputmode="numeric" onchange="updatePlayingHC(${origIdx}, this.value)" title="Course / playing handicap — edit to override"/></td>
-      <td class="sc"><input type="number" min="0" max="60" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
+      <td class="sc"><input type="number" min="0" max="${isMedal ? 150 : 60}" value="${p.score !== null ? p.score : ''}" placeholder="—" inputmode="numeric" onchange="updateScore(${origIdx}, this.value)" oninput="updateScore(${origIdx}, this.value)"/></td>
+      ${netCell}
       <td class="nhc">${newHC}</td>
       ${col6}
     </tr>`;
@@ -1728,8 +1782,10 @@ async function recalculate() {
     const data = await resp.json();
     state.players = state.players.map(p => {
       const r = data.players.find(x => x.name === p.name);
-      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, adjustment: r.adjustment, position: r.position, winner: r.winner} : p;
+      return r ? {...p, new_handicap: r.new_handicap, adj_display: r.adj_display, adjustment: r.adjustment, position: r.position, winner: r.winner, net_score: r.net_score} : p;
     });
+    if (data.competition_format) state.competitionFormat = data.competition_format;
+    if (data.tee_par !== undefined) state.teePar = data.tee_par;
     state.teamScores = data.team_scores || [];
     state.prohibitedWinner = data.prohibited_winner || null;
 
@@ -1788,6 +1844,8 @@ async function saveRound() {
     }
     const data = await resp.json();
     state.players = data.players;
+    if (data.competition_format) state.competitionFormat = data.competition_format;
+    if (data.tee_par !== undefined) state.teePar = data.tee_par;
     state.allRoundDates = [];
     state.allPlayers = [];   // invalidate cache so history includes any new walk-ups
     await showResultsScreen();
@@ -1851,22 +1909,39 @@ async function loadRoundByIdx(idx) {
 }
 
 function renderResults(players, date) {
-  const sorted = [...players].sort((a,b) => b.score - a.score);
+  const isMedal = (state.competitionFormat || (state.rollupSettings || {}).competition_format || 'stableford') === 'medal';
+  const teePar  = state.teePar || (state.rollupSettings || {}).tee_par || null;
+
+  // Sort: medal = lowest net first; stableford = highest score first
+  const withNet = players.map(p => ({
+    ...p,
+    _net: (isMedal && p.playing_hc != null) ? (p.score - p.playing_hc)
+          : (!isMedal && teePar != null)    ? (teePar + 36 - p.score)
+          : null,
+  }));
+  const sorted = [...withNet].sort((a,b) =>
+    isMedal ? (a._net ?? 999) - (b._net ?? 999) : b.score - a.score
+  );
+
+  // Update column headers
+  document.getElementById('resScoreHead').textContent = isMedal ? 'Gross' : 'Points';
+  const resNetHead = document.getElementById('resNetHead');
+  resNetHead.style.display = (isMedal || teePar) ? '' : 'none';
+  resNetHead.textContent = isMedal ? 'Net' : 'Net Score';
+
   const body = document.getElementById('resultsBody');
   body.innerHTML = sorted.map((p, i) => {
     const rowClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
     const medal = i === 0 ? '<span class="medal g">1</span>' : i === 1 ? '<span class="medal s">2</span>' : i === 2 ? '<span class="medal b">3</span>' : '';
-    const hcChange = p.new_handicap !== undefined && p.new_handicap !== null
-      ? (() => {
-          const diff = p.new_handicap - (p.handicap_before || p.new_handicap);
-          return '';
-        })() : '';
     const resBanBadge = p.winner_ban_entries > 0
       ? ` <span style="font-size:9px;background:#c47a00;color:#fff;border-radius:3px;padding:1px 3px;" title="Win ban: ${p.winner_ban_entries} round(s) remaining">⛔${p.winner_ban_entries}</span>`
       : '';
+    const netCell = (isMedal || teePar)
+      ? `<td class="c">${p._net !== null ? p._net : '—'}</td>` : '';
     return `<tr class="${rowClass}" onclick="showPlayerHistoryFor('${p.name.replace(/'/g,"\\'")}')">
       <td>${medal} ${p.name}${resBanBadge}</td>
       <td class="c">${p.score}</td>
+      ${netCell}
       <td class="c">${p.new_handicap !== null ? p.new_handicap : '—'}</td>
       <td class="c hc-change">—</td>
     </tr>`;
@@ -2014,6 +2089,8 @@ async function loadSettingsForm() {
     if (!resp.ok) return;
     const s = await resp.json();
     state.rollupSettings = s;
+    state.competitionFormat = s.competition_format || 'stableford';
+    state.teePar = s.tee_par || null;
     populateSettingsForm(s);
     await loadCourseOptions(s.course_id, s.tee_id);
   } catch(e) {}
@@ -2029,6 +2106,9 @@ function populateSettingsForm(s) {
   document.querySelectorAll('.day-chip').forEach(chip => {
     chip.classList.toggle('active', (s.run_days || []).includes(chip.dataset.day));
   });
+
+  // Competition format (must be set before scoring mode so updateSettingsSections sees it)
+  onFormatChange(s.competition_format || 'stableford');
 
   // Scoring mode — normalize legacy values on read
   let mode = s.scoring_mode || 'universal';
@@ -2051,8 +2131,9 @@ function populateSettingsForm(s) {
   document.getElementById('sWinnerReductionPct').value = s.winner_reduction_pct ?? 25;
   document.getElementById('sWinnerBanRounds').value = s.winner_ban_rounds ?? 3;
 
-  // Adjustment table
+  // Adjustment tables
   populateAdjTable(s.adjustment_table || []);
+  populateMedalAdjTable(s.medal_adjustment_table || []);
 
   // Prizes
   document.getElementById('sEntryFee').value = s.entry_fee || 0;
@@ -2068,32 +2149,46 @@ function populateSettingsForm(s) {
 }
 
 
+function getCurrentFormat() {
+  return document.getElementById('fmtMedal').classList.contains('active') ? 'medal' : 'stableford';
+}
+
+function getCurrentHcMode() {
+  return document.getElementById('modeWinnersOnly1').classList.contains('active') ? 'winners_only_1'
+       : document.getElementById('modeWinnersOnly2').classList.contains('active') ? 'winners_only_2'
+       : 'universal';
+}
+
+function updateSettingsSections() {
+  const fmt      = getCurrentFormat();
+  const mode     = getCurrentHcMode();
+  const isUniv   = mode === 'universal';
+  const isWhs    = mode === 'winners_only_1';
+  const isReduc  = mode === 'winners_only_2';
+  const isMedal  = fmt === 'medal';
+
+  document.getElementById('adjTableSection').style.display        = (!isMedal && isUniv) ? 'block' : 'none';
+  document.getElementById('medalAdjTableSection').style.display   = (isMedal  && isUniv) ? 'block' : 'none';
+  document.getElementById('winnerPenaltySection').style.display   = isUniv  ? 'block' : 'none';
+  document.getElementById('whsSection').style.display             = isWhs   ? 'block' : 'none';
+  document.getElementById('winnerReductionSection').style.display = isReduc ? 'block' : 'none';
+  document.getElementById('winnerReductionDetail').style.display  = isReduc ? 'block' : 'none';
+  const showCourse = isWhs || isMedal;
+  document.getElementById('courseTeeSection').style.display = showCourse ? 'block' : 'none';
+  if (showCourse) loadCourseOptions();
+}
+
+function onFormatChange(fmt) {
+  document.getElementById('fmtStableford').classList.toggle('active', fmt !== 'medal');
+  document.getElementById('fmtMedal').classList.toggle('active', fmt === 'medal');
+  updateSettingsSections();
+}
+
 function onScoringModeChange(mode) {
   document.getElementById('modeUniversal').classList.toggle('active', mode === 'universal');
   document.getElementById('modeWinnersOnly1').classList.toggle('active', mode === 'winners_only_1');
   document.getElementById('modeWinnersOnly2').classList.toggle('active', mode === 'winners_only_2');
-
-  if (mode === 'universal') {
-    document.getElementById('adjTableSection').style.display = 'block';
-    document.getElementById('winnerPenaltySection').style.display = 'block';
-    document.getElementById('whsSection').style.display = 'none';
-    document.getElementById('courseTeeSection').style.display = 'none';
-    document.getElementById('winnerReductionSection').style.display = 'none';
-  } else if (mode === 'winners_only_1') {
-    document.getElementById('whsSection').style.display = 'block';
-    document.getElementById('courseTeeSection').style.display = 'block';
-    document.getElementById('adjTableSection').style.display = 'none';
-    document.getElementById('winnerPenaltySection').style.display = 'none';
-    document.getElementById('winnerReductionSection').style.display = 'none';
-    loadCourseOptions();
-  } else if (mode === 'winners_only_2') {
-    document.getElementById('winnerReductionSection').style.display = 'block';
-    document.getElementById('winnerReductionDetail').style.display = 'block';
-    document.getElementById('adjTableSection').style.display = 'none';
-    document.getElementById('winnerPenaltySection').style.display = 'none';
-    document.getElementById('whsSection').style.display = 'none';
-    document.getElementById('courseTeeSection').style.display = 'none';
-  }
+  updateSettingsSections();
 }
 
 async function loadCourseOptions(selectedCourseId, selectedTeeId) {
@@ -2253,6 +2348,26 @@ function updateAdjRow(idx, field, val) {
     ? (val === '' ? null : parseInt(val)) : parseInt(val);
 }
 
+function populateMedalAdjTable(table) {
+  const tbody = document.getElementById('medalAdjTableBody');
+  tbody.innerHTML = table.map((row, i) => {
+    const isLast = row.max_score === null || i === table.length - 1;
+    const scoreCell = isLast
+      ? '<td style="color:#888;font-size:11px;">Otherwise</td>'
+      : `<td><input class="adj-input" type="number" value="${row.max_score}" onchange="updateMedalAdjRow(${i},'max_score',this.value)"/></td>`;
+    return `<tr>${scoreCell}
+      <td><input class="adj-input" type="number" min="-5" max="5" value="${row.adjustment}" onchange="updateMedalAdjRow(${i},'adjustment',this.value)"/></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateMedalAdjRow(idx, field, val) {
+  if (!state.rollupSettings) return;
+  if (!state.rollupSettings.medal_adjustment_table) state.rollupSettings.medal_adjustment_table = [];
+  state.rollupSettings.medal_adjustment_table[idx][field] = field === 'max_score'
+    ? (val === '' ? null : parseInt(val)) : parseInt(val);
+}
+
 function toggleDay(el) { el.classList.toggle('active'); }
 
 let currentPrizePlaces = 3;
@@ -2324,6 +2439,7 @@ async function saveSettings() {
   const courseId = document.getElementById('sCourseSelect').value;
   const teeId = document.getElementById('sTeeSelect').value;
 
+  const medalAdjTable = state.rollupSettings ? (state.rollupSettings.medal_adjustment_table || []) : [];
   const payload = {
     rollup_id: session.rollupId,
     display_name: document.getElementById('sDisplayName').value.trim(),
@@ -2331,7 +2447,9 @@ async function saveSettings() {
     run_days: runDays,
     tee_interval_minutes: parseInt(document.getElementById('sTeeInterval').value) || 8,
     scoring_mode: mode,
+    competition_format: getCurrentFormat(),
     adjustment_table: adjTable,
+    medal_adjustment_table: medalAdjTable,
     winner_bonus_enabled: document.getElementById('sWinnerBonus').checked,
     winner_gap_penalty1: parseInt(document.getElementById('sGapPenalty1').value) || 0,
     winner_gap_penalty2: parseInt(document.getElementById('sGapPenalty2').value) || 0,

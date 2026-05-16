@@ -1305,6 +1305,9 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
     whs_mode         = (autosave_method == "winners_only_1")
     winner_reduction = (autosave_method == "winners_only_2")
 
+    competition_format = (settings or {}).get("competition_format", "stableford")
+    tee_par = (settings or {}).get("tee_par")
+
     if whs_mode:
         prohibited = await get_prohibited_winners(body.rollup_id)
         whs_result = calculate_whs_handicaps(body.players, settings=settings, prohibited_names=prohibited)
@@ -1314,7 +1317,8 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
         team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
         return {"players": results, "team_scores": team_scores, "whs_mode": True,
                 "prohibited_winner": whs_result.get("prohibited_winner"),
-                "error": whs_result.get("error")}
+                "error": whs_result.get("error"),
+                "competition_format": competition_format, "tee_par": tee_par}
     elif winner_reduction:
         results = [
             {**p, "adjustment": None, "new_handicap": p.get("playing_hc") or p.get("handicap") or 0,
@@ -1325,13 +1329,15 @@ async def autosave(body: ScoreUpdate, tenant_id: int = Depends(get_current_tenan
             for p in body.players if p.get("score") is None
         ]
         team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
-        return {"players": results, "team_scores": team_scores, "whs_mode": False}
+        return {"players": results, "team_scores": team_scores, "whs_mode": False,
+                "competition_format": competition_format, "tee_par": tee_par}
     else:
         results = calculate_new_handicaps(body.players, team_mode=body.team_mode, settings=settings)
         for r in results:
             r["adj_display"] = format_adjustment(r.get("adjustment"))
         team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
-        return {"players": results, "team_scores": team_scores, "whs_mode": False}
+        return {"players": results, "team_scores": team_scores, "whs_mode": False,
+                "competition_format": competition_format, "tee_par": tee_par}
 
 
 def _compute_prize_map(scored: list[dict], pot: float, pcts: list[float]) -> dict:
@@ -1453,9 +1459,12 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
     for r in results:
         r["adj_display"] = format_adjustment(r.get("adjustment"))
     team_scores = calculate_team_scores(results, settings=settings) if body.team_mode else []
+    competition_format = (settings or {}).get("competition_format", "stableford")
+    tee_par = (settings or {}).get("tee_par")
     return {"ok": True, "players": results, "date": body.date,
             "team_scores": team_scores, "whs_mode": whs_mode,
-            "reduction_changes": reduction_changes}
+            "reduction_changes": reduction_changes,
+            "competition_format": competition_format, "tee_par": tee_par}
 
 
 # ---------------------------------------------------------------------------
@@ -1540,7 +1549,9 @@ class RollupSettingsRequest(BaseModel):
     run_days: list[str]
     tee_interval_minutes: int = 8
     scoring_mode: str = "stableford"
+    competition_format: str = "stableford"
     adjustment_table: list[dict]
+    medal_adjustment_table: list[dict] = []
     winner_bonus_enabled: bool = True
     winner_gap_penalty1: int = 0
     winner_gap_penalty2: int = 0

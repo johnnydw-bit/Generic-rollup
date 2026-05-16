@@ -1,16 +1,23 @@
 # Bramley Rollup - backend/handicap.py
-# Updated: 2026-04-17 — WHS position adjustment mode added
+# Updated: 2026-05-16 — Medal (stroke play) mode added
 
 """
 Handicap calculation for Bramley Rollup.
 
-Two modes, selected per rollup in settings:
+Two competition formats: stableford (default) and medal (stroke play).
+Two HC modes: stableford adj table / WHS position %.
 
 STABLEFORD MODE (default)
   - Integer handicap
   - Adjustment table maps score bands to +/- changes
   - Optional winner bonus (-1) and gap penalties
   - Team mode suspends winner bonus
+
+MEDAL MODE
+  - Gross strokes input; net = gross - playing_hc
+  - Winner = lowest net strokes
+  - Medal adjustment table maps net score bands to HC changes
+  - Same winner bonus (-1) logic applies
 
 WHS MODE
   - Decimal WHS index (one decimal place)
@@ -30,9 +37,19 @@ DEFAULT_ADJUSTMENT_TABLE = [
     {"max_score": None, "adjustment": -2},
 ]
 
+DEFAULT_MEDAL_ADJUSTMENT_TABLE = [
+    {"max_score": 68,   "adjustment": -2},
+    {"max_score": 71,   "adjustment": -1},
+    {"max_score": 74,   "adjustment": 0},
+    {"max_score": 80,   "adjustment": 1},
+    {"max_score": None, "adjustment": 2},
+]
+
 DEFAULT_SETTINGS = {
     "scoring_mode":             "stableford",
+    "competition_format":       "stableford",
     "adjustment_table":         DEFAULT_ADJUSTMENT_TABLE,
+    "medal_adjustment_table":   DEFAULT_MEDAL_ADJUSTMENT_TABLE,
     "winner_bonus_enabled":     True,
     "winner_gap_penalty1":      0,
     "winner_gap_penalty2":      0,
@@ -63,14 +80,25 @@ def calculate_new_handicaps(
     settings: dict | None = None,
 ) -> list[dict]:
     """
-    Stableford mode handicap calculation.
+    Handicap calculation dispatcher — routes to stableford or medal logic.
 
-    Player dict keys expected: name, handicap, score (int|None), team (int|None)
+    Player dict keys expected: name, handicap, playing_hc, score (int|None), team (int|None)
     Returns players with added keys: new_handicap, adjustment, winner
+    Medal mode also adds: net_score (int)
     """
     if settings is None:
         settings = DEFAULT_SETTINGS
 
+    if settings.get("competition_format", "stableford") == "medal":
+        return _calculate_medal_handicaps(players, team_mode, settings)
+    return _calculate_stableford_handicaps(players, team_mode, settings)
+
+
+def _calculate_stableford_handicaps(
+    players: list[dict],
+    team_mode: bool,
+    settings: dict,
+) -> list[dict]:
     adj_table    = settings.get("adjustment_table", DEFAULT_ADJUSTMENT_TABLE)
     winner_bonus = settings.get("winner_bonus_enabled", True)
     gap_penalty1 = settings.get("winner_gap_penalty1", 0)
@@ -115,6 +143,52 @@ def calculate_new_handicaps(
 
         new_hc = max(0, hc + adj)
         result.append({**p, "adjustment": adj, "new_handicap": new_hc, "winner": is_winner})
+
+    return result
+
+
+def _calculate_medal_handicaps(
+    players: list[dict],
+    team_mode: bool,
+    settings: dict,
+) -> list[dict]:
+    """Medal (stroke play) handicap calculation. Winner = lowest net strokes."""
+    medal_adj_table = settings.get("medal_adjustment_table", DEFAULT_MEDAL_ADJUSTMENT_TABLE)
+    winner_bonus    = settings.get("winner_bonus_enabled", True)
+
+    def _hc(p):
+        return p["playing_hc"] if p.get("playing_hc") is not None else (p.get("handicap") or 0)
+
+    def _net(p):
+        return p["score"] - _hc(p)
+
+    scored = [p for p in players if p.get("score") is not None]
+
+    winner_name = None
+    if scored and not team_mode and winner_bonus:
+        best_net = min(_net(p) for p in scored)
+        for p in scored:
+            if _net(p) == best_net:
+                winner_name = p["name"]
+                break
+
+    result = []
+    for p in players:
+        score = p.get("score")
+        hc    = _hc(p)
+        is_winner = (p["name"] == winner_name)
+
+        if score is None:
+            result.append({**p, "new_handicap": None, "adjustment": None, "winner": False, "net_score": None})
+            continue
+
+        net_strokes = _net(p)
+        adj = get_adjustment(net_strokes, medal_adj_table)
+        if is_winner:
+            adj -= 1
+
+        new_hc = max(0, hc + adj)
+        result.append({**p, "adjustment": adj, "new_handicap": new_hc, "winner": is_winner, "net_score": net_strokes})
 
     return result
 
