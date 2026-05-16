@@ -405,6 +405,31 @@ def _init_schema():
                   AND (SELECT COUNT(*) FROM tenants) > 0
             """)
 
+            # ── Unique constraint on rounds ───────────────────────────────
+            # Deduplicate first (keep highest id per player+rollup+date),
+            # then ensure the constraint exists so UPSERT works correctly.
+            cur.execute("""
+                DELETE FROM rounds
+                WHERE id NOT IN (
+                    SELECT MAX(id)
+                    FROM rounds
+                    GROUP BY player_id, rollup_id, date
+                )
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'rounds_player_rollup_date_unique'
+                    ) THEN
+                        ALTER TABLE rounds
+                            ADD CONSTRAINT rounds_player_rollup_date_unique
+                            UNIQUE (player_id, rollup_id, date);
+                    END IF;
+                END $$
+            """)
+
             # ── Indexes ──────────────────────────────────────────────────
             cur.execute("CREATE INDEX IF NOT EXISTS tenants_slug_idx ON tenants(slug)")
             cur.execute("CREATE INDEX IF NOT EXISTS users_tenant_idx ON users(tenant_id)")
@@ -819,7 +844,15 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                             new_handicap, whs_mode, whs_index_used, new_whs_index,
                             course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, %s)
-                        ON CONFLICT DO NOTHING
+                        ON CONFLICT (player_id, rollup_id, date) DO UPDATE SET
+                            score              = EXCLUDED.score,
+                            new_handicap       = EXCLUDED.new_handicap,
+                            whs_mode           = EXCLUDED.whs_mode,
+                            whs_index_used     = EXCLUDED.whs_index_used,
+                            new_whs_index      = EXCLUDED.new_whs_index,
+                            course_id          = EXCLUDED.course_id,
+                            tee_id             = EXCLUDED.tee_id,
+                            competition_format = EXCLUDED.competition_format
                     """, (player_id, rollup_id, date_str, r["score"],
                           r["new_handicap"], r.get("whs_index_used"), new_whs,
                           course_id, tee_id, competition_format))
@@ -833,7 +866,13 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                         INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
                             playing_hc, course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT DO NOTHING
+                        ON CONFLICT (player_id, rollup_id, date) DO UPDATE SET
+                            score              = EXCLUDED.score,
+                            new_handicap       = EXCLUDED.new_handicap,
+                            playing_hc         = EXCLUDED.playing_hc,
+                            course_id          = EXCLUDED.course_id,
+                            tee_id             = EXCLUDED.tee_id,
+                            competition_format = EXCLUDED.competition_format
                     """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"],
                            playing_hc, course_id, tee_id, competition_format))
 
