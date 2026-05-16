@@ -26,7 +26,7 @@ The app is **multi-tenant**: each golf club has a unique URL slug (e.g. `/bramle
 | Frontend | Vanilla JS, single-page PWA |
 | Charts | Chart.js 4.4.1 |
 | Hosting | Render (free tier) |
-| IG scraping | Playwright (via `backend/scraper.py`) |
+| IG scraping | httpx + BeautifulSoup4 (via `backend/scraper.py`) |
 
 ### Project Structure
 

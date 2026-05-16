@@ -10,7 +10,7 @@ moths_rollup/
 ├── .env.example               # Environment variable template
 ├── backend/
 │   ├── handicap.py            # Handicap calculation logic
-│   ├── scraper.py             # Intelligent Golf scraper (Playwright)
+│   ├── scraper.py             # Intelligent Golf scraper (httpx + BeautifulSoup4)
 │   └── sheets.py              # Google Sheets API helper
 └── frontend/
     ├── templates/
@@ -92,7 +92,6 @@ moths_rollup/
 ```bash
 cd moths_rollup
 pip install -r requirements.txt
-playwright install chromium
 cp .env.example .env
 # Fill in .env with your values
 uvicorn main:app --reload --port 8000
@@ -114,8 +113,7 @@ Use the Bramley Golf Club logo resized to these dimensions.
 
 ## Notes
 
-- The scraper uses Playwright running headless Chromium. First deployment
-  on Render may take a few minutes while Chromium installs.
+- The scraper uses httpx + BeautifulSoup4 to parse Intelligent Golf pages — no browser required.
 - Sessions are stored in memory — users will need to re-enter credentials
   if the server restarts. A future upgrade could use Redis for persistence.
 - The IG PIN is encrypted at rest using the APP_SECRET_KEY.
