@@ -690,6 +690,48 @@ async def add_new_player(rollup_id: int, name: str, handicap: int) -> None:
     await _run(_add_new_player, rollup_id, name, handicap)
 
 
+def _bulk_import_players(rollup_id: int, rows: list[dict]) -> dict:
+    """
+    Upsert a list of {name, handicap, whs_index?} rows.
+    Returns {added, updated} counts.
+    """
+    added = updated = 0
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            for row in rows:
+                name     = row["name"].strip()
+                handicap = int(row["handicap"])
+                whs      = row.get("whs_index")
+                cur.execute(
+                    "SELECT id FROM players WHERE rollup_id = %s AND name = %s",
+                    (rollup_id, name)
+                )
+                existing = cur.fetchone()
+                if existing:
+                    if whs is not None:
+                        cur.execute(
+                            "UPDATE players SET handicap = %s, whs_index = %s WHERE id = %s",
+                            (handicap, whs, existing[0])
+                        )
+                    else:
+                        cur.execute(
+                            "UPDATE players SET handicap = %s WHERE id = %s",
+                            (handicap, existing[0])
+                        )
+                    updated += 1
+                else:
+                    cur.execute(
+                        "INSERT INTO players (rollup_id, name, handicap, whs_index) VALUES (%s, %s, %s, %s)",
+                        (rollup_id, name, handicap, whs)
+                    )
+                    added += 1
+    return {"added": added, "updated": updated}
+
+
+async def bulk_import_players(rollup_id: int, rows: list[dict]) -> dict:
+    return await _run(_bulk_import_players, rollup_id, rows)
+
+
 def _update_player_handicap(player_id: int, handicap: int):
     with _get_conn() as conn:
         with conn.cursor() as cur:

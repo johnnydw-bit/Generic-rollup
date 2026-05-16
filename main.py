@@ -50,6 +50,7 @@ from backend.db import (
     get_prohibited_winners,
     validate_rollup_tenant,
     credit_prize_money,
+    bulk_import_players,
     init_db,
     close_db,
 )
@@ -957,6 +958,68 @@ async def delete_player(body: DeletePlayerRequest, tenant_id: int = Depends(get_
     except Exception as e:
         raise HTTPException(500, f"Could not delete player: {str(e)}")
     return {"ok": True}
+
+
+@app.post("/api/players/import")
+async def import_players(
+    request: Request,
+    rollup_id: int = Form(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    Bulk-import players from CSV/TSV text.
+    Expected columns: Name, Handicap[, WHS Index]
+    First row may be a header — detected automatically.
+    """
+    await _assert_rollup_access(rollup_id, tenant_id)
+    form = await request.form()
+    raw  = (form.get("csv_text") or "").strip()
+    if not raw:
+        raise HTTPException(400, "No data provided")
+
+    import csv, io
+    dialect = "excel-tab" if "\t" in raw.split("\n")[0] else "excel"
+    reader  = csv.reader(io.StringIO(raw), dialect=dialect)
+    rows_in = list(reader)
+    if not rows_in:
+        raise HTTPException(400, "No rows found")
+
+    # Skip header if first cell looks non-numeric
+    start = 0
+    if rows_in and not rows_in[0][0].strip().lstrip("-").replace(".", "", 1).isdigit():
+        start = 1
+
+    rows: list[dict] = []
+    errors: list[str] = []
+    for i, row in enumerate(rows_in[start:], start=start + 1):
+        if len(row) < 2:
+            errors.append(f"Row {i}: need at least Name and Handicap columns")
+            continue
+        name = row[0].strip()
+        if not name:
+            continue
+        try:
+            handicap = int(float(row[1].strip()))
+        except ValueError:
+            errors.append(f"Row {i}: invalid handicap '{row[1]}'")
+            continue
+        whs = None
+        if len(row) >= 3 and row[2].strip():
+            try:
+                whs = round(float(row[2].strip()), 1)
+            except ValueError:
+                pass
+        rows.append({"name": name, "handicap": handicap, "whs_index": whs})
+
+    if not rows:
+        raise HTTPException(400, f"No valid rows found. {'; '.join(errors)}")
+
+    try:
+        result = await bulk_import_players(rollup_id, rows)
+    except Exception as e:
+        raise HTTPException(500, f"Import failed: {str(e)}")
+
+    return {**result, "errors": errors, "total": len(rows)}
 
 
 class SyncWhsRequest(BaseModel):

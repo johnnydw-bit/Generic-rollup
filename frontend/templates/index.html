@@ -836,6 +836,7 @@
         <option value="">Select competition…</option>
       </select>
       <button class="s6-add-btn" onclick="showAddPlayerDialog()">＋ Add</button>
+      <button class="s6-sync-btn" onclick="showImportDialog()">📥 Import</button>
       <button class="s6-sync-btn" id="syncWhsBtn" onclick="syncWhsIndices()">⬇ Sync WHS</button>
     </div>
     <div class="s6-status status-bar status-neutral" id="s6Status"></div>
@@ -964,6 +965,22 @@
 </div>
 
 <!-- Delete player confirmation dialog (screen6) -->
+<div class="overlay" id="importPlayersOverlay">
+  <div class="dialog" style="max-width:420px;">
+    <div class="dialog-title">Import Players</div>
+    <div class="dialog-body" style="margin-bottom:8px;">
+      Paste spreadsheet data below — or drag &amp; drop a CSV file.<br>
+      <span style="font-size:11px;color:#888;">Columns: <strong>Name, Handicap</strong> [, WHS Index]&nbsp;&nbsp;Header row optional.</span>
+    </div>
+    <textarea id="importCsvText" rows="10" style="width:100%;font-size:12px;font-family:monospace;padding:8px;border:1.5px solid #2D2B5B40;border-radius:8px;resize:vertical;" placeholder="John Smith,18,17.4&#10;Jane Doe,24"></textarea>
+    <div id="importStatus" style="font-size:12px;margin-top:6px;min-height:16px;"></div>
+    <div class="dialog-btns">
+      <button class="dialog-btn btn-cancel" onclick="closeOverlay('importPlayersOverlay')">Cancel</button>
+      <button class="dialog-btn btn-confirm" onclick="confirmImportPlayers()">Import</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="deletePlayerOverlay">
   <div class="dialog">
     <div class="dialog-title">Delete Player?</div>
@@ -2460,6 +2477,37 @@ async function confirmDeletePlayer() {
     if (!resp.ok) throw new Error();
     await loadPlayerManager();
   } catch(e) { setS6Status('Delete failed', 'danger'); }
+}
+
+function showImportDialog() {
+  document.getElementById('importCsvText').value = '';
+  document.getElementById('importStatus').textContent = '';
+  document.getElementById('importStatus').style.color = '#888';
+  document.getElementById('importPlayersOverlay').classList.add('open');
+}
+
+async function confirmImportPlayers() {
+  const text   = document.getElementById('importCsvText').value.trim();
+  const status = document.getElementById('importStatus');
+  if (!text) { status.textContent = 'Please paste some data first.'; status.style.color = '#A32D2D'; return; }
+
+  status.textContent = 'Importing…'; status.style.color = '#888';
+  try {
+    const form = new FormData();
+    form.append('rollup_id', s6State.rollupId);
+    form.append('csv_text', text);
+    const resp = await apiFetch('/api/players/import', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) { status.textContent = data.detail || 'Import failed.'; status.style.color = '#A32D2D'; return; }
+
+    let msg = `Done — ${data.added} added, ${data.updated} updated.`;
+    if (data.errors && data.errors.length) msg += ` Skipped: ${data.errors.join('; ')}`;
+    status.textContent = msg; status.style.color = '#3B6D11';
+    await loadPlayerManager();
+    setTimeout(() => closeOverlay('importPlayersOverlay'), 1800);
+  } catch(e) {
+    status.textContent = 'Network error.'; status.style.color = '#A32D2D';
+  }
 }
 
 function showAddPlayerDialog() {
