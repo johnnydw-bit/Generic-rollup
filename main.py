@@ -671,24 +671,33 @@ async def admin_dashboard(
     tenants = await db.get_all_tenants()
     base = os.getenv("APP_BASE_URL", "").rstrip("/")
     deleted_msg = ""
-    rows = "".join(
-        f"<tr>"
-        f"<td>{t['id']}</td>"
-        f"<td><strong>{t['name']}</strong></td>"
-        f"<td><code>{t['slug']}</code></td>"
-        f"<td>{str(t['created_at'])[:10]}</td>"
-        f"<td><a href='/admin/visit/{t['slug']}'>Visit →</a></td>"
-        f"<td><a href='/admin/dump/{t['id']}'>📥 Dump</a></td>"
-        f"<td>"
-        f"<form method='post' action='/admin/delete-history/{t[\"id\"]}' "
-        f"onsubmit=\"return confirm('Delete ALL round history for {t[\"name\"]}? This cannot be undone.')\">"
-        f"<button type='submit' style='background:#A32D2D;color:#fff;border:none;border-radius:4px;"
-        f"padding:4px 10px;font-size:12px;cursor:pointer;'>🗑 Delete history</button>"
-        f"</form>"
-        f"</td>"
-        f"</tr>"
-        for t in tenants
-    )
+
+    def _tenant_row(t: dict) -> str:
+        tid   = t["id"]
+        tname = t["name"]
+        slug  = t["slug"]
+        created = str(t["created_at"])[:10]
+        confirm_msg = f"Delete ALL round history for {tname}? This cannot be undone."
+        return (
+            f"<tr>"
+            f"<td>{tid}</td>"
+            f"<td><strong>{tname}</strong></td>"
+            f"<td><code>{slug}</code></td>"
+            f"<td>{created}</td>"
+            f"<td><a href='/admin/visit/{slug}'>Visit →</a></td>"
+            f"<td><a href='/admin/dump/{tid}'>📥 Dump</a></td>"
+            f"<td>"
+            f"<form method='post' action='/admin/delete-history/{tid}' "
+            f"onsubmit='return confirm(\"{confirm_msg}\")'>"
+            f"<button type='submit' style='background:#A32D2D;color:#fff;border:none;"
+            f"border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;'>"
+            f"🗑 Delete history</button>"
+            f"</form>"
+            f"</td>"
+            f"</tr>"
+        )
+
+    rows = "".join(_tenant_row(t) for t in tenants)
     return HTMLResponse(f"""
     <!DOCTYPE html>
     <html><head><meta charset="UTF-8"/>
