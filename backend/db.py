@@ -841,6 +841,14 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                 if player_id is None:
                     continue
 
+                # DELETE + INSERT (no constraint dependency — works whether or not
+                # the unique constraint migration has run yet).
+                cur.execute("""
+                    DELETE FROM rounds
+                    WHERE player_id = %s AND rollup_id = %s
+                      AND date = %s AND competition_format = %s
+                """, (player_id, rollup_id, date_str, competition_format))
+
                 if whs_mode:
                     new_whs = r.get("new_whs_index")
                     cur.execute("""
@@ -854,15 +862,6 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                             new_handicap, whs_mode, whs_index_used, new_whs_index,
                             course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, %s)
-                        ON CONFLICT (player_id, rollup_id, date, competition_format) DO UPDATE SET
-                            score              = EXCLUDED.score,
-                            new_handicap       = EXCLUDED.new_handicap,
-                            whs_mode           = EXCLUDED.whs_mode,
-                            whs_index_used     = EXCLUDED.whs_index_used,
-                            new_whs_index      = EXCLUDED.new_whs_index,
-                            course_id          = EXCLUDED.course_id,
-                            tee_id             = EXCLUDED.tee_id,
-                            competition_format = EXCLUDED.competition_format
                     """, (player_id, rollup_id, date_str, r["score"],
                           r["new_handicap"], r.get("whs_index_used"), new_whs,
                           course_id, tee_id, competition_format))
@@ -876,13 +875,6 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                         INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
                             playing_hc, course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (player_id, rollup_id, date, competition_format) DO UPDATE SET
-                            score              = EXCLUDED.score,
-                            new_handicap       = EXCLUDED.new_handicap,
-                            playing_hc         = EXCLUDED.playing_hc,
-                            course_id          = EXCLUDED.course_id,
-                            tee_id             = EXCLUDED.tee_id,
-                            competition_format = EXCLUDED.competition_format
                     """, (player_id, rollup_id, date_str, r["score"], r["new_handicap"],
                            playing_hc, course_id, tee_id, competition_format))
 
