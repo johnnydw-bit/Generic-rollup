@@ -1496,20 +1496,21 @@ async def last_round(rollup_id: int = Query(1), tenant_id: int = Depends(get_cur
 async def round_dates(rollup_id: int = Query(1), tenant_id: int = Depends(get_current_tenant)):
     await _assert_rollup_access(rollup_id, tenant_id)
     try:
-        dates = await get_round_dates(rollup_id)
+        rounds = await get_round_dates(rollup_id)
     except Exception as e:
         raise HTTPException(500, f"Could not load round dates: {str(e)}")
-    return {"dates": dates}
+    return {"rounds": rounds}
 
 
 @app.get("/api/round")
 async def round_by_date(
     date: str = Query(...), rollup_id: int = Query(1),
+    format: str = Query("stableford"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     await _assert_rollup_access(rollup_id, tenant_id)
     try:
-        results = await get_round_by_date(date, rollup_id)
+        results = await get_round_by_date(date, rollup_id, format)
     except Exception as e:
         raise HTTPException(500, f"Could not load round: {str(e)}")
     if not results:

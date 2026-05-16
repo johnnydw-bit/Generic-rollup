@@ -406,26 +406,36 @@ def _init_schema():
             """)
 
             # ── Unique constraint on rounds ───────────────────────────────
-            # Deduplicate first (keep highest id per player+rollup+date),
-            # then ensure the constraint exists so UPSERT works correctly.
+            # Key includes competition_format so two formats on the same day
+            # coexist as separate rounds. Deduplicate first, then migrate
+            # from the old date-only constraint (if present) to the new one.
             cur.execute("""
                 DELETE FROM rounds
                 WHERE id NOT IN (
                     SELECT MAX(id)
                     FROM rounds
-                    GROUP BY player_id, rollup_id, date
+                    GROUP BY player_id, rollup_id, date, competition_format
                 )
             """)
             cur.execute("""
                 DO $$
                 BEGIN
-                    IF NOT EXISTS (
+                    -- Drop old constraint if it exists (date-only key)
+                    IF EXISTS (
                         SELECT 1 FROM pg_constraint
                         WHERE conname = 'rounds_player_rollup_date_unique'
                     ) THEN
                         ALTER TABLE rounds
-                            ADD CONSTRAINT rounds_player_rollup_date_unique
-                            UNIQUE (player_id, rollup_id, date);
+                            DROP CONSTRAINT rounds_player_rollup_date_unique;
+                    END IF;
+                    -- Add new constraint (date + format key)
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'rounds_player_rollup_date_format_unique'
+                    ) THEN
+                        ALTER TABLE rounds
+                            ADD CONSTRAINT rounds_player_rollup_date_format_unique
+                            UNIQUE (player_id, rollup_id, date, competition_format);
                     END IF;
                 END $$
             """)
@@ -844,7 +854,7 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                             new_handicap, whs_mode, whs_index_used, new_whs_index,
                             course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, %s)
-                        ON CONFLICT (player_id, rollup_id, date) DO UPDATE SET
+                        ON CONFLICT (player_id, rollup_id, date, competition_format) DO UPDATE SET
                             score              = EXCLUDED.score,
                             new_handicap       = EXCLUDED.new_handicap,
                             whs_mode           = EXCLUDED.whs_mode,
@@ -866,7 +876,7 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                         INSERT INTO rounds (player_id, rollup_id, date, score, new_handicap,
                             playing_hc, course_id, tee_id, competition_format)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (player_id, rollup_id, date) DO UPDATE SET
+                        ON CONFLICT (player_id, rollup_id, date, competition_format) DO UPDATE SET
                             score              = EXCLUDED.score,
                             new_handicap       = EXCLUDED.new_handicap,
                             playing_hc         = EXCLUDED.playing_hc,
@@ -1109,18 +1119,20 @@ async def delete_tenant_history(tenant_id: int) -> int:
 def _get_round_dates(rollup_id: int):
     with _get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT DISTINCT date FROM rounds WHERE rollup_id = %s ORDER BY date DESC",
-                (rollup_id,)
-            )
-            return [str(r[0]) for r in cur.fetchall()]
+            cur.execute("""
+                SELECT DISTINCT date, competition_format
+                FROM rounds
+                WHERE rollup_id = %s
+                ORDER BY date DESC, competition_format
+            """, (rollup_id,))
+            return [{"date": str(r[0]), "format": r[1] or "stableford"} for r in cur.fetchall()]
 
 
-async def get_round_dates(rollup_id: int) -> list[str]:
+async def get_round_dates(rollup_id: int) -> list[dict]:
     return await _run(_get_round_dates, rollup_id)
 
 
-def _get_round_by_date(date_str: str, rollup_id: int):
+def _get_round_by_date(date_str: str, rollup_id: int, competition_format: str = "stableford"):
     with _get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
@@ -1130,14 +1142,14 @@ def _get_round_by_date(date_str: str, rollup_id: int):
                        p.winner_ban_entries, p.winner_prohibited
                 FROM rounds r
                 JOIN players p ON p.id = r.player_id
-                WHERE r.rollup_id = %s AND r.date = %s
+                WHERE r.rollup_id = %s AND r.date = %s AND r.competition_format = %s
                 ORDER BY r.score DESC
-            """, (rollup_id, date_str))
+            """, (rollup_id, date_str, competition_format))
             return [dict(r) for r in cur.fetchall()]
 
 
-async def get_round_by_date(date_str: str, rollup_id: int) -> list[dict]:
-    return await _run(_get_round_by_date, date_str, rollup_id)
+async def get_round_by_date(date_str: str, rollup_id: int, competition_format: str = "stableford") -> list[dict]:
+    return await _run(_get_round_by_date, date_str, rollup_id, competition_format)
 
 
 # ---------------------------------------------------------------------------

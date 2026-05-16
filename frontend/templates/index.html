@@ -1839,10 +1839,14 @@ async function loadRoundDates() {
   try {
     const resp = await apiFetch(`/api/round-dates?rollup_id=${session.rollupId}`);
     const data = await resp.json();
-    state.allRoundDates = data.dates || [];
+    // Each entry is {date, format} — two rounds same day show separately
+    state.allRoundDates = data.rounds || [];
     state.currentRoundIdx = 0;
     const sel = document.getElementById('roundDateSelect');
-    sel.innerHTML = state.allRoundDates.map((d,i) => `<option value="${i}">${d}</option>`).join('');
+    sel.innerHTML = state.allRoundDates.map((r, i) => {
+      const label = r.format === 'medal' ? `${r.date} [MDL]` : `${r.date} [SF]`;
+      return `<option value="${i}">${label}</option>`;
+    }).join('');
     if (state.allRoundDates.length > 0) loadRoundByIdx(0);
   } catch(e) {}
 }
@@ -1861,14 +1865,14 @@ function onRoundDateChange() {
 }
 
 async function loadRoundByIdx(idx) {
-  const date = state.allRoundDates[idx];
-  if (!date) return;
+  const entry = state.allRoundDates[idx];
+  if (!entry) return;
   document.getElementById('prevRoundBtn').disabled = idx >= state.allRoundDates.length - 1;
   document.getElementById('nextRoundBtn').disabled = idx <= 0;
   try {
-    const resp = await apiFetch(`/api/round?date=${date}&rollup_id=${session.rollupId}`);
+    const resp = await apiFetch(`/api/round?date=${entry.date}&format=${entry.format}&rollup_id=${session.rollupId}`);
     const data = await resp.json();
-    renderResults(data.players, date);
+    renderResults(data.players, entry.date);
   } catch(e) {}
 }
 
