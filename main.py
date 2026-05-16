@@ -822,7 +822,7 @@ async def rollups(tenant_id: int = Depends(get_current_tenant)):
 
 class AddRollupRequest(BaseModel):
     name: str
-    ig_search_term: str
+    ig_search_term: str = ""
 
 
 @app.post("/api/rollups/add")

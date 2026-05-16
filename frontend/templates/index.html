@@ -929,12 +929,12 @@
 <div class="overlay" id="addRollupOverlay">
   <div class="dialog">
     <div class="dialog-title">Add Competition</div>
-    <div class="dialog-body">Enter the competition details as they appear in Intelligent Golf.</div>
+    <div class="dialog-body" id="addRollupDesc">Enter the competition details.</div>
     <div class="field-group">
       <div class="field-label">Competition name</div>
       <input class="name-input" id="newRollupName" type="text" placeholder="e.g. Senior Roll-Up"/>
     </div>
-    <div class="field-group">
+    <div class="field-group" id="addRollupTermGroup">
       <div class="field-label">Search term (from IG contact name)</div>
       <input class="name-input" id="newRollupTerm" type="text" placeholder="e.g. SENIOR"/>
     </div>
@@ -1280,13 +1280,21 @@ async function saveLogin() {
 function showAddRollup() {
   document.getElementById('newRollupName').value = '';
   document.getElementById('newRollupTerm').value = '';
+  const igTenant = session.igTenant;
+  document.getElementById('addRollupTermGroup').style.display = igTenant ? '' : 'none';
+  document.getElementById('addRollupDesc').textContent = igTenant
+    ? 'Enter the competition details as they appear in Intelligent Golf.'
+    : 'Enter a name for this competition.';
   document.getElementById('addRollupOverlay').classList.add('open');
 }
 
 async function confirmAddRollup() {
   const name = document.getElementById('newRollupName').value.trim();
-  const term = document.getElementById('newRollupTerm').value.trim().toUpperCase();
-  if (!name || !term) { alert('Please enter both name and search term.'); return; }
+  const term = session.igTenant
+    ? document.getElementById('newRollupTerm').value.trim().toUpperCase()
+    : '';
+  if (!name) { alert('Please enter a competition name.'); return; }
+  if (session.igTenant && !term) { alert('Please enter a search term.'); return; }
   try {
     const resp = await apiFetch('/api/rollups/add', {
       method: 'POST', headers: {'Content-Type':'application/json'},
