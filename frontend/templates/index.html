@@ -889,8 +889,9 @@
   <div class="dialog">
     <div class="dialog-title">New player found</div>
     <div class="dialog-name" id="newPlayerName"></div>
-    <div class="dialog-body">Not in the <span id="newPlayerRollupName"></span> list yet. Enter a starting handicap to add them.</div>
-    <div class="field-group">
+    <div class="dialog-body">Not in the <span id="newPlayerRollupName"></span> list yet.</div>
+    <div id="newPlayerStatus" style="font-size:12px;color:#888;text-align:center;min-height:16px;margin:4px 0;">Looking up…</div>
+    <div id="newPlayerHCRow" class="field-group" style="display:none;">
       <div class="field-label" style="text-align:center">Starting handicap</div>
       <input class="hc-number" id="newPlayerHC" type="number" min="0" max="54" placeholder="e.g. 24" inputmode="numeric"/>
     </div>
@@ -1026,6 +1027,7 @@ let state = {
   roundDate: '',
   newPlayerQueue: [],
   currentNewPlayer: null,
+  newPlayerFoundData: null,
   playerToRemove: null,
   gameMode: 'individual',
   teamSize: 2,
@@ -2764,18 +2766,66 @@ async function syncWhsIndices() {
 function processNewPlayerQueue() {
   if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
   state.currentNewPlayer = state.newPlayerQueue.shift();
+  state.newPlayerFoundData = null;
   document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
   document.getElementById('newPlayerRollupName').textContent = session.rollupName;
   document.getElementById('newPlayerHC').value = '';
+  document.getElementById('newPlayerHCRow').style.display = 'none';
+  document.getElementById('newPlayerStatus').textContent = 'Looking up…';
+  document.getElementById('newPlayerStatus').style.color = '#888';
   document.getElementById('newPlayerOverlay').classList.add('open');
+  lookupNewPlayer();
+}
+
+async function lookupNewPlayer() {
+  try {
+    const resp = await apiFetch('/api/lookup-player', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: state.currentNewPlayer, rollup_id: session.rollupId}),
+    });
+    const data = await resp.json();
+    if (data.found) {
+      state.newPlayerFoundData = data;
+      const whsLabel = data.whs_index != null ? `  WHS ${parseFloat(data.whs_index).toFixed(1)}` : '';
+      document.getElementById('newPlayerStatus').textContent = `Found — HC ${data.handicap}${whsLabel}`;
+      document.getElementById('newPlayerStatus').style.color = '#3B6D11';
+      document.getElementById('newPlayerHCRow').style.display = 'none';
+    } else {
+      state.newPlayerFoundData = null;
+      document.getElementById('newPlayerStatus').textContent = 'Not found — enter starting handicap';
+      document.getElementById('newPlayerStatus').style.color = '#2D2B5B';
+      document.getElementById('newPlayerHCRow').style.display = 'flex';
+    }
+  } catch(e) {
+    state.newPlayerFoundData = null;
+    document.getElementById('newPlayerStatus').textContent = 'Lookup failed — enter handicap manually';
+    document.getElementById('newPlayerStatus').style.color = '#A32D2D';
+    document.getElementById('newPlayerHCRow').style.display = 'flex';
+  }
 }
 
 async function confirmNewPlayer() {
-  const hc = parseInt(document.getElementById('newPlayerHC').value);
-  if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
-  await apiFetch('/api/new-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}) });
+  let hc, whs_index = null, whs_index_next_round = null, winner_ban_entries = 0, winner_ban_original_hc = null;
+  if (state.newPlayerFoundData) {
+    hc                     = state.newPlayerFoundData.handicap;
+    whs_index              = state.newPlayerFoundData.whs_index ?? null;
+    whs_index_next_round   = state.newPlayerFoundData.whs_index_next_round ?? null;
+    winner_ban_entries     = state.newPlayerFoundData.winner_ban_entries ?? 0;
+    winner_ban_original_hc = state.newPlayerFoundData.winner_ban_original_hc ?? null;
+  } else {
+    hc = parseInt(document.getElementById('newPlayerHC').value);
+    if (isNaN(hc) || hc < 0 || hc > 54) { alert('Please enter a valid handicap (0–54).'); return; }
+    await apiFetch('/api/new-player', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: state.currentNewPlayer, handicap: hc, rollup_id: session.rollupId}),
+    });
+  }
   const p = state.players.find(p => p.name === state.currentNewPlayer);
-  if (p) { p.handicap = hc; p.new_player = false; }
+  if (p) {
+    p.handicap = hc; p.whs_index = whs_index; p.whs_index_next_round = whs_index_next_round;
+    p.winner_ban_entries = winner_ban_entries; p.winner_ban_original_hc = winner_ban_original_hc;
+    p.new_player = false;
+  }
   closeOverlay('newPlayerOverlay');
   processNewPlayerQueue();
 }
