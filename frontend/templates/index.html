@@ -1129,6 +1129,18 @@ async function init() {
 
   await loadRollupOptions();
 
+  // Validate stored rollup_id belongs to this tenant; clear if stale or absent
+  if (session.rollupId) {
+    const sel = document.getElementById('rollupSelect');
+    const knownIds = Array.from(sel.options).map(o => parseInt(o.value)).filter(Boolean);
+    if (!knownIds.includes(session.rollupId)) {
+      session.rollupId   = null;
+      session.rollupName = '';
+      session.rollupTerm = '';
+      ['rollup_id','rollup_name','rollup_term'].forEach(k => localStorage.removeItem(k));
+    }
+  }
+
   if (hasValidSession()) {
     updateHeaderNames();
     applyIgTenantUI();
