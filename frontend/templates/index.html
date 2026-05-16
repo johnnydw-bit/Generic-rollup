@@ -2366,6 +2366,21 @@ async function saveSettings() {
 
     statusEl.className = 'status-bar status-success';
     statusEl.textContent = 'Settings saved ✓';
+
+    // For non-IG competitions with no players yet, prompt to import
+    if (!session.igTenant) {
+      try {
+        const pr = await apiFetch(`/api/players?rollup_id=${session.rollupId}`);
+        const pd = await pr.json();
+        if ((pd.players || []).length === 0) {
+          statusEl.style.display = 'none';
+          await showPlayerManager();
+          showImportDialog();
+          return;
+        }
+      } catch(e) {}
+    }
+
     setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
   } catch(e) {
     statusEl.className = 'status-bar status-danger';
