@@ -1014,10 +1014,18 @@ async def load_players(body: LoadRequest, session: dict = Depends(get_current_se
             (p for p in all_players if p["name"].strip().lower() == name.strip().lower()), None
         )
         if hc is None:
-            new_players.append(name)
+            # Look up this new player's WHS index from the scraped indices dict
+            scraped_idx = indices.get(name) or next(
+                (v for k, v in indices.items() if k.lower() == name.strip().lower()), None
+            )
+            new_players.append({
+                "name":      name,
+                "whs_index": float(scraped_idx) if scraped_idx is not None else None,
+            })
             players.append({
                 "name": name, "handicap": None, "score": None, "team": None,
-                "new_player": True, "whs_index": None,
+                "new_player": True,
+                "whs_index": float(scraped_idx) if scraped_idx is not None else None,
                 "whs_index_next_round": None, "winner_prohibited": False,
             })
         else:
@@ -1406,7 +1414,7 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=True,
                                      course_id=course_id, tee_id=tee_id,
-                                     competition_format=round_format)
+                                     competition_format=round_format, cleanup_all_formats=True)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
     elif winner_reduction:
@@ -1422,7 +1430,7 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
                                      course_id=course_id, tee_id=tee_id,
-                                     competition_format=round_format)
+                                     competition_format=round_format, cleanup_all_formats=True)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
     else:
@@ -1430,7 +1438,7 @@ async def save_round(body: ScoreUpdate, tenant_id: int = Depends(get_current_ten
         try:
             await save_round_results(results, body.date, body.rollup_id, whs_mode=False,
                                      course_id=course_id, tee_id=tee_id,
-                                     competition_format=round_format)
+                                     competition_format=round_format, cleanup_all_formats=True)
         except Exception as e:
             raise HTTPException(500, f"Failed to save to database: {str(e)}")
 

@@ -2765,16 +2765,30 @@ async function syncWhsIndices() {
 // ═══════════════════════════════════════════
 function processNewPlayerQueue() {
   if (state.newPlayerQueue.length === 0) { openScoreEntry(); return; }
-  state.currentNewPlayer = state.newPlayerQueue.shift();
+  const entry = state.newPlayerQueue.shift();
+  // Queue entries are now {name, whs_index} objects (legacy plain-string fallback kept)
+  const name = typeof entry === 'string' ? entry : entry.name;
+  const knownWhs = typeof entry === 'object' ? entry.whs_index : null;
+  state.currentNewPlayer = name;
   state.newPlayerFoundData = null;
-  document.getElementById('newPlayerName').textContent = state.currentNewPlayer;
+  document.getElementById('newPlayerName').textContent = name;
   document.getElementById('newPlayerRollupName').textContent = session.rollupName;
   document.getElementById('newPlayerHC').value = '';
   document.getElementById('newPlayerHCRow').style.display = 'none';
-  document.getElementById('newPlayerStatus').textContent = 'Looking up…';
-  document.getElementById('newPlayerStatus').style.color = '#888';
   document.getElementById('newPlayerOverlay').classList.add('open');
-  lookupNewPlayer();
+
+  if (knownWhs !== null && knownWhs !== undefined) {
+    // WHS index was scraped during load — no API call needed
+    const hc = Math.round(knownWhs);
+    state.newPlayerFoundData = { name, handicap: hc, whs_index: knownWhs, whs_index_next_round: null, winner_ban_entries: 0, winner_ban_original_hc: null };
+    document.getElementById('newPlayerStatus').textContent = `Found — HC ${hc}  WHS ${knownWhs.toFixed(1)}`;
+    document.getElementById('newPlayerStatus').style.color = '#3B6D11';
+    document.getElementById('newPlayerHCRow').style.display = 'none';
+  } else {
+    document.getElementById('newPlayerStatus').textContent = 'Looking up…';
+    document.getElementById('newPlayerStatus').style.color = '#888';
+    lookupNewPlayer();
+  }
 }
 
 async function lookupNewPlayer() {

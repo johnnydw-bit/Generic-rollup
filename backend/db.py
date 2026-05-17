@@ -790,7 +790,8 @@ async def remove_player(player_id: int, rollup_id: int) -> None:
 
 def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                         whs_mode: bool = False, course_id=None, tee_id=None,
-                        competition_format: str = "stableford"):
+                        competition_format: str = "stableford",
+                        cleanup_all_formats: bool = False):
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -806,13 +807,20 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
                 if player_id is None:
                     continue
 
-                # DELETE + INSERT (no constraint dependency — works whether or not
-                # the unique constraint migration has run yet).
-                cur.execute("""
-                    DELETE FROM rounds
-                    WHERE player_id = %s AND rollup_id = %s
-                      AND date = %s AND competition_format = %s
-                """, (player_id, rollup_id, date_str, competition_format))
+                # Final save: delete ALL format rows for this player/date so stale
+                # autosave rows from a mid-session format switch don't linger.
+                # Autosave: delete only matching format to preserve other same-day rounds.
+                if cleanup_all_formats:
+                    cur.execute("""
+                        DELETE FROM rounds
+                        WHERE player_id = %s AND rollup_id = %s AND date = %s
+                    """, (player_id, rollup_id, date_str))
+                else:
+                    cur.execute("""
+                        DELETE FROM rounds
+                        WHERE player_id = %s AND rollup_id = %s
+                          AND date = %s AND competition_format = %s
+                    """, (player_id, rollup_id, date_str, competition_format))
 
                 if whs_mode:
                     new_whs = r.get("new_whs_index")
@@ -846,9 +854,10 @@ def _save_round_results(results: list[dict], date_str: str, rollup_id: int,
 
 async def save_round_results(results: list[dict], date_str: str, rollup_id: int,
                               whs_mode: bool = False, course_id=None, tee_id=None,
-                              competition_format: str = "stableford") -> None:
+                              competition_format: str = "stableford",
+                              cleanup_all_formats: bool = False) -> None:
     await _run(_save_round_results, results, date_str, rollup_id, whs_mode, course_id, tee_id,
-               competition_format)
+               competition_format, cleanup_all_formats)
 
 
 def _get_prohibited_winners(rollup_id: int) -> list[str]:
