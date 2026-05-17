@@ -405,41 +405,6 @@ def _init_schema():
                   AND (SELECT COUNT(*) FROM tenants) > 0
             """)
 
-            # ── Unique constraint on rounds ───────────────────────────────
-            # Key includes competition_format so two formats on the same day
-            # coexist as separate rounds. Deduplicate first, then migrate
-            # from the old date-only constraint (if present) to the new one.
-            cur.execute("""
-                DELETE FROM rounds
-                WHERE id NOT IN (
-                    SELECT MAX(id)
-                    FROM rounds
-                    GROUP BY player_id, rollup_id, date, competition_format
-                )
-            """)
-            cur.execute("""
-                DO $$
-                BEGIN
-                    -- Drop old constraint if it exists (date-only key)
-                    IF EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conname = 'rounds_player_rollup_date_unique'
-                    ) THEN
-                        ALTER TABLE rounds
-                            DROP CONSTRAINT rounds_player_rollup_date_unique;
-                    END IF;
-                    -- Add new constraint (date + format key)
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conname = 'rounds_player_rollup_date_format_unique'
-                    ) THEN
-                        ALTER TABLE rounds
-                            ADD CONSTRAINT rounds_player_rollup_date_format_unique
-                            UNIQUE (player_id, rollup_id, date, competition_format);
-                    END IF;
-                END $$
-            """)
-
             # ── Indexes ──────────────────────────────────────────────────
             cur.execute("CREATE INDEX IF NOT EXISTS tenants_slug_idx ON tenants(slug)")
             cur.execute("CREATE INDEX IF NOT EXISTS users_tenant_idx ON users(tenant_id)")
