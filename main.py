@@ -1541,7 +1541,13 @@ async def player_history(
     return {
         "name": name,
         "rounds": [
-            {"date": str(r["date"]), "score": r["score"], "new_handicap": r["new_handicap"]}
+            {
+                "date":               str(r["date"]),
+                "score":              r["score"],
+                "new_handicap":       r["new_handicap"],
+                "playing_hc":         r.get("playing_hc"),
+                "competition_format": r.get("competition_format") or "stableford",
+            }
             for r in history
         ]
     }
