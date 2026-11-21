@@ -1170,6 +1170,12 @@ async function init() {
     setTodayDate();
     await loadAuthStatus();
     showScreen('screen1');
+    // ?autoload=1 (e.g. opened by a scheduled Tasker task) loads today's players straight away
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autoload') === '1') {
+      history.replaceState(null, '', window.location.pathname);  // don't re-run on refresh
+      loadPlayers();
+    }
   } else {
     showScreen('screen0');
   }
